@@ -27,6 +27,7 @@ export interface Settings {
   labelsVisible: boolean;
   videosVisible: boolean;
   orbitsVisible: boolean;
+  dsosVisible: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +40,7 @@ const DEFAULT_SETTINGS: Settings = {
   labelsVisible: false,
   videosVisible: true,
   orbitsVisible: false,
+  dsosVisible: false,
 };
 
 /**

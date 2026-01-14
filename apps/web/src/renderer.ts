@@ -4,7 +4,7 @@ import type { SkyEngine } from "./wasm/sky_engine";
 import { getStarsPositionBuffer, getStarsMetaBuffer, getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getPlanetaryMoonsBuffer, getAllStarsPositionBuffer, getAllStarsMetaBuffer } from "./engine";
 import { getAllConstellationLines, CONSTELLATIONS } from "./constellations";
 import { applyTimeToEngine } from "./ui";
-import { DSO_DATA, DSO_COLORS, getVisibleDSOs, type DSO, type DSOType } from "./dsoData";
+import { DSO_DATA, DSO_COLORS, getVisibleDSOs, type DSOType } from "./dsoData";
 
 // -----------------------------------------------------------------------------
 // Coordinate conversion utilities
