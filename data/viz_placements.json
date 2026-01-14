@@ -1,0 +1,973 @@
+=== Final Placement Statistics ===
+Total videos: 306
+Placeable: 107
+Skipped: 199
+[
+  {
+    "id": "qzFKgsPpI3A",
+    "title": "Once Around Barnards Loop",
+    "object": "Barnards Loop",
+    "ra": 81.87500000000001,
+    "dec": -3.966666666666667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=qzFKgsPpI3A"
+  },
+  {
+    "id": "TrEDNXYnygY",
+    "title": "Once Around Janus and Epimetheus",
+    "object": "Janus and Epimetheus",
+    "ra": 357.8427916666667,
+    "dec": -3.352888888888889,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=TrEDNXYnygY"
+  },
+  {
+    "id": "ZnKXuy3THcU",
+    "title": "Once Around Iota Horologii",
+    "object": "Iota Horologii",
+    "ra": 40.6394444495925,
+    "dec": -50.800293093935,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=ZnKXuy3THcU"
+  },
+  {
+    "id": "1h6y6L_uIWE",
+    "title": "Once Around Tychos Supernova",
+    "object": "Tychos Supernova",
+    "ra": 6.339583333333334,
+    "dec": 64.14083333333333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=1h6y6L_uIWE"
+  },
+  {
+    "id": "h7AbMQFwojM",
+    "title": "Once Around the Moons of Neptune",
+    "object": "the Moons of Neptune",
+    "ra": 359.931375,
+    "dec": -1.4735833333333335,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=h7AbMQFwojM"
+  },
+  {
+    "id": "3eoqEq-5x-c",
+    "title": "Once Around the Moons of Mars",
+    "object": "the Moons of Mars",
+    "ra": 294.303375,
+    "dec": -22.53613888888889,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=3eoqEq-5x-c"
+  },
+  {
+    "id": "ba9Z3JG12Ps",
+    "title": "Once Around the Horsehead Nebula",
+    "object": "the Horsehead Nebula",
+    "ra": 85.24583333333334,
+    "dec": -2.4583333333333335,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=ba9Z3JG12Ps"
+  },
+  {
+    "id": "ko9q8SgsZh4",
+    "title": "Once Around The Orion Nebula",
+    "object": "The Orion Nebula",
+    "ra": 83.82000000000001,
+    "dec": -5.3875,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=ko9q8SgsZh4"
+  },
+  {
+    "id": "X-vey2P7xUc",
+    "title": "Once Around The Helix Nebula",
+    "object": "The Helix Nebula",
+    "ra": 337.41060585298,
+    "dec": -20.83715201178,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=X-vey2P7xUc"
+  },
+  {
+    "id": "kvPhQdQW6m8",
+    "title": "Once Around Nova 1934 DQ Herculis",
+    "object": "Nova 1934 DQ Herculis",
+    "ra": 271.87604599661,
+    "dec": 45.85904577552,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=kvPhQdQW6m8"
+  },
+  {
+    "id": "G7sCv6biYnE",
+    "title": "Once Around GK Persei",
+    "object": "GK Persei",
+    "ra": 52.80004119305,
+    "dec": 43.90429720867,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=G7sCv6biYnE"
+  },
+  {
+    "id": "HsVv8vWgDBI",
+    "title": "Once Around Westerlund 1",
+    "object": "Westerlund 1",
+    "ra": 251.76000000000005,
+    "dec": -45.85194444444445,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=HsVv8vWgDBI"
+  },
+  {
+    "id": "G3Thlzt2gMc",
+    "title": "Once Around Varuna",
+    "object": "Varuna",
+    "ra": 135.4555416666667,
+    "dec": 26.952638888888888,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=G3Thlzt2gMc"
+  },
+  {
+    "id": "8t00exL7LLM",
+    "title": "Once Around Ixion",
+    "object": "Ixion",
+    "ra": 278.4435833333333,
+    "dec": -31.833499999999997,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=8t00exL7LLM"
+  },
+  {
+    "id": "8PQv-mVU_48",
+    "title": "Once Around Gonggong",
+    "object": "Gonggong",
+    "ra": 337.1657916666666,
+    "dec": -10.444194444444445,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=8PQv-mVU_48"
+  },
+  {
+    "id": "i3_7D_6btRc",
+    "title": "Once Around Orcus",
+    "object": "Orcus",
+    "ra": 160.76441666666668,
+    "dec": -13.979472222222222,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=i3_7D_6btRc"
+  },
+  {
+    "id": "CyuezQh0gcQ",
+    "title": "Once Around Gliese 876",
+    "object": "Gliese 876",
+    "ra": 343.3197190985358,
+    "dec": -14.26369557005139,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=CyuezQh0gcQ"
+  },
+  {
+    "id": "uULlBgqG6aA",
+    "title": "Once Around Makemake",
+    "object": "Makemake",
+    "ra": 202.36441666666664,
+    "dec": 20.238555555555557,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=uULlBgqG6aA"
+  },
+  {
+    "id": "vA4q0zDhyoM",
+    "title": "Once Around Gliese 229",
+    "object": "Gliese 229",
+    "ra": 92.64422889923625,
+    "dec": -21.86462676470167,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=vA4q0zDhyoM"
+  },
+  {
+    "id": "urGaNgShdBQ",
+    "title": "Once Around Quaoar",
+    "object": "Quaoar",
+    "ra": 281.2787083333333,
+    "dec": -15.197888888888889,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=urGaNgShdBQ"
+  },
+  {
+    "id": "rTf1fyTKZIY",
+    "title": "Once Around Gliese 581",
+    "object": "Gliese 581",
+    "ra": 229.8617789114604,
+    "dec": -7.722274860407222,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=rTf1fyTKZIY"
+  },
+  {
+    "id": "BgfADu5ouhc",
+    "title": "Once Around Huamea",
+    "object": "Huamea",
+    "ra": 221.042125,
+    "dec": 13.714583333333332,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=BgfADu5ouhc"
+  },
+  {
+    "id": "ZcyUeQ3JWBg",
+    "title": "Once Around Eris",
+    "object": "Eris",
+    "ra": 26.321125,
+    "dec": -0.4211111111111111,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=ZcyUeQ3JWBg"
+  },
+  {
+    "id": "DLQAcuukgVQ",
+    "title": "Once Around Triton",
+    "object": "Triton",
+    "ra": 359.931375,
+    "dec": -1.4735833333333335,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=DLQAcuukgVQ"
+  },
+  {
+    "id": "cHQv8tCPi6Q",
+    "title": "Once Around Antares",
+    "object": "Antares",
+    "ra": 247.35191541666669,
+    "dec": -26.432002611111113,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=cHQv8tCPi6Q"
+  },
+  {
+    "id": "j73r0seUqZM",
+    "title": "Once Around the Moons of Pluto",
+    "object": "the Moons of Pluto",
+    "ra": 305.984125,
+    "dec": -23.21875,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=j73r0seUqZM"
+  },
+  {
+    "id": "gOrYdNpHWWk",
+    "title": "Once Around Rigel",
+    "object": "Rigel",
+    "ra": 78.63446708333333,
+    "dec": -8.20163836111111,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=gOrYdNpHWWk"
+  },
+  {
+    "id": "Tpa8iHwbuSM",
+    "title": "Once Around Canopus",
+    "object": "Canopus",
+    "ra": 95.98795783333334,
+    "dec": -52.69566138888889,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=Tpa8iHwbuSM"
+  },
+  {
+    "id": "m2791HFOx-c",
+    "title": "Once Around the North America Nebula",
+    "object": "the North America Nebula",
+    "ra": 314.6958333333333,
+    "dec": 44.330000000000005,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=m2791HFOx-c"
+  },
+  {
+    "id": "tJKpcibbMX8",
+    "title": "Once Around Trappist 1",
+    "object": "Trappist 1",
+    "ra": 346.6223687285788,
+    "dec": -5.041399250518333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=tJKpcibbMX8"
+  },
+  {
+    "id": "-22EhpUdGU8",
+    "title": "Once Around Triangulum",
+    "object": "Triangulum",
+    "ra": 23.462069062180003,
+    "dec": 30.66017511198,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=-22EhpUdGU8"
+  },
+  {
+    "id": "9q5hc5gSpvU",
+    "title": "Once Around Nova 1670",
+    "object": "Nova 1670",
+    "ra": 296.90815722661,
+    "dec": 27.31160900038,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=9q5hc5gSpvU"
+  },
+  {
+    "id": "gHhvb3Ic88M",
+    "title": "Did James Webb Spot a new Gas Giant at Alpha Centauri",
+    "object": "Alpha Centauri",
+    "ra": 219.90208333333334,
+    "dec": -60.83388888888889,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=gHhvb3Ic88M"
+  },
+  {
+    "id": "hyI_pPs2sKM",
+    "title": "Once Around The Cosmic Owl",
+    "object": "The Cosmic Owl",
+    "ra": 19.884999999999998,
+    "dec": 58.27777777777778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=hyI_pPs2sKM"
+  },
+  {
+    "id": "heplgytpf-Y",
+    "title": "Where Next for New Horizons?",
+    "object": "New Horizons (Kuiper Belt)",
+    "ra": 289.6887916666667,
+    "dec": -20.223,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=heplgytpf-Y"
+  },
+  {
+    "id": "ASQP1ZOxFWA",
+    "title": "Once Around Ross 128",
+    "object": "Ross 128",
+    "ra": 176.93498861725834,
+    "dec": 0.8045556493308333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=ASQP1ZOxFWA"
+  },
+  {
+    "id": "s_M-7bDzZ6o",
+    "title": "Once Around Piazzi's Flying Star",
+    "object": "Piazzi's Flying Star",
+    "ra": 316.72479166666665,
+    "dec": 38.74941666666667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=s_M-7bDzZ6o"
+  },
+  {
+    "id": "GAbkTDvvScc",
+    "title": "Did We Find Betelgeuse’s Buddy?",
+    "object": "Betelgeuse",
+    "ra": 88.79291666666667,
+    "dec": 7.406944444444445,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=GAbkTDvvScc"
+  },
+  {
+    "id": "tH1OwgpCM1k",
+    "title": "Once Around Luytens star",
+    "object": "Luytens star",
+    "ra": 111.85207903566793,
+    "dec": 5.225789303071389,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=tH1OwgpCM1k"
+  },
+  {
+    "id": "QVc-un92TQM",
+    "title": "Once Around Procyon",
+    "object": "Procyon",
+    "ra": 114.82549791666668,
+    "dec": 5.224987555555556,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=QVc-un92TQM"
+  },
+  {
+    "id": "mjXl2YFNLX8",
+    "title": "Once Around Wolf 359",
+    "object": "Wolf 359",
+    "ra": 164.1205036259475,
+    "dec": 7.014723134801667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=mjXl2YFNLX8"
+  },
+  {
+    "id": "vPTvqoqAs20",
+    "title": "Once Around SN1181",
+    "object": "SN1181",
+    "ra": 31.398875,
+    "dec": 64.82813888888889,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=vPTvqoqAs20"
+  },
+  {
+    "id": "rdhW3kMWJbU",
+    "title": "Once Around The Andromeda Galaxy",
+    "object": "The Andromeda Galaxy",
+    "ra": 10.684708333333331,
+    "dec": 41.26875,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=rdhW3kMWJbU"
+  },
+  {
+    "id": "kR2ROwjIs98",
+    "title": "Once Around The Ring Nebula",
+    "object": "The Ring Nebula",
+    "ra": 283.39623652463,
+    "dec": 33.029134246539996,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=kR2ROwjIs98"
+  },
+  {
+    "id": "BbOrWeC3boo",
+    "title": "Once Around Epsilon Lyrae",
+    "object": "Epsilon Lyrae",
+    "ra": 281.08477454166666,
+    "dec": 39.67012591666666,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=BbOrWeC3boo"
+  },
+  {
+    "id": "j4pofxYKsfg",
+    "title": "Once Around V838 Monocerotis",
+    "object": "V838 Monocerotis",
+    "ra": 106.02009228957999,
+    "dec": -3.84740247067,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=j4pofxYKsfg"
+  },
+  {
+    "id": "wN0KEVdzLI0",
+    "title": "Once Around Cor Caroli",
+    "object": "Cor Caroli",
+    "ra": 194.00693995375292,
+    "dec": 38.31837643625334,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=wN0KEVdzLI0"
+  },
+  {
+    "id": "2dZgQn-9n2Q",
+    "title": "Once Around Gamma Andromeda",
+    "object": "Gamma Andromeda",
+    "ra": 30.974801208333332,
+    "dec": 42.32972841666667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=2dZgQn-9n2Q"
+  },
+  {
+    "id": "IuBYBHU3XpQ",
+    "title": "Once Around Epsilon Indi",
+    "object": "Epsilon Indi",
+    "ra": 330.84022344234336,
+    "dec": -56.785978554364995,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=IuBYBHU3XpQ"
+  },
+  {
+    "id": "sW0a9hWc_xY",
+    "title": "Once Around R136a1",
+    "object": "R136a1",
+    "ra": 84.67665,
+    "dec": -69.10093333333333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=sW0a9hWc_xY"
+  },
+  {
+    "id": "RT2g9e345QQ",
+    "title": "A new look at Alpha Centauri",
+    "object": "Alpha Centauri",
+    "ra": 219.90208333333334,
+    "dec": -60.83388888888889,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=RT2g9e345QQ"
+  },
+  {
+    "id": "F5puFTHy0Lo",
+    "title": "Once Around Fomalhaut",
+    "object": "Fomalhaut",
+    "ra": 344.41269270833334,
+    "dec": -29.62223702777778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=F5puFTHy0Lo"
+  },
+  {
+    "id": "ZO_i2SNDrXw",
+    "title": "Once Around Beta Lyrae",
+    "object": "Beta Lyrae",
+    "ra": 282.5199797676483,
+    "dec": 33.36266676977778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=ZO_i2SNDrXw"
+  },
+  {
+    "id": "esH5I1m46sk",
+    "title": "Once Around The Garnet Star",
+    "object": "The Garnet Star",
+    "ra": 325.8769148160595,
+    "dec": 58.78004609373166,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=esH5I1m46sk"
+  },
+  {
+    "id": "N09uNWcY7Nk",
+    "title": "Once Around Mira",
+    "object": "Mira",
+    "ra": 34.83663375,
+    "dec": -2.977637666666667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=N09uNWcY7Nk"
+  },
+  {
+    "id": "LQxpAm4pFyk",
+    "title": "Once Around Kapteyn's Star",
+    "object": "Kapteyn's Star",
+    "ra": 77.91912433145708,
+    "dec": -45.018433815243334,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=LQxpAm4pFyk"
+  },
+  {
+    "id": "7MX76GfvKyE",
+    "title": "Once Around QB1",
+    "object": "QB1",
+    "ra": 42.53929166666667,
+    "dec": 18.03355555555556,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=7MX76GfvKyE"
+  },
+  {
+    "id": "xX8jxrSc_ok",
+    "title": "Once around Pollux",
+    "object": "Pollux",
+    "ra": 116.32895779166667,
+    "dec": 28.02619888888889,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=xX8jxrSc_ok"
+  },
+  {
+    "id": "_BKLCYu_yR8",
+    "title": "Once Around Castor",
+    "object": "Castor",
+    "ra": 113.649471625,
+    "dec": 31.888282222222223,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=_BKLCYu_yR8"
+  },
+  {
+    "id": "GMs7oqvHJ9w",
+    "title": "Once Around The Pistol Star",
+    "object": "The Pistol Star",
+    "ra": 266.5635,
+    "dec": -28.834327777777776,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=GMs7oqvHJ9w"
+  },
+  {
+    "id": "mr-4qx4TonI",
+    "title": "Once Around The Magellanic Clouds",
+    "object": "The Magellanic Clouds",
+    "ra": 80.89416666666668,
+    "dec": -69.75611111111111,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=mr-4qx4TonI"
+  },
+  {
+    "id": "QjHyei4PRWw",
+    "title": "The Milky Way's Family Tree",
+    "object": "Galactic Center",
+    "ra": 266.4166666666667,
+    "dec": -29.00777777777778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=QjHyei4PRWw"
+  },
+  {
+    "id": "kFVpcocENxI",
+    "title": "Once Around The Goblin",
+    "object": "The Goblin",
+    "ra": 7.155541666666666,
+    "dec": 15.198,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=kFVpcocENxI"
+  },
+  {
+    "id": "SH2KZQrJaf4",
+    "title": "Once Around Vega",
+    "object": "Vega",
+    "ra": 279.23473479166665,
+    "dec": 38.78368894444444,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=SH2KZQrJaf4"
+  },
+  {
+    "id": "7CCD_k8Ng0k",
+    "title": "Once Around Mercury",
+    "object": "Mercury",
+    "ra": 290.4599166666667,
+    "dec": -23.843916666666665,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=7CCD_k8Ng0k"
+  },
+  {
+    "id": "ioUvGDRMrC8",
+    "title": "Once Around Asteroid Apophis",
+    "object": "Asteroid Apophis",
+    "ra": 319.71045833333335,
+    "dec": -14.694777777777778,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=ioUvGDRMrC8"
+  },
+  {
+    "id": "SIJx3967olA",
+    "title": "Once Around Altair",
+    "object": "Altair",
+    "ra": 297.69582729166666,
+    "dec": 8.868321194444444,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=SIJx3967olA"
+  },
+  {
+    "id": "aKMmeLhVRC4",
+    "title": "Once Around TON618",
+    "object": "TON618",
+    "ra": 187.10402488561,
+    "dec": 31.47711916322,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=aKMmeLhVRC4"
+  },
+  {
+    "id": "Gf-2Fpt1T58",
+    "title": "Once Around Venus",
+    "object": "Venus",
+    "ra": 297.33875,
+    "dec": -22.02525,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=Gf-2Fpt1T58"
+  },
+  {
+    "id": "OeNtqQwKvCA",
+    "title": "Once Around Deneb",
+    "object": "Deneb",
+    "ra": 310.35797974999997,
+    "dec": 45.28033880555555,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=OeNtqQwKvCA"
+  },
+  {
+    "id": "yNw0J44zF4o",
+    "title": "Once Around Tabbys Star",
+    "object": "Tabbys Star",
+    "ra": 301.5643860504275,
+    "dec": 44.45688635254389,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=yNw0J44zF4o"
+  },
+  {
+    "id": "nmLQ9pw4BWs",
+    "title": "Once Around Vesta",
+    "object": "Vesta",
+    "ra": 294.303375,
+    "dec": -22.53613888888889,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=nmLQ9pw4BWs"
+  },
+  {
+    "id": "3MV2FpcgjtQ",
+    "title": "Once Around Ceres",
+    "object": "Ceres",
+    "ra": 290.4599166666667,
+    "dec": -23.843916666666665,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=3MV2FpcgjtQ"
+  },
+  {
+    "id": "xgSF8C5epm8",
+    "title": "Once Around Albireo",
+    "object": "Albireo",
+    "ra": 292.68031501400833,
+    "dec": 27.959673631221666,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=xgSF8C5epm8"
+  },
+  {
+    "id": "h2VJ7Zj0P_8",
+    "title": "Once Around the Hyades",
+    "object": "the Hyades",
+    "ra": 67.61416666666666,
+    "dec": 16.77861111111111,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=h2VJ7Zj0P_8"
+  },
+  {
+    "id": "nhdcc_PgQZs",
+    "title": "Once Around The Crab Nebula",
+    "object": "The Crab Nebula",
+    "ra": 83.6325,
+    "dec": 22.0175,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=nhdcc_PgQZs"
+  },
+  {
+    "id": "4S9gCsfnSGE",
+    "title": "Once Around the Whirlpool Galaxy",
+    "object": "the Whirlpool Galaxy",
+    "ra": 202.469575,
+    "dec": 47.19525833333333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=4S9gCsfnSGE"
+  },
+  {
+    "id": "NY1SsOGM_yw",
+    "title": "Once Around Eta Carina",
+    "object": "Eta Carina",
+    "ra": 161.26477419999998,
+    "dec": -59.684430899999995,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=NY1SsOGM_yw"
+  },
+  {
+    "id": "Dt4dnqlzlQs",
+    "title": "Once Around Sagittarius A",
+    "object": "Sagittarius A",
+    "ra": 266.416816625,
+    "dec": -29.007824972222224,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=Dt4dnqlzlQs"
+  },
+  {
+    "id": "5PApG9c0v6c",
+    "title": "Once Around The Beehive Cluster",
+    "object": "The Beehive Cluster",
+    "ra": 129.99333333333334,
+    "dec": 19.609166666666667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=5PApG9c0v6c"
+  },
+  {
+    "id": "sipNso1zklg",
+    "title": "Once Around The Pleiades",
+    "object": "The Pleiades",
+    "ra": 56.65833333333333,
+    "dec": 24.178055555555556,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=sipNso1zklg"
+  },
+  {
+    "id": "aJbsl1est88",
+    "title": "Once Around Ultima Thule",
+    "object": "Ultima Thule",
+    "ra": 296.80941666666666,
+    "dec": -19.46708333333333,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=aJbsl1est88"
+  },
+  {
+    "id": "z3AvYfuXpb8",
+    "title": "Once Around Arcturus",
+    "object": "Arcturus",
+    "ra": 213.91530029166665,
+    "dec": 19.18240916666667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=z3AvYfuXpb8"
+  },
+  {
+    "id": "rnrTCepk6aA",
+    "title": "Once Around Capella",
+    "object": "Capella",
+    "ra": 79.17232795833334,
+    "dec": 45.997991472222225,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=rnrTCepk6aA"
+  },
+  {
+    "id": "tstA9fSPnPU",
+    "title": "Once Around Algol - the demon star",
+    "object": "Algol - the demon star",
+    "ra": 47.04221855625,
+    "dec": 40.95564667027778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=tstA9fSPnPU"
+  },
+  {
+    "id": "7vjTKGN2VD8",
+    "title": "Once Around Przybylskis Star",
+    "object": "Przybylskis Star",
+    "ra": 174.40433733673,
+    "dec": -46.70968829912,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=7vjTKGN2VD8"
+  },
+  {
+    "id": "M8qM4CGEHZM",
+    "title": "Once Around the Lost Asteroid Hermes",
+    "object": "the Lost Asteroid Hermes",
+    "ra": 294.45283333333333,
+    "dec": -25.861611111111113,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=M8qM4CGEHZM"
+  },
+  {
+    "id": "aBzksdM_pSM",
+    "title": "Once Around Polaris",
+    "object": "Polaris",
+    "ra": 37.954560666666666,
+    "dec": 89.26410897222222,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=aBzksdM_pSM"
+  },
+  {
+    "id": "QnfXtX8bGSs",
+    "title": "Once Around Asteroid Bennu",
+    "object": "Asteroid Bennu",
+    "ra": 329.35179166666666,
+    "dec": -12.596555555555556,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=QnfXtX8bGSs"
+  },
+  {
+    "id": "9w5z5lpA_mY",
+    "title": "Once Around Sirius",
+    "object": "Sirius",
+    "ra": 101.28715533333333,
+    "dec": -16.71611586111111,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=9w5z5lpA_mY"
+  },
+  {
+    "id": "YUM9jF-Fnq4",
+    "title": "Betelgeuse, will it supernova tomorrow?",
+    "object": "Betelgeuse",
+    "ra": 88.79291666666667,
+    "dec": 7.406944444444445,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=YUM9jF-Fnq4"
+  },
+  {
+    "id": "JmMujpRrHQI",
+    "title": "A new look at Barnard's Star",
+    "object": "Barnard's Star",
+    "ra": 269.45208333333335,
+    "dec": 4.693333333333333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=JmMujpRrHQI"
+  },
+  {
+    "id": "AEFBMr2ec6A",
+    "title": "Once Around K2 18b",
+    "object": "K2 18b",
+    "ra": 172.56049060233002,
+    "dec": 7.588404263469999,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=AEFBMr2ec6A"
+  },
+  {
+    "id": "4YJ6XYVN2fg",
+    "title": "Once Around 40 Eridani",
+    "object": "40 Eridani",
+    "ra": 63.81799841247708,
+    "dec": -7.652869660838333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=4YJ6XYVN2fg"
+  },
+  {
+    "id": "qYvoM_wJOf4",
+    "title": "Once Around Tau Ceti",
+    "object": "Tau Ceti",
+    "ra": 26.017013071634167,
+    "dec": -15.93747989102139,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=qYvoM_wJOf4"
+  },
+  {
+    "id": "FBggG5xPq6A",
+    "title": "Once Around Epsilon Eridani",
+    "object": "Epsilon Eridani",
+    "ra": 53.23268537982792,
+    "dec": -9.458260970518054,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=FBggG5xPq6A"
+  },
+  {
+    "id": "tE6AWxOdEjg",
+    "title": "The Blaze Star : T Coronae Borealis",
+    "object": "T Coronae Borealis",
+    "ra": 239.87583333333333,
+    "dec": 25.92027777777778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=tE6AWxOdEjg"
+  },
+  {
+    "id": "_S4dcf9C38o",
+    "title": "Galaxies and The Milky Way   I2A5   Brian Lister",
+    "object": "Galactic Center",
+    "ra": 266.4166666666667,
+    "dec": -29.00777777777778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=_S4dcf9C38o"
+  },
+  {
+    "id": "J_ZwmBq5jeE",
+    "title": "I2APt5   Galaxies and the Milky Way",
+    "object": "Galactic Center",
+    "ra": 266.4166666666667,
+    "dec": -29.00777777777778,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=J_ZwmBq5jeE"
+  },
+  {
+    "id": "Xe5dTYbn5HA",
+    "title": "Once Around The Methuselah Star",
+    "object": "The Methuselah Star",
+    "ra": 235.76290466259124,
+    "dec": -10.933498803663333,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=Xe5dTYbn5HA"
+  },
+  {
+    "id": "Nj7uaBnCGU8",
+    "title": "Once Around the Fireworks Galaxy",
+    "object": "the Fireworks Galaxy",
+    "ra": 308.71805,
+    "dec": 60.15367777777777,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=Nj7uaBnCGU8"
+  },
+  {
+    "id": "2zvGO0n6NJw",
+    "title": "Once Around Barnards Star",
+    "object": "Barnards Star",
+    "ra": 269.45207695861876,
+    "dec": 4.693364966576667,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=2zvGO0n6NJw"
+  },
+  {
+    "id": "xdWKXZezkYY",
+    "title": "Once Around Alpha Centauri",
+    "object": "Alpha Centauri",
+    "ra": 219.90208333333334,
+    "dec": -60.83397222222222,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=xdWKXZezkYY"
+  },
+  {
+    "id": "ILwDC9PQ3hw",
+    "title": "Once Around Cygnus X 1",
+    "object": "Cygnus X 1",
+    "ra": 299.59031556498,
+    "dec": 35.201606809080005,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=ILwDC9PQ3hw"
+  },
+  {
+    "id": "T2cpgbUgGXg",
+    "title": "Once around the Ice Giants",
+    "object": "the Ice Giants",
+    "ra": 55.048791666666666,
+    "dec": 19.36088888888889,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=T2cpgbUgGXg"
+  },
+  {
+    "id": "JrqSGS9HHV4",
+    "title": "Once around Saturn",
+    "object": "Saturn",
+    "ra": 357.8427916666667,
+    "dec": -3.352888888888889,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=JrqSGS9HHV4"
+  },
+  {
+    "id": "udTPZx6tAyo",
+    "title": "Once around Jupiter",
+    "object": "Jupiter",
+    "ra": 110.87500000000001,
+    "dec": 22.321638888888888,
+    "moving": true,
+    "url": "https://www.youtube.com/watch?v=udTPZx6tAyo"
+  }
+]
+
+Saved:
+  data/final_placements.json (all 306 videos)
+  data/final_placements.csv (107 placeable videos)

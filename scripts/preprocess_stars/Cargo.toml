@@ -1,0 +1,10 @@
+[package]
+name = "preprocess_stars"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "preprocess_stars"
+path = "src/main.rs"
+
+[dependencies]

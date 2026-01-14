@@ -1,0 +1,8 @@
+[package]
+name = "sky_engine_core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+hifitime.workspace = true
+vsop87.workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "sky_engine"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+sky_engine_core = { path = "../sky_engine_core" }
+wasm-bindgen = "0.2"
+
+[dependencies.web-sys]
+version = "0.3"
+features = ["console"]

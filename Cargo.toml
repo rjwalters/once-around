@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sky_engine_core",
+    "crates/sky_engine",
+    "scripts/preprocess_stars",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Once-Around Contributors"]
+
+[workspace.dependencies]
+hifitime = "4"
+vsop87 = "2"
+
+[profile.release]
+opt-level = "s"
+lto = true

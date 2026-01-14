@@ -1,0 +1,27 @@
+{
+  "name": "once-around-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:wasm": "cd ../../crates/sky_engine && wasm-pack build --target web --out-dir ../../apps/web/src/wasm --release",
+    "build:all": "pnpm build:wasm && pnpm build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "deploy": "pnpm build && wrangler pages deploy dist --project-name=once-around",
+    "deploy:all": "pnpm build:all && wrangler pages deploy dist --project-name=once-around"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vite-plugin-top-level-await": "^1.5.0",
+    "vite-plugin-wasm": "^3.4.0",
+    "wrangler": "^4.59.1"
+  }
+}

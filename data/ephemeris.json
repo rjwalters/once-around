@@ -1,0 +1,274 @@
+{
+  "Mercury": {
+    "name": "Mercury",
+    "horizonsId": "199",
+    "ra": "19 21 50.38",
+    "dec": "-23 50 38.1",
+    "ra_decimal": 290.4599166666667,
+    "dec_decimal": -23.843916666666665,
+    "date": "2026-01-14"
+  },
+  "Venus": {
+    "name": "Venus",
+    "horizonsId": "299",
+    "ra": "19 49 21.30",
+    "dec": "-22 01 30.9",
+    "ra_decimal": 297.33875,
+    "dec_decimal": -22.02525,
+    "date": "2026-01-14"
+  },
+  "Jupiter": {
+    "name": "Jupiter",
+    "horizonsId": "599",
+    "ra": "07 23 30.00",
+    "dec": "+22 19 17.9",
+    "ra_decimal": 110.87500000000001,
+    "dec_decimal": 22.321638888888888,
+    "date": "2026-01-14"
+  },
+  "Saturn": {
+    "name": "Saturn",
+    "horizonsId": "699",
+    "ra": "23 51 22.27",
+    "dec": "-03 21 10.4",
+    "ra_decimal": 357.8427916666667,
+    "dec_decimal": -3.352888888888889,
+    "date": "2026-01-14"
+  },
+  "Janus and Epimetheus": {
+    "name": "Janus and Epimetheus",
+    "horizonsId": "699",
+    "ra": "23 51 22.27",
+    "dec": "-03 21 10.4",
+    "ra_decimal": 357.8427916666667,
+    "dec_decimal": -3.352888888888889,
+    "date": "2026-01-14"
+  },
+  "the Moons of Neptune": {
+    "name": "the Moons of Neptune",
+    "horizonsId": "899",
+    "ra": "23 59 43.53",
+    "dec": "-01 28 24.9",
+    "ra_decimal": 359.931375,
+    "dec_decimal": -1.4735833333333335,
+    "date": "2026-01-14"
+  },
+  "the Moons of Mars": {
+    "name": "the Moons of Mars",
+    "horizonsId": "499",
+    "ra": "19 37 12.81",
+    "dec": "-22 32 10.1",
+    "ra_decimal": 294.303375,
+    "dec_decimal": -22.53613888888889,
+    "date": "2026-01-14"
+  },
+  "the Moons of Pluto": {
+    "name": "the Moons of Pluto",
+    "horizonsId": "999",
+    "ra": "20 23 56.19",
+    "dec": "-23 13 07.5",
+    "ra_decimal": 305.984125,
+    "dec_decimal": -23.21875,
+    "date": "2026-01-14"
+  },
+  "Triton": {
+    "name": "Triton",
+    "horizonsId": "899",
+    "ra": "23 59 43.53",
+    "dec": "-01 28 24.9",
+    "ra_decimal": 359.931375,
+    "dec_decimal": -1.4735833333333335,
+    "date": "2026-01-14"
+  },
+  "Eris": {
+    "name": "Eris",
+    "horizonsId": "136199",
+    "ra": "01 45 17.07",
+    "dec": "-00 25 16.0",
+    "ra_decimal": 26.321125,
+    "dec_decimal": -0.4211111111111111,
+    "date": "2026-01-14"
+  },
+  "Makemake": {
+    "name": "Makemake",
+    "horizonsId": "136472",
+    "ra": "13 29 27.46",
+    "dec": "+20 14 18.8",
+    "ra_decimal": 202.36441666666664,
+    "dec_decimal": 20.238555555555557,
+    "date": "2026-01-14"
+  },
+  "Huamea": {
+    "name": "Huamea",
+    "horizonsId": "136108",
+    "ra": "14 44 10.11",
+    "dec": "+13 42 52.5",
+    "ra_decimal": 221.042125,
+    "dec_decimal": 13.714583333333332,
+    "date": "2026-01-14"
+  },
+  "Quaoar": {
+    "name": "Quaoar",
+    "horizonsId": "50000",
+    "ra": "18 45 06.89",
+    "dec": "-15 11 52.4",
+    "ra_decimal": 281.2787083333333,
+    "dec_decimal": -15.197888888888889,
+    "date": "2026-01-14"
+  },
+  "Orcus": {
+    "name": "Orcus",
+    "horizonsId": "90482",
+    "ra": "10 43 03.46",
+    "dec": "-13 58 46.1",
+    "ra_decimal": 160.76441666666668,
+    "dec_decimal": -13.979472222222222,
+    "date": "2026-01-14"
+  },
+  "Varuna": {
+    "name": "Varuna",
+    "horizonsId": "20000",
+    "ra": "09 01 49.33",
+    "dec": "+26 57 09.5",
+    "ra_decimal": 135.4555416666667,
+    "dec_decimal": 26.952638888888888,
+    "date": "2026-01-14"
+  },
+  "Ixion": {
+    "name": "Ixion",
+    "horizonsId": "28978",
+    "ra": "18 33 46.46",
+    "dec": "-31 50 00.6",
+    "ra_decimal": 278.4435833333333,
+    "dec_decimal": -31.833499999999997,
+    "date": "2026-01-14"
+  },
+  "Gonggong": {
+    "name": "Gonggong",
+    "horizonsId": "225088",
+    "ra": "22 28 39.79",
+    "dec": "-10 26 39.1",
+    "ra_decimal": 337.1657916666666,
+    "dec_decimal": -10.444194444444445,
+    "date": "2026-01-14"
+  },
+  "QB1": {
+    "name": "QB1",
+    "horizonsId": "15760",
+    "ra": "02 50 09.43",
+    "dec": "+18 02 00.8",
+    "ra_decimal": 42.53929166666667,
+    "dec_decimal": 18.03355555555556,
+    "date": "2026-01-14"
+  },
+  "The Goblin": {
+    "name": "The Goblin",
+    "horizonsId": "541132",
+    "ra": "00 28 37.33",
+    "dec": "+15 11 52.8",
+    "ra_decimal": 7.155541666666666,
+    "dec_decimal": 15.198,
+    "date": "2026-01-14"
+  },
+  "Ultima Thule": {
+    "name": "Ultima Thule",
+    "horizonsId": "486958",
+    "ra": "19 47 14.26",
+    "dec": "-19 28 01.5",
+    "ra_decimal": 296.80941666666666,
+    "dec_decimal": -19.46708333333333,
+    "date": "2026-01-14"
+  },
+  "Ceres": {
+    "name": "Ceres",
+    "horizonsId": "1",
+    "ra": "19 21 50.38",
+    "dec": "-23 50 38.1",
+    "ra_decimal": 290.4599166666667,
+    "dec_decimal": -23.843916666666665,
+    "date": "2026-01-14"
+  },
+  "Vesta": {
+    "name": "Vesta",
+    "horizonsId": "4",
+    "ra": "19 37 12.81",
+    "dec": "-22 32 10.1",
+    "ra_decimal": 294.303375,
+    "dec_decimal": -22.53613888888889,
+    "date": "2026-01-14"
+  },
+  "Asteroid Apophis": {
+    "name": "Asteroid Apophis",
+    "horizonsId": "99942",
+    "ra": "21 18 50.51",
+    "dec": "-14 41 41.2",
+    "ra_decimal": 319.71045833333335,
+    "dec_decimal": -14.694777777777778,
+    "date": "2026-01-14"
+  },
+  "Asteroid Bennu": {
+    "name": "Asteroid Bennu",
+    "horizonsId": "101955",
+    "ra": "21 57 24.43",
+    "dec": "-12 35 47.6",
+    "ra_decimal": 329.35179166666666,
+    "dec_decimal": -12.596555555555556,
+    "date": "2026-01-14"
+  },
+  "the Lost Asteroid Hermes": {
+    "name": "the Lost Asteroid Hermes",
+    "horizonsId": "69230",
+    "ra": "19 37 48.68",
+    "dec": "-25 51 41.8",
+    "ra_decimal": 294.45283333333333,
+    "dec_decimal": -25.861611111111113,
+    "date": "2026-01-14"
+  },
+  "Schwassmann-Wachmann-1": {
+    "name": "Schwassmann-Wachmann-1",
+    "error": "Could not parse position",
+    "raw": "*******************************************************************************\nJPL/DASTCOM            Small-body Index Search Results     2026-Jan-13 19:18:13\n\n Comet AND asteroid index search:\n\n    DES = 29P;\n\n Matching small-bodies: \n\n    Record #  Epoch-yr  >MATCH DESIG<  Primary Desig  Name  \n    --------  --------  -------------  -------------  -------------------------\n    90000389    1908    29P            29P             Schwassmann-Wachmann 1\n    90000390    1925    29P            29P "
+  },
+  "3I ATLAS: Interstellar Comet": {
+    "name": "3I ATLAS: Interstellar Comet",
+    "error": "No Horizons ID available"
+  },
+  "New Horizons (Kuiper Belt)": {
+    "name": "New Horizons (Kuiper Belt)",
+    "horizonsId": "-98",
+    "ra": "19 18 45.31",
+    "dec": "-20 13 22.8",
+    "ra_decimal": 289.6887916666667,
+    "dec_decimal": -20.223,
+    "date": "2026-01-14"
+  },
+  "Oumuamua": {
+    "name": "Oumuamua",
+    "error": "No Horizons ID available"
+  },
+  "Vulcan": {
+    "name": "Vulcan",
+    "error": "No Horizons ID available"
+  },
+  "Planet Nine": {
+    "name": "Planet Nine",
+    "error": "No Horizons ID available"
+  },
+  "Achlys": {
+    "name": "Achlys",
+    "error": "No Horizons ID available"
+  },
+  "the Centaurs": {
+    "name": "the Centaurs",
+    "error": "No Horizons ID available"
+  },
+  "the Ice Giants": {
+    "name": "the Ice Giants",
+    "horizonsId": "799",
+    "ra": "03 40 11.71",
+    "dec": "+19 21 39.2",
+    "ra_decimal": 55.048791666666666,
+    "dec_decimal": 19.36088888888889,
+    "date": "2026-01-14"
+  }
+}

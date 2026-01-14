@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# WASM build artifacts (keep .gitignore in wasm dir)
+apps/web/src/wasm/*.wasm
+apps/web/src/wasm/*.js
+apps/web/src/wasm/*.ts
+apps/web/src/wasm/package.json
+!apps/web/src/wasm/.gitignore

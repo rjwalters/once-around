@@ -1,0 +1,23 @@
+{
+  "name": "once-around",
+  "version": "1.0.0",
+  "description": "Visualizer for Paul Fellows' Once Around astronomy series",
+  "main": "index.js",
+  "scripts": {
+    "dev": "pnpm --filter once-around-web dev",
+    "build": "pnpm --filter once-around-web build",
+    "build:wasm": "pnpm --filter once-around-web build:wasm",
+    "build:all": "pnpm --filter once-around-web build:all",
+    "deploy": "pnpm --filter once-around-web deploy",
+    "deploy:all": "pnpm --filter once-around-web deploy:all",
+    "preview": "pnpm --filter once-around-web preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.57.0"
+  }
+}

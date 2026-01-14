@@ -1,0 +1,11 @@
+# Cloudflare Pages configuration
+name = "once-around"
+compatibility_date = "2024-01-01"
+
+# Pages-specific settings
+pages_build_output_dir = "dist"
+
+# Custom domain
+# Note: You must add oncearound.org in Cloudflare Dashboard:
+# Pages > once-around > Custom domains > Add custom domain
+# Then update DNS to point to Cloudflare Pages
