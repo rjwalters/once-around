@@ -101,6 +101,9 @@ async function main(): Promise<void> {
       // Also show labels when videos are visible
       videoMarkers.setLabelsVisible(videosCheckbox.checked);
     });
+    // Set initial visibility based on checkbox state (checked by default)
+    videoMarkers.setVisible(videosCheckbox.checked);
+    videoMarkers.setLabelsVisible(videosCheckbox.checked);
   }
 
   // About modal
