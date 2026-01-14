@@ -95,7 +95,7 @@ export const STAR_DATA: Record<number, StarInfo> = {
     magnitude: 0.13,
     distance: "860 light-years",
     description:
-      "A blue supergiant that is one of the most luminous stars known, shining with about 120,000 times the Sun's luminosity. Despite its 'beta' designation, it's usually brighter than Betelgeuse (alpha). Rigel is only about 8 million years old but has already exhausted its core hydrogen.",
+      "A blue supergiant shining with about 120,000 times the Sun's luminosity. The name comes from Arabic 'rijl' meaning 'foot', marking Orion's left foot. Despite its 'beta' designation, it's usually brighter than Betelgeuse (alpha). Only 8 million years old, Rigel has already exhausted its core hydrogen.",
     ra: 78.63,
     dec: -8.20,
   },
@@ -123,7 +123,7 @@ export const STAR_DATA: Record<number, StarInfo> = {
     magnitude: 0.42,
     distance: "700 light-years",
     description:
-      "One of the largest stars visible to the naked eye - if placed at the Sun's position, its surface would extend past Mars's orbit. Betelgeuse is a semi-regular variable star and is expected to explode as a supernova within the next 100,000 years. In late 2019, it underwent an unusual dimming event.",
+      "One of the largest stars visible to the naked eye - if placed at the Sun's position, its surface would extend past Mars's orbit. The name derives from Arabic 'Ibt al-Jauzāʾ' meaning 'Armpit of Orion', though it was famously mistranscribed over centuries. Betelgeuse is expected to explode as a supernova within the next 100,000 years.",
     ra: 88.79,
     dec: 7.41,
   },
@@ -137,7 +137,7 @@ export const STAR_DATA: Record<number, StarInfo> = {
     magnitude: 0.76,
     distance: "17 light-years",
     description:
-      "One of the closest stars visible to the naked eye. Altair rotates incredibly fast - completing a rotation every 9 hours (compared to the Sun's 25 days), causing it to be noticeably flattened at the poles. Part of the 'Summer Triangle' asterism along with Vega and Deneb.",
+      "One of the closest stars visible to the naked eye. The name comes from Arabic 'al-Ṭāʾir' meaning 'The Flying One', referring to the eagle. Altair rotates incredibly fast - every 9 hours compared to the Sun's 25 days - causing it to be noticeably flattened. Part of the Summer Triangle with Vega and Deneb.",
     ra: 297.70,
     dec: 8.87,
   },
@@ -151,7 +151,7 @@ export const STAR_DATA: Record<number, StarInfo> = {
     magnitude: 0.85,
     distance: "65 light-years",
     description:
-      "The 'Eye of the Bull' in Taurus. An aging giant star about 44 times the Sun's diameter. Although it appears to be part of the Hyades star cluster, Aldebaran is actually much closer to us - a foreground star that just happens to lie in the same direction.",
+      "The 'Eye of the Bull' in Taurus. The name comes from Arabic 'al-Dabarān' meaning 'The Follower', as it appears to follow the Pleiades star cluster across the sky. Although it appears to be part of the Hyades cluster, Aldebaran is actually much closer - a foreground star in the same direction.",
     ra: 68.98,
     dec: 16.51,
   },
@@ -221,7 +221,7 @@ export const STAR_DATA: Record<number, StarInfo> = {
     magnitude: 1.25,
     distance: "2,600 light-years",
     description:
-      "One of the most luminous stars known, shining with over 200,000 times the Sun's luminosity. Despite being about 100 times farther than most bright stars, Deneb still appears among the 20 brightest. It marks the tail of Cygnus the Swan and is part of the Summer Triangle.",
+      "One of the most luminous stars known, shining with over 200,000 times the Sun's luminosity. The name is simply Arabic 'dhanab' meaning 'tail' - it marks the tail of Cygnus the Swan. Despite being about 100 times farther than most bright stars, Deneb still appears among the 20 brightest. Part of the Summer Triangle.",
     ra: 310.36,
     dec: 45.28,
   },
@@ -294,5 +294,395 @@ export const STAR_DATA: Record<number, StarInfo> = {
       "The name means 'Head of the Serpent Charmer' in Arabic. A binary system with a rapidly rotating primary star that completes a rotation every 8.5 hours, giving it a noticeably oblate shape. Ophiuchus is the 13th zodiacal constellation, though not part of traditional astrology.",
     ra: 263.73,
     dec: 12.56,
+  },
+
+  // ==========================================
+  // First Magnitude Stars (added for constellation coverage)
+  // ==========================================
+
+  // Achernar - HR 472
+  472: {
+    name: "Achernar",
+    designation: "Alpha Eridani",
+    constellation: "Eridanus",
+    type: "B6Vep - Blue main-sequence star",
+    magnitude: 0.46,
+    distance: "139 light-years",
+    description:
+      "The ninth-brightest star in the night sky and the brightest in Eridanus, marking the river's end. Achernar is one of the flattest stars known - it rotates so fast (once every 2 days) that its equatorial diameter is 50% larger than its polar diameter. The name means 'End of the River' in Arabic.",
+    ra: 24.43,
+    dec: -57.24,
+  },
+
+  // Acrux - HR 4730
+  4730: {
+    name: "Acrux",
+    designation: "Alpha Crucis",
+    constellation: "Crux",
+    type: "B0.5IV + B1V - Blue subgiant binary",
+    magnitude: 0.76,
+    distance: "320 light-years",
+    description:
+      "The brightest star in the Southern Cross and the southernmost first-magnitude star. Actually a multiple star system with two brilliant blue components orbiting each other. Acrux appears on the flags of Australia, New Zealand, Brazil, Papua New Guinea, and Samoa.",
+    ra: 186.65,
+    dec: -63.10,
+  },
+
+  // ==========================================
+  // Second Magnitude Stars
+  // ==========================================
+
+  // Alnair - HR 8425
+  8425: {
+    name: "Alnair",
+    designation: "Alpha Gruis",
+    constellation: "Grus",
+    type: "B7IV - Blue-white subgiant",
+    magnitude: 1.74,
+    distance: "101 light-years",
+    description:
+      "The brightest star in Grus, the Crane. Its name derives from the Arabic 'al-nayyir' meaning 'the bright one'. Alnair is a young star, only about 100 million years old, and rotates rapidly with a period of less than a day.",
+    ra: 332.06,
+    dec: -46.96,
+  },
+
+  // Alioth - HR 4905
+  4905: {
+    name: "Alioth",
+    designation: "Epsilon Ursae Majoris",
+    constellation: "Ursa Major",
+    type: "A1III-IVp - White giant",
+    magnitude: 1.77,
+    distance: "81 light-years",
+    description:
+      "The brightest star in Ursa Major and the 31st brightest in the sky. Despite its epsilon designation, it outshines all other stars in the Big Dipper. Alioth is a peculiar star with an unusual distribution of elements in its atmosphere, causing its brightness to vary slightly.",
+    ra: 193.51,
+    dec: 55.96,
+  },
+
+  // Mirfak - HR 1017
+  1017: {
+    name: "Mirfak",
+    designation: "Alpha Persei",
+    constellation: "Perseus",
+    type: "F5Ib - Yellow-white supergiant",
+    magnitude: 1.80,
+    distance: "510 light-years",
+    description:
+      "The brightest star in Perseus and the brightest member of the Alpha Persei Cluster, a group of young stars moving together through space. The name means 'elbow' in Arabic, referring to its position in the constellation figure. Mirfak is about 5,000 times more luminous than the Sun.",
+    ra: 51.08,
+    dec: 49.86,
+  },
+
+  // Kaus Australis - HR 6879
+  6879: {
+    name: "Kaus Australis",
+    designation: "Epsilon Sagittarii",
+    constellation: "Sagittarius",
+    type: "B9.5III - Blue-white giant",
+    magnitude: 1.85,
+    distance: "143 light-years",
+    description:
+      "The brightest star in Sagittarius, marking the base of the Archer's bow. The name combines Arabic 'qaus' (bow) with Latin 'australis' (southern). Located near the center of the Milky Way, it serves as a guide to the galactic core region.",
+    ra: 276.04,
+    dec: -34.38,
+  },
+
+  // Atria - HR 6217
+  6217: {
+    name: "Atria",
+    designation: "Alpha Trianguli Australis",
+    constellation: "Triangulum Australe",
+    type: "K2IIb-IIIa - Orange giant",
+    magnitude: 1.91,
+    distance: "415 light-years",
+    description:
+      "The brightest star in Triangulum Australe, the Southern Triangle. Its name is a contraction of 'Alpha Trianguli Australis'. Atria is an orange giant about 5,500 times more luminous than the Sun, with a stellar wind that creates a visible bow shock in infrared images.",
+    ra: 252.17,
+    dec: -69.03,
+  },
+
+  // Peacock - HR 7790
+  7790: {
+    name: "Peacock",
+    designation: "Alpha Pavonis",
+    constellation: "Pavo",
+    type: "B2IV - Blue subgiant",
+    magnitude: 1.94,
+    distance: "179 light-years",
+    description:
+      "The brightest star in Pavo, the Peacock. It was given its English name by Her Majesty's Nautical Almanac Office in the 1930s. Peacock is a spectroscopic binary with a close companion completing an orbit every 11.75 days.",
+    ra: 306.41,
+    dec: -56.74,
+  },
+
+  // Hamal - HR 617
+  617: {
+    name: "Hamal",
+    designation: "Alpha Arietis",
+    constellation: "Aries",
+    type: "K2III - Orange giant",
+    magnitude: 2.00,
+    distance: "66 light-years",
+    description:
+      "The brightest star in Aries, marking the Ram's head. Around 2000 BCE, Hamal was very close to the vernal equinox point, making Aries the first constellation of the zodiac. In 2011, an exoplanet about 1.8 times Jupiter's mass was discovered orbiting Hamal.",
+    ra: 31.79,
+    dec: 23.46,
+  },
+
+  // Alphard - HR 3748
+  3748: {
+    name: "Alphard",
+    designation: "Alpha Hydrae",
+    constellation: "Hydra",
+    type: "K3II-III - Orange giant",
+    magnitude: 2.00,
+    distance: "177 light-years",
+    description:
+      "The brightest star in Hydra, the Water Serpent - the largest constellation in the sky. Known as the 'Solitary One' because it lies in a relatively star-poor region. Alphard is an evolved giant star about 50 times the Sun's diameter, slowly pulsating in brightness.",
+    ra: 141.90,
+    dec: -8.66,
+  },
+
+  // Diphda - HR 188
+  188: {
+    name: "Diphda",
+    designation: "Beta Ceti",
+    constellation: "Cetus",
+    type: "K0III - Orange giant",
+    magnitude: 2.04,
+    distance: "96 light-years",
+    description:
+      "The brightest star in Cetus, the Sea Monster, despite its beta designation. Also known as Deneb Kaitos ('tail of the whale'). Diphda is an evolved giant star about 145 times more luminous than the Sun, and one of the brightest X-ray sources among normal giant stars.",
+    ra: 10.90,
+    dec: -17.99,
+  },
+
+  // Schedar - HR 168
+  168: {
+    name: "Schedar",
+    designation: "Alpha Cassiopeiae",
+    constellation: "Cassiopeia",
+    type: "K0IIIa - Orange giant",
+    magnitude: 2.24,
+    distance: "228 light-years",
+    description:
+      "One of the five bright stars forming Cassiopeia's distinctive W shape. The name derives from Arabic 'sadr' meaning 'breast'. Schedar is a giant star about 40 times the Sun's diameter, with a suspected faint companion detected through variations in its radial velocity.",
+    ra: 10.13,
+    dec: 56.54,
+  },
+
+  // Alphecca - HR 5793
+  5793: {
+    name: "Alphecca",
+    designation: "Alpha Coronae Borealis",
+    constellation: "Corona Borealis",
+    type: "A0V + G5V - White binary",
+    magnitude: 2.23,
+    distance: "75 light-years",
+    description:
+      "The brightest star in Corona Borealis, the Northern Crown, also known as Gemma ('the jewel'). It's an eclipsing binary system where a cooler companion star periodically passes in front of the primary, causing subtle brightness dips every 17 days.",
+    ra: 233.67,
+    dec: 26.71,
+  },
+
+  // Alpheratz - HR 15
+  15: {
+    name: "Alpheratz",
+    designation: "Alpha Andromedae",
+    constellation: "Andromeda",
+    type: "B8IVpMnHg - Blue-white subgiant",
+    magnitude: 2.06,
+    distance: "97 light-years",
+    description:
+      "The brightest star in Andromeda, also historically shared with Pegasus as Delta Pegasi. Alpheratz is chemically peculiar with unusually high concentrations of mercury and manganese in its atmosphere. It forms the northeast corner of the Great Square of Pegasus.",
+    ra: 2.10,
+    dec: 29.09,
+  },
+
+  // Eltanin - HR 6705
+  6705: {
+    name: "Eltanin",
+    designation: "Gamma Draconis",
+    constellation: "Draco",
+    type: "K5III - Orange giant",
+    magnitude: 2.24,
+    distance: "148 light-years",
+    description:
+      "The brightest star in Draco, the Dragon. In about 1.5 million years, Eltanin will pass within 28 light-years of Earth, becoming one of the brightest stars in our sky. James Bradley's observations of Eltanin in 1728 led to the discovery of stellar aberration.",
+    ra: 269.15,
+    dec: 51.49,
+  },
+
+  // Enif - HR 8308
+  8308: {
+    name: "Enif",
+    designation: "Epsilon Pegasi",
+    constellation: "Pegasus",
+    type: "K2Ib - Orange supergiant",
+    magnitude: 2.38,
+    distance: "690 light-years",
+    description:
+      "The brightest star in Pegasus, marking the flying horse's muzzle. The name means 'nose' in Arabic. Enif is an evolved supergiant about 185 times the Sun's diameter. In 1972, it unexpectedly flared to magnitude 0.7 before returning to normal - a rare event for this type of star.",
+    ra: 326.05,
+    dec: 9.88,
+  },
+
+  // ==========================================
+  // Third Magnitude Stars
+  // ==========================================
+
+  // Ankaa - HR 99
+  99: {
+    name: "Ankaa",
+    designation: "Alpha Phoenicis",
+    constellation: "Phoenix",
+    type: "K0III - Orange giant",
+    magnitude: 2.40,
+    distance: "77 light-years",
+    description:
+      "The brightest star in Phoenix, marking the mythical bird's breast. The name is derived from the Arabic word for 'phoenix'. Ankaa is a spectroscopic binary with an orbital period of about 10 years, and the primary is an orange giant roughly 15 times the Sun's diameter.",
+    ra: 6.57,
+    dec: -42.31,
+  },
+
+  // Zubeneschamali - HR 5685
+  5685: {
+    name: "Zubeneschamali",
+    designation: "Beta Librae",
+    constellation: "Libra",
+    type: "B8V - Blue-white main-sequence star",
+    magnitude: 2.61,
+    distance: "185 light-years",
+    description:
+      "The brightest star in Libra, historically reported by many observers to appear distinctly green - an unusual color for a star. The name means 'Northern Claw' from when these stars were part of Scorpius. It rotates rapidly, completing a rotation in less than a day.",
+    ra: 229.25,
+    dec: -9.38,
+  },
+
+  // Unukalhai - HR 5854
+  5854: {
+    name: "Unukalhai",
+    designation: "Alpha Serpentis",
+    constellation: "Serpens",
+    type: "K2III - Orange giant",
+    magnitude: 2.63,
+    distance: "73 light-years",
+    description:
+      "The brightest star in Serpens, the only constellation divided into two parts (Serpens Caput and Serpens Cauda). The name means 'Neck of the Serpent' in Arabic. Unukalhai is a giant star about 12 times the Sun's diameter with a confirmed stellar companion.",
+    ra: 236.07,
+    dec: 6.43,
+  },
+
+  // Kornephoros - HR 6148
+  6148: {
+    name: "Kornephoros",
+    designation: "Beta Herculis",
+    constellation: "Hercules",
+    type: "G7IIIa - Yellow giant",
+    magnitude: 2.77,
+    distance: "139 light-years",
+    description:
+      "The brightest star in Hercules, despite its beta designation. The name means 'club-bearer' in Greek. Kornephoros is actually a binary system with a companion star orbiting every 410 days. The primary is a yellow giant about 17 times the Sun's diameter.",
+    ra: 247.55,
+    dec: 21.49,
+  },
+
+  // Suhail - HR 3634
+  3634: {
+    name: "Suhail",
+    designation: "Lambda Velorum",
+    constellation: "Vela",
+    type: "K4Ib-II - Orange supergiant",
+    magnitude: 2.21,
+    distance: "573 light-years",
+    description:
+      "One of the brightest stars in Vela, the Sail. Suhail is an irregular variable star and evolved supergiant about 11,000 times more luminous than the Sun. The name comes from Arabic, possibly meaning 'smooth' or 'level ground'.",
+    ra: 136.99,
+    dec: -43.43,
+  },
+
+  // Naos - HR 3165
+  3165: {
+    name: "Naos",
+    designation: "Zeta Puppis",
+    constellation: "Puppis",
+    type: "O4If - Blue supergiant",
+    magnitude: 2.25,
+    distance: "1,080 light-years",
+    description:
+      "One of the hottest and most luminous stars visible to the naked eye, with a surface temperature of about 42,000 K. Naos is a runaway star ejected from a binary system, speeding through space at 60 km/s. Its powerful stellar wind loses a mass equal to Earth every year.",
+    ra: 120.90,
+    dec: -40.00,
+  },
+
+  // Gienah - HR 4662
+  4662: {
+    name: "Gienah",
+    designation: "Gamma Corvi",
+    constellation: "Corvus",
+    type: "B8IIIp - Blue giant",
+    magnitude: 2.59,
+    distance: "154 light-years",
+    description:
+      "The brightest star in Corvus, the Crow. The name means 'wing' in Arabic. Gienah is a chemically peculiar star with excess mercury and manganese in its atmosphere. It forms part of the distinctive quadrilateral shape that makes Corvus easy to identify.",
+    ra: 183.95,
+    dec: -17.54,
+  },
+
+  // Arneb - HR 1865
+  1865: {
+    name: "Arneb",
+    designation: "Alpha Leporis",
+    constellation: "Lepus",
+    type: "F0Ib - White supergiant",
+    magnitude: 2.58,
+    distance: "2,200 light-years",
+    description:
+      "The brightest star in Lepus, the Hare, located just south of Orion. The name means 'the hare' in Arabic. Arneb is a rare white supergiant, about 129 times the Sun's diameter. At its great distance, it must be extraordinarily luminous - about 32,000 times the Sun.",
+    ra: 83.18,
+    dec: -17.82,
+  },
+
+  // Phact - HR 1956
+  1956: {
+    name: "Phact",
+    designation: "Alpha Columbae",
+    constellation: "Columba",
+    type: "B7IVe - Blue subgiant",
+    magnitude: 2.65,
+    distance: "268 light-years",
+    description:
+      "The brightest star in Columba, the Dove. The name derives from Arabic 'al-fakhitah' meaning 'ring dove'. Phact is a Be star - a rapidly rotating star that throws off material into a surrounding disk, causing emission lines in its spectrum.",
+    ra: 84.91,
+    dec: -34.07,
+  },
+
+  // Deneb Algedi - HR 8322
+  8322: {
+    name: "Deneb Algedi",
+    designation: "Delta Capricorni",
+    constellation: "Capricornus",
+    type: "A7III - White giant",
+    magnitude: 2.81,
+    distance: "39 light-years",
+    description:
+      "One of the brightest stars in Capricornus, despite its delta designation. The name means 'tail of the goat' in Arabic. Deneb Algedi is an eclipsing binary system where the components partially block each other every 24.5 hours, causing small brightness variations.",
+    ra: 326.76,
+    dec: -16.13,
+  },
+
+  // Sadalsuud - HR 8232
+  8232: {
+    name: "Sadalsuud",
+    designation: "Beta Aquarii",
+    constellation: "Aquarius",
+    type: "G0Ib - Yellow supergiant",
+    magnitude: 2.87,
+    distance: "540 light-years",
+    description:
+      "The brightest star in Aquarius, the Water Bearer. The name means 'luck of lucks' in Arabic, as its heliacal rising marked the end of winter in ancient times. Sadalsuud is a rare yellow supergiant, about 50 times the Sun's diameter and 2,200 times its luminosity.",
+    ra: 322.89,
+    dec: -5.57,
   },
 };
