@@ -79,28 +79,28 @@ function starIdHash(id: number): number {
   return (h >>> 0) / 4294967295; // Convert to 0-1 range
 }
 
-// Major stars - HR (Harvard Revised) number → name
+// Major stars - HIP (Hipparcos) number → name
 const MAJOR_STARS: [number, string][] = [
-  [2491, "Sirius"],
-  [2326, "Canopus"],
-  [5340, "Arcturus"],
-  [7001, "Vega"],
-  [1708, "Capella"],
-  [1713, "Rigel"],
-  [2943, "Procyon"],
-  [2061, "Betelgeuse"],
-  [7557, "Altair"],
-  [1457, "Aldebaran"],
-  [5056, "Spica"],
-  [6134, "Antares"],
-  [2990, "Pollux"],
-  [8728, "Fomalhaut"],
-  [7924, "Deneb"],
-  [3982, "Regulus"],
-  [2891, "Castor"],
-  [5267, "Mizar"],
-  [424, "Polaris"],
-  [6527, "Rasalhague"],
+  [32349, "Sirius"],      // α CMa, mag -1.46
+  [30438, "Canopus"],     // α Car, mag -0.72
+  [69673, "Arcturus"],    // α Boo, mag -0.05
+  [91262, "Vega"],        // α Lyr, mag 0.03
+  [24608, "Capella"],     // α Aur, mag 0.08
+  [24436, "Rigel"],       // β Ori, mag 0.13
+  [37279, "Procyon"],     // α CMi, mag 0.34
+  [27989, "Betelgeuse"],  // α Ori, mag 0.42
+  [97649, "Altair"],      // α Aql, mag 0.76
+  [21421, "Aldebaran"],   // α Tau, mag 0.85
+  [65474, "Spica"],       // α Vir, mag 0.97
+  [80763, "Antares"],     // α Sco, mag 1.06
+  [37826, "Pollux"],      // β Gem, mag 1.14
+  [113368, "Fomalhaut"],  // α PsA, mag 1.16
+  [102098, "Deneb"],      // α Cyg, mag 1.25
+  [49669, "Regulus"],     // α Leo, mag 1.36
+  [36850, "Castor"],      // α Gem, mag 1.58
+  [65378, "Mizar"],       // ζ UMa, mag 2.23
+  [11767, "Polaris"],     // α UMi, mag 1.98
+  [86032, "Rasalhague"],  // α Oph, mag 2.08
 ];
 
 // -----------------------------------------------------------------------------
