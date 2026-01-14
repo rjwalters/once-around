@@ -85,7 +85,7 @@ function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3
   // RA increases eastward, Dec is latitude from equator
   const x = radius * Math.cos(decRad) * Math.cos(raRad);
   const y = radius * Math.sin(decRad);
-  const z = -radius * Math.cos(decRad) * Math.sin(raRad);
+  const z = radius * Math.cos(decRad) * Math.sin(raRad);
 
   return new THREE.Vector3(x, y, z);
 }

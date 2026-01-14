@@ -6,6 +6,44 @@ import { getAllConstellationLines, CONSTELLATIONS } from "./constellations";
 import { applyTimeToEngine } from "./ui";
 
 // -----------------------------------------------------------------------------
+// Coordinate conversion utilities
+// -----------------------------------------------------------------------------
+
+/**
+ * Convert from Rust/WASM coordinate system (Z-up) to Three.js coordinate system (Y-up).
+ *
+ * Rust coords:  X → RA=0, Dec=0 | Y → RA=90°, Dec=0 | Z → north celestial pole
+ * Three.js:     X → RA=0, Dec=0 | Y → north pole    | Z → RA=90°
+ *
+ * The conversion swaps Y↔Z to change from Z-up to Y-up coordinate system.
+ * This matches the getRaDec() function which uses atan2(z, x) for RA and asin(y) for Dec.
+ *
+ * @param rustX - X coordinate from WASM buffer
+ * @param rustY - Y coordinate from WASM buffer
+ * @param rustZ - Z coordinate from WASM buffer
+ * @param scale - Scale factor to apply (e.g., SKY_RADIUS)
+ * @returns THREE.Vector3 in Three.js coordinate system
+ */
+function rustToThreeJS(rustX: number, rustY: number, rustZ: number, scale: number = 1): THREE.Vector3 {
+  return new THREE.Vector3(
+    rustX * scale,       // X stays the same (RA=0, Dec=0)
+    rustZ * scale,       // Rust Z → Three.js Y (north pole up)
+    rustY * scale        // Rust Y → Three.js Z (RA=90°)
+  );
+}
+
+/**
+ * Read a position from a WASM buffer at the given index and convert to Three.js coords.
+ * @param buffer - Float32Array from WASM
+ * @param index - Body/star index (will be multiplied by 3 to get buffer offset)
+ * @param scale - Scale factor to apply
+ */
+function readPositionFromBuffer(buffer: Float32Array, index: number, scale: number = 1): THREE.Vector3 {
+  const offset = index * 3;
+  return rustToThreeJS(buffer[offset], buffer[offset + 1], buffer[offset + 2], scale);
+}
+
+// -----------------------------------------------------------------------------
 // Color utilities
 // -----------------------------------------------------------------------------
 
@@ -76,18 +114,18 @@ const CONSTELLATION_COLOR = new THREE.Color(0.2, 0.4, 0.6);
 // Planets to show orbits for: Mercury(2), Venus(3), Mars(4), Jupiter(5), Saturn(6), Uranus(7), Neptune(8)
 // Exclude Sun(0) and Moon(1) - Moon's path is complex, Sun defines the ecliptic
 const ORBIT_PLANET_INDICES = [2, 3, 4, 5, 6, 7, 8];
-const ORBIT_NUM_POINTS = 400; // Points per orbit path (more for smoother long orbits)
+const ORBIT_NUM_POINTS = 120; // Points per orbit path (reduced from 400 for performance)
 
 // Orbital periods in days - use full period to show complete apparent path
-// Outer planets capped at ~30 years to keep computation reasonable
+// Outer planets use shorter spans since full orbits are visually similar
 const ORBIT_PERIODS_DAYS: Record<number, number> = {
-  2: 88,      // Mercury
-  3: 225,     // Venus
-  4: 687,     // Mars (~2 years)
-  5: 4333,    // Jupiter (~12 years)
-  6: 10759,   // Saturn (~29 years)
-  7: 10950,   // Uranus - capped at 30 years (actual: 84 years)
-  8: 10950,   // Neptune - capped at 30 years (actual: 165 years)
+  2: 88,      // Mercury - full orbit
+  3: 225,     // Venus - full orbit
+  4: 687,     // Mars (~2 years) - full orbit
+  5: 2000,    // Jupiter - ~5.5 years (reduced from 12)
+  6: 3000,    // Saturn - ~8 years (reduced from 29)
+  7: 3000,    // Uranus - ~8 years (reduced from 30)
+  8: 3000,    // Neptune - ~8 years (reduced from 30)
 };
 
 const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
@@ -251,13 +289,14 @@ const milkyWayFragmentShader = `
 varying vec3 vPosition;
 uniform float uVisibility; // 0.0 = hidden, 1.0 = full brightness
 
-// Transformation matrix from equatorial to galactic coordinates
-// Galactic north pole: RA=192.85948°, Dec=+27.12825°
-// Galactic center: RA=266.405°, Dec=-28.936°
+// Transformation matrix from equatorial to galactic coordinates (column-major for GLSL)
+// Galactic north pole: RA=192.85948°, Dec=+27.12825° (12h 51m)
+// Galactic center: RA=266.405°, Dec=-28.936° (17h 46m)
+// Matrix transposed from standard row-major form for GLSL's column-major storage
 const mat3 equatorialToGalactic = mat3(
-  -0.0548755604, -0.8734370902, -0.4838350155,
-  +0.4941094279, -0.4448296300, +0.7469822445,
-  -0.8676661490, -0.1980763734, +0.4559837762
+  -0.0548755604, +0.4941094279, -0.8676661490,  // column 0
+  -0.8734370902, -0.4448296300, -0.1980763734,  // column 1
+  -0.4838350155, +0.7469822445, +0.4559837762   // column 2
 );
 
 // 3D hash function for seamless spherical noise
@@ -290,11 +329,11 @@ float noise3(vec3 p) {
   return mix(z1, z2, f.z);
 }
 
-// 3D Fractal Brownian Motion - seamless on sphere
+// 3D Fractal Brownian Motion - seamless on sphere (reduced octaves for performance)
 float fbm3(vec3 p) {
   float value = 0.0;
   float amplitude = 0.5;
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 3; i++) {
     value += amplitude * noise3(p);
     p *= 2.0;
     amplitude *= 0.5;
@@ -303,11 +342,22 @@ float fbm3(vec3 p) {
 }
 
 void main() {
-  // Normalize position to get direction on unit sphere
+  // Early out if Milky Way is hidden
+  if (uVisibility < 0.01) {
+    gl_FragColor = vec4(0.0);
+    return;
+  }
+
+  // Normalize position to get direction on unit sphere (Three.js Y-up coords)
   vec3 dir = normalize(vPosition);
 
+  // Convert from Three.js (Y-up) to equatorial (Z-up) before galactic transform
+  // Three.js: X=RA0, Y=north pole, Z=RA90
+  // Equatorial: X=RA0, Y=RA90, Z=north pole
+  vec3 eqDir = vec3(dir.x, dir.z, dir.y);
+
   // Transform to galactic coordinates
-  vec3 galDir = equatorialToGalactic * dir;
+  vec3 galDir = equatorialToGalactic * eqDir;
 
   // Calculate galactic latitude (b) and longitude (l)
   float galLat = asin(clamp(galDir.z, -1.0, 1.0)); // -PI/2 to PI/2
@@ -381,7 +431,7 @@ export interface SkyRenderer {
   setLabelsVisible(visible: boolean): void;
   setOrbitsVisible(visible: boolean): void;
   focusOrbit(bodyIndex: number | null): void;
-  computeOrbits(engine: SkyEngine, centerDate: Date): void;
+  computeOrbits(engine: SkyEngine, centerDate: Date): Promise<void>;
   setMilkyWayVisibility(limitingMagnitude: number): void;
   getRenderedStarCount(): number;
   render(): void;
@@ -622,6 +672,12 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     orbitsGroup.add(line);
   }
 
+  // Orbit cache - reuse computed orbits when date hasn't changed much
+  // Orbits show the apparent path which doesn't change dramatically for small date shifts
+  const ORBIT_CACHE_VALIDITY_DAYS = 60; // Cache valid for ±60 days from center
+  let orbitCacheCenterDate: Date | null = null;
+  let orbitCacheValid = false;
+
   // ---------------------------------------------------------------------------
   // CSS2D Label renderer
   // ---------------------------------------------------------------------------
@@ -736,10 +792,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
     for (let i = 0; i < totalStars; i++) {
       const id = Math.round(meta[i * 4 + 2]);
-      const x = positions[i * 3] * SKY_RADIUS;
-      const y = positions[i * 3 + 1] * SKY_RADIUS;
-      const z = positions[i * 3 + 2] * SKY_RADIUS;
-      constellationStarPositionMap.set(id, new THREE.Vector3(x, y, z));
+      constellationStarPositionMap.set(id, readPositionFromBuffer(positions, i, SKY_RADIUS));
     }
   }
 
@@ -805,13 +858,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       const includeInRender = isBright || (starIdHash(id) < faintProbability);
 
       // Always store position for constellation/label lookup (even if not rendered)
-      const x = positions[i * 3] * SKY_RADIUS;
-      const y = positions[i * 3 + 1] * SKY_RADIUS;
-      const z = positions[i * 3 + 2] * SKY_RADIUS;
-      starPositionMap.set(id, new THREE.Vector3(x, y, z));
+      const pos = readPositionFromBuffer(positions, i, SKY_RADIUS);
+      starPositionMap.set(id, pos);
 
       if (includeInRender) {
-        scaledPositions.push(x, y, z);
+        scaledPositions.push(pos.x, pos.y, pos.z);
 
         const color = bvToColor(bv);
         colors.push(color.r, color.g, color.b);
@@ -926,10 +977,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const flagLineColors = new Float32Array(9 * 2 * 3);
 
     // Sun direction (index 0) - needed for Moon/planet phase lighting
-    const sunX = bodyPositions[0];
-    const sunY = bodyPositions[1];
-    const sunZ = bodyPositions[2];
-    const sunDir = new THREE.Vector3(sunX, sunY, sunZ).normalize();
+    const sunUnitPos = readPositionFromBuffer(bodyPositions, 0, 1);
+    const sunDir = sunUnitPos.clone().normalize();
 
     // Helper to update flag line for a body
     function setFlagLine(bodyIdx: number, objPos: THREE.Vector3, labelPos: THREE.Vector3) {
@@ -953,7 +1002,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     }
 
     // Update Sun mesh position
-    const sunPos = new THREE.Vector3(sunX * radius, sunY * radius, sunZ * radius);
+    const sunPos = readPositionFromBuffer(bodyPositions, 0, radius);
     sunMesh.position.copy(sunPos);
 
     // Scale Sun based on true angular diameter
@@ -966,11 +1015,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setFlagLine(0, sunPos, sunLabelPos);
 
     // Moon position (index 1)
-    const moonPos = new THREE.Vector3(
-      bodyPositions[3] * radius,
-      bodyPositions[4] * radius,
-      bodyPositions[5] * radius
-    );
+    const moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
 
     // Update Moon mesh position
     moonMesh.position.copy(moonPos);
@@ -990,11 +1035,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     // Update planet spheres (Mercury=2, Venus=3, Mars=4, Jupiter=5, Saturn=6)
     for (let i = 0; i < 5; i++) {
       const bodyIdx = PLANET_INDICES[i];
-      const planetPos = new THREE.Vector3(
-        bodyPositions[bodyIdx * 3] * radius,
-        bodyPositions[bodyIdx * 3 + 1] * radius,
-        bodyPositions[bodyIdx * 3 + 2] * radius
-      );
+      const planetPos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
 
       // Update position
       planetMeshes[i].position.copy(planetPos);
@@ -1016,11 +1057,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
     // Update Uranus and Neptune labels (indices 7, 8) - not rendered as spheres
     for (const bodyIdx of [7, 8]) {
-      const pos = new THREE.Vector3(
-        bodyPositions[bodyIdx * 3] * radius,
-        bodyPositions[bodyIdx * 3 + 1] * radius,
-        bodyPositions[bodyIdx * 3 + 2] * radius
-      );
+      const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
       const labelPos = calculateLabelOffset(pos, LABEL_OFFSET);
       bodyLabels[bodyIdx].position.copy(labelPos);
       setFlagLine(bodyIdx, pos, labelPos);
@@ -1050,13 +1087,12 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
     for (let i = 0; i < 5; i++) {
       const idx = i * 4;
-      const x = moonsBuffer[idx] * radius;
-      const y = moonsBuffer[idx + 1] * radius;
-      const z = moonsBuffer[idx + 2] * radius;
+      // Moons buffer has 4 components per moon: x, y, z, angDiam
+      const moonPos = rustToThreeJS(moonsBuffer[idx], moonsBuffer[idx + 1], moonsBuffer[idx + 2], radius);
       const angDiam = moonsBuffer[idx + 3];
 
       const mesh = planetaryMoonMeshes[i];
-      mesh.position.set(x, y, z);
+      mesh.position.copy(moonPos);
 
       // Scale based on true angular diameter
       const displayScale = (angDiam * SKY_RADIUS) / 2;
@@ -1064,7 +1100,6 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       mesh.visible = true;
 
       // Update label position with offset
-      const moonPos = new THREE.Vector3(x, y, z);
       const labelPos = calculateLabelOffset(moonPos, LABEL_OFFSET * 0.5);
       planetaryMoonLabels[i].position.copy(labelPos);
       planetaryMoonLabels[i].visible = labelsGroup.visible;
@@ -1125,12 +1160,32 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   /**
+   * Check if the orbit cache is valid for the given date.
+   * Cache is valid if the date is within ORBIT_CACHE_VALIDITY_DAYS of the cache center.
+   */
+  function isOrbitCacheValid(requestedDate: Date): boolean {
+    if (!orbitCacheValid || !orbitCacheCenterDate) return false;
+
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const daysDiff = Math.abs(requestedDate.getTime() - orbitCacheCenterDate.getTime()) / msPerDay;
+    return daysDiff <= ORBIT_CACHE_VALIDITY_DAYS;
+  }
+
+  /**
    * Compute orbital paths for all planets by sampling positions over time.
    * Uses each planet's orbital period to show complete apparent path.
+   * Async to avoid blocking the UI - yields to event loop periodically.
+   * Uses caching to skip recomputation for small date changes.
    */
-  function computeOrbits(engine: SkyEngine, centerDate: Date): void {
+  async function computeOrbits(engine: SkyEngine, centerDate: Date): Promise<void> {
+    // Check if we can use cached orbits
+    if (isOrbitCacheValid(centerDate)) {
+      return; // Cache is valid, no need to recompute
+    }
+
     const radius = SKY_RADIUS - 1;
     const msPerDay = 24 * 60 * 60 * 1000;
+    const CHUNK_SIZE = 20; // Process this many points before yielding
 
     // For each planet, collect positions over its orbital period
     for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
@@ -1151,11 +1206,13 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
         // Get the planet position at this time
         const bodyPositions = getBodiesPositionBuffer(engine);
-        const x = bodyPositions[bodyIdx * 3] * radius;
-        const y = bodyPositions[bodyIdx * 3 + 1] * radius;
-        const z = bodyPositions[bodyIdx * 3 + 2] * radius;
+        const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
+        positions.push(pos.x, pos.y, pos.z);
 
-        positions.push(x, y, z);
+        // Yield to event loop periodically to keep UI responsive
+        if (i % CHUNK_SIZE === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
       }
 
       // Update this planet's orbit line geometry
@@ -1169,6 +1226,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     // Restore the original time
     applyTimeToEngine(engine, centerDate);
     engine.recompute();
+
+    // Update cache
+    orbitCacheCenterDate = new Date(centerDate.getTime());
+    orbitCacheValid = true;
   }
 
   /**
