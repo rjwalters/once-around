@@ -148,12 +148,15 @@ export function createCelestialControls(
    */
   function updateCameraDirection(): void {
     const dir = getViewDirection();
-    camera.lookAt(dir.x * 100, dir.y * 100, dir.z * 100);
 
-    // Update the camera's up vector to prevent roll
+    // Calculate and set the camera's up vector BEFORE lookAt
+    // (lookAt uses camera.up to determine the final orientation)
     const right = getCameraRight();
     const cameraUp = new THREE.Vector3().crossVectors(right, dir).normalize();
     camera.up.copy(cameraUp);
+
+    // Now lookAt will use the correct up vector
+    camera.lookAt(dir.x * 100, dir.y * 100, dir.z * 100);
 
     const spherical = getSphericalFromQuaternion();
     updateDebug({

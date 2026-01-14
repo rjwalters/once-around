@@ -139,6 +139,15 @@ const PLANETARY_MOON_COLORS: THREE.Color[] = [
   new THREE.Color(0.9, 0.7, 0.4),    // Titan - orange (thick atmosphere)
 ];
 
+// Apparent magnitudes of planetary moons (used for star-like brightness rendering)
+const PLANETARY_MOON_MAGNITUDES = [
+  5.0,  // Io
+  5.3,  // Europa
+  4.6,  // Ganymede (brightest Galilean moon)
+  5.7,  // Callisto
+  8.4,  // Titan (much dimmer, often hard to see)
+];
+
 const PLANETARY_MOON_NAMES = ["Io", "Europa", "Ganymede", "Callisto", "Titan"];
 
 // FOV threshold for showing planetary moons (degrees) - only show when zoomed in
@@ -622,21 +631,58 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   // ---------------------------------------------------------------------------
   // Planetary moons (Io, Europa, Ganymede, Callisto, Titan)
+  // Rendered as point sources like stars, with brightness based on magnitude
   // Only visible when zoomed in (FOV < threshold)
   // ---------------------------------------------------------------------------
-  const planetaryMoonGeometry = new THREE.SphereGeometry(1, 16, 16);
-  const planetaryMoonMeshes: THREE.Mesh[] = [];
-  const planetaryMoonMaterials: THREE.MeshBasicMaterial[] = [];
+  const planetaryMoonsGeometry = new THREE.BufferGeometry();
+  // 5 moons * 3 coords = 15 floats for positions
+  const moonPositions = new Float32Array(5 * 3);
+  // 5 moons * 3 color components = 15 floats for colors
+  const moonColors = new Float32Array(5 * 3);
 
+  // Initialize colors and calculate brightness from magnitude
   for (let i = 0; i < 5; i++) {
+    const mag = PLANETARY_MOON_MAGNITUDES[i];
     const color = PLANETARY_MOON_COLORS[i];
-    const material = new THREE.MeshBasicMaterial({ color });
-    const mesh = new THREE.Mesh(planetaryMoonGeometry, material);
-    mesh.visible = false; // Hidden by default, shown when zoomed in
-    planetaryMoonMeshes.push(mesh);
-    planetaryMoonMaterials.push(material);
-    scene.add(mesh);
+    // Convert magnitude to brightness factor (similar to star rendering)
+    // Brighter moons (lower mag) get higher intensity
+    const brightness = Math.pow(10, (4.6 - mag) / 2.5); // Normalize to Ganymede = 1.0
+    const clampedBrightness = Math.min(1.0, Math.max(0.15, brightness));
+
+    moonColors[i * 3] = color.r * clampedBrightness;
+    moonColors[i * 3 + 1] = color.g * clampedBrightness;
+    moonColors[i * 3 + 2] = color.b * clampedBrightness;
   }
+
+  planetaryMoonsGeometry.setAttribute('position', new THREE.BufferAttribute(moonPositions, 3));
+  planetaryMoonsGeometry.setAttribute('color', new THREE.BufferAttribute(moonColors, 3));
+
+  const planetaryMoonsMaterial = new THREE.PointsMaterial({
+    size: 2.5, // Similar to bright stars
+    sizeAttenuation: false,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.95,
+  });
+
+  const planetaryMoonsPoints = new THREE.Points(planetaryMoonsGeometry, planetaryMoonsMaterial);
+  planetaryMoonsPoints.visible = false; // Hidden by default
+  scene.add(planetaryMoonsPoints);
+
+  // Planetary moon flag lines (5 moons * 2 endpoints * 3 coords = 30 floats)
+  const moonFlagLinesGeometry = new THREE.BufferGeometry();
+  const moonFlagPositions = new Float32Array(5 * 2 * 3);
+  const moonFlagColors = new Float32Array(5 * 2 * 3);
+  moonFlagLinesGeometry.setAttribute("position", new THREE.BufferAttribute(moonFlagPositions, 3));
+  moonFlagLinesGeometry.setAttribute("color", new THREE.BufferAttribute(moonFlagColors, 3));
+  const moonFlagLinesMaterial = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.5,
+  });
+  const moonFlagLines = new THREE.LineSegments(moonFlagLinesGeometry, moonFlagLinesMaterial);
+  moonFlagLines.visible = false;
+  scene.add(moonFlagLines);
 
   // ---------------------------------------------------------------------------
   // Constellation lines layer
@@ -1075,10 +1121,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   function updatePlanetaryMoons(engine: SkyEngine, fov: number): void {
     const visible = fov < PLANETARY_MOONS_FOV_THRESHOLD;
 
-    // Hide all moons and labels if FOV is too wide
+    // Hide moons, labels, and flag lines if FOV is too wide
     if (!visible) {
+      planetaryMoonsPoints.visible = false;
+      moonFlagLines.visible = false;
       for (let i = 0; i < 5; i++) {
-        planetaryMoonMeshes[i].visible = false;
         planetaryMoonLabels[i].visible = false;
       }
       return;
@@ -1087,25 +1134,44 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const moonsBuffer = getPlanetaryMoonsBuffer(engine);
     const radius = SKY_RADIUS - 0.5; // Slightly in front of sky sphere
 
+    // Smaller label offset for moons (they're smaller objects)
+    const MOON_LABEL_OFFSET = 0.4;
+
+    // Get the position buffer attributes to update
+    const posAttr = planetaryMoonsGeometry.getAttribute('position') as THREE.BufferAttribute;
+    const flagPosAttr = moonFlagLinesGeometry.getAttribute('position') as THREE.BufferAttribute;
+    const flagColorAttr = moonFlagLinesGeometry.getAttribute('color') as THREE.BufferAttribute;
+
     for (let i = 0; i < 5; i++) {
       const idx = i * 4;
       // Moons buffer has 4 components per moon: x, y, z, angDiam
       const moonPos = rustToThreeJS(moonsBuffer[idx], moonsBuffer[idx + 1], moonsBuffer[idx + 2], radius);
-      const angDiam = moonsBuffer[idx + 3];
 
-      const mesh = planetaryMoonMeshes[i];
-      mesh.position.copy(moonPos);
+      // Update position in the Points geometry buffer
+      posAttr.setXYZ(i, moonPos.x, moonPos.y, moonPos.z);
 
-      // Scale based on angular diameter (enhanced for visibility)
-      const displayScale = (angDiam * SKY_RADIUS ) / 2;
-      mesh.scale.setScalar(displayScale);
-      mesh.visible = true;
-
-      // Update label position with offset
-      const labelPos = calculateLabelOffset(moonPos, LABEL_OFFSET * 0.5);
+      // Update label position with smaller offset
+      const labelPos = calculateLabelOffset(moonPos, MOON_LABEL_OFFSET);
       planetaryMoonLabels[i].position.copy(labelPos);
       planetaryMoonLabels[i].visible = labelsGroup.visible;
+
+      // Update flag line (moon position to label position)
+      const color = PLANETARY_MOON_COLORS[i];
+      // Moon end
+      flagPosAttr.setXYZ(i * 2, moonPos.x, moonPos.y, moonPos.z);
+      // Label end
+      flagPosAttr.setXYZ(i * 2 + 1, labelPos.x, labelPos.y, labelPos.z);
+      // Colors (same for both ends)
+      flagColorAttr.setXYZ(i * 2, color.r, color.g, color.b);
+      flagColorAttr.setXYZ(i * 2 + 1, color.r, color.g, color.b);
     }
+
+    // Mark buffers as needing update
+    posAttr.needsUpdate = true;
+    flagPosAttr.needsUpdate = true;
+    flagColorAttr.needsUpdate = true;
+    planetaryMoonsPoints.visible = true;
+    moonFlagLines.visible = labelsGroup.visible;
   }
 
   // Track whether constellation star map has been initialized

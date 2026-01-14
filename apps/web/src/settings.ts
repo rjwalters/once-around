@@ -6,7 +6,14 @@
 const STORAGE_KEY = "once-around-settings";
 const DEBOUNCE_MS = 500;
 
+// Increment this when coordinate system or camera orientation changes
+// to invalidate old saved camera quaternions
+const SETTINGS_VERSION = 2;
+
 export interface Settings {
+  // Settings schema version (for migration)
+  version: number;
+
   // Camera state
   cameraQuaternion: { x: number; y: number; z: number; w: number };
   fov: number;
@@ -23,6 +30,7 @@ export interface Settings {
 }
 
 const DEFAULT_SETTINGS: Settings = {
+  version: SETTINGS_VERSION,
   cameraQuaternion: { x: 0, y: 0, z: 0, w: 1 },
   fov: 60,
   datetime: new Date().toISOString(),
@@ -36,6 +44,7 @@ const DEFAULT_SETTINGS: Settings = {
 /**
  * Load settings from localStorage.
  * Returns default settings if none exist or on parse error.
+ * Resets camera quaternion if settings version changed (coordinate system fix).
  */
 export function loadSettings(): Settings {
   try {
@@ -45,7 +54,16 @@ export function loadSettings(): Settings {
     }
     const parsed = JSON.parse(stored);
     // Merge with defaults to handle missing fields from older versions
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const settings = { ...DEFAULT_SETTINGS, ...parsed };
+
+    // Check version - reset camera quaternion if outdated (coordinate system changed)
+    if (!parsed.version || parsed.version < SETTINGS_VERSION) {
+      console.log("Settings version changed, resetting camera orientation");
+      settings.version = SETTINGS_VERSION;
+      settings.cameraQuaternion = DEFAULT_SETTINGS.cameraQuaternion;
+    }
+
+    return settings;
   } catch {
     console.warn("Failed to load settings, using defaults");
     return { ...DEFAULT_SETTINGS };

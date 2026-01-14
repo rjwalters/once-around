@@ -66,8 +66,8 @@ async function main(): Promise<void> {
     fov: settings.fov,
   });
 
-  // Initial render from engine
-  renderer.updateFromEngine(engine);
+  // Initial render from engine (pass saved FOV for consistent LOD)
+  renderer.updateFromEngine(engine, settings.fov);
 
   // Save camera changes (debounced)
   controls.onCameraChange = () => {
@@ -141,8 +141,8 @@ async function main(): Promise<void> {
     engine.recompute();
   }
 
-  // Update display after restoring settings
-  renderer.updateFromEngine(engine);
+  // Update display after restoring settings (pass saved FOV for consistent LOD)
+  renderer.updateFromEngine(engine, settings.fov);
   renderer.setMilkyWayVisibility(settings.magnitude);
 
   // Track current date for orbit computation (updated in onTimeChange)
@@ -494,6 +494,10 @@ async function main(): Promise<void> {
   const coordRaEl = document.getElementById("coord-ra");
   const coordDecEl = document.getElementById("coord-dec");
   const coordFovEl = document.getElementById("coord-fov");
+  const referenceCircle = document.getElementById("reference-circle");
+
+  // Reference circle size in arcseconds
+  const REFERENCE_ARCSEC = 50;
 
   /**
    * Format RA in hours/minutes (e.g., "12h 34m")
@@ -516,12 +520,49 @@ async function main(): Promise<void> {
     return `${sign}${d}° ${m.toString().padStart(2, "0")}'`;
   }
 
+  /**
+   * Update the reference circle size based on current FOV.
+   * The circle represents REFERENCE_ARCSEC arcseconds.
+   * Only shown when FOV < 5° (where it becomes useful for comparison).
+   */
+  function updateReferenceCircle(fov: number): void {
+    if (!referenceCircle) return;
+
+    // Only show when zoomed in enough for it to be useful
+    if (fov > 5) {
+      referenceCircle.style.display = "none";
+      return;
+    }
+
+    // Calculate circle size in pixels
+    // FOV is the vertical field of view in degrees
+    // Reference is in arcseconds, FOV in degrees (1 deg = 3600 arcsec)
+    const fovArcsec = fov * 3600;
+    const canvasHeight = window.innerHeight;
+    const circlePx = (REFERENCE_ARCSEC / fovArcsec) * canvasHeight;
+
+    // Show the circle and set its size
+    referenceCircle.style.display = "block";
+    referenceCircle.style.width = `${circlePx}px`;
+    referenceCircle.style.height = `${circlePx}px`;
+  }
+
   function updateCoordinates(): void {
     const { ra, dec } = controls.getRaDec();
     const { fov } = controls.getCameraState();
     if (coordRaEl) coordRaEl.textContent = formatRA(ra);
     if (coordDecEl) coordDecEl.textContent = formatDec(dec);
-    if (coordFovEl) coordFovEl.textContent = `${Math.round(fov)}°`;
+    if (coordFovEl) {
+      // Show decimal for small FOVs
+      if (fov < 1) {
+        coordFovEl.textContent = `${fov.toFixed(2)}°`;
+      } else if (fov < 10) {
+        coordFovEl.textContent = `${fov.toFixed(1)}°`;
+      } else {
+        coordFovEl.textContent = `${Math.round(fov)}°`;
+      }
+    }
+    updateReferenceCircle(fov);
   }
 
   // Update coordinates initially
@@ -542,6 +583,14 @@ async function main(): Promise<void> {
   }
 
   animate();
+
+  // Force a full update after first render frame to ensure everything is initialized
+  // This fixes issues where planetary moons or other elements don't render until interaction
+  requestAnimationFrame(() => {
+    renderer.updateFromEngine(engine, settings.fov);
+    updateRenderedStars();
+  });
+
   console.log("Once Around ready!");
 }
 

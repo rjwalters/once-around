@@ -267,4 +267,55 @@ mod tests {
             "Io should have moved after half a period"
         );
     }
+
+    #[test]
+    fn test_jupiter_moon_angular_separation() {
+        // Verify the angular separation between Jupiter and its moons is correct
+        use crate::planets::compute_planet_position_full;
+
+        let time = SkyTime::from_utc(2024, 1, 1, 0, 0, 0.0);
+
+        // Get Jupiter's position
+        let jupiter = compute_planet_position_full(Planet::Jupiter, &time);
+        let (jup_ra, jup_dec) = cartesian_to_ra_dec(&jupiter.direction);
+        let jupiter_ang_diam_arcsec = jupiter.angular_diameter_rad * 206264.806;
+
+        println!("Jupiter distance: {:.0} km", jupiter.distance_km);
+        println!("Jupiter angular diameter: {:.1} arcsec", jupiter_ang_diam_arcsec);
+
+        // Get each moon's position and calculate angular separation
+        for moon in [PlanetaryMoon::Io, PlanetaryMoon::Europa, PlanetaryMoon::Ganymede, PlanetaryMoon::Callisto] {
+            let moon_pos = compute_planetary_moon_position(moon, &time);
+            let (moon_ra, moon_dec) = cartesian_to_ra_dec(&moon_pos.direction);
+
+            // Angular separation using dot product
+            let dot = jupiter.direction.x * moon_pos.direction.x
+                + jupiter.direction.y * moon_pos.direction.y
+                + jupiter.direction.z * moon_pos.direction.z;
+            let sep_rad = dot.clamp(-1.0, 1.0).acos();
+            let sep_arcsec = sep_rad * 206264.806;
+
+            // Expected max separation based on orbital distance
+            let elem = moon.elements();
+            let expected_max_arcsec = (elem.semi_major_axis_km / jupiter.distance_km).atan() * 206264.806;
+
+            println!(
+                "{}: separation = {:.1} arcsec ({:.1} Jupiter diameters from center), expected max = {:.1} arcsec",
+                moon.name(),
+                sep_arcsec,
+                sep_arcsec / jupiter_ang_diam_arcsec,
+                expected_max_arcsec
+            );
+
+            // Separation should not exceed the expected maximum by much
+            // (allowing some margin for orbital eccentricity and phase)
+            assert!(
+                sep_arcsec <= expected_max_arcsec * 1.2,
+                "{} separation ({:.1}\") exceeds expected max ({:.1}\")",
+                moon.name(),
+                sep_arcsec,
+                expected_max_arcsec
+            );
+        }
+    }
 }
