@@ -28,3 +28,4 @@ apps/web/src/wasm/*.js
 apps/web/src/wasm/*.ts
 apps/web/src/wasm/package.json
 !apps/web/src/wasm/.gitignore
+test-results/

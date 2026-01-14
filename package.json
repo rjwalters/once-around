@@ -12,13 +12,15 @@
     "deploy:prod": "pnpm --filter once-around-web deploy:prod",
     "deploy:all": "pnpm --filter once-around-web deploy:all",
     "preview": "pnpm --filter once-around-web preview",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "playwright test",
+    "test:perf": "playwright test tests/performance.spec.ts --reporter=list",
+    "test:ui": "playwright test --ui"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "dependencies": {
-    "playwright": "^1.57.0"
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
   }
 }

@@ -1048,7 +1048,11 @@ async function main(): Promise<void> {
   });
 
   // Hover detection for video markers - change cursor to pointer
+  // Throttled to reduce raycast frequency
   let isHoveringVideo = false;
+  let lastMouseMoveTime = 0;
+  const MOUSE_MOVE_THROTTLE = 50; // ms
+
   renderer.renderer.domElement.addEventListener("mousemove", (event) => {
     // Only process if videos layer is visible
     if (!videoMarkers.group.visible) {
@@ -1058,6 +1062,13 @@ async function main(): Promise<void> {
       }
       return;
     }
+
+    // Throttle mousemove raycasts
+    const now = performance.now();
+    if (now - lastMouseMoveTime < MOUSE_MOVE_THROTTLE) {
+      return;
+    }
+    lastMouseMoveTime = now;
 
     // Calculate mouse position in normalized device coordinates
     const rect = renderer.renderer.domElement.getBoundingClientRect();
@@ -1240,7 +1251,29 @@ async function main(): Promise<void> {
     referenceCircle.style.height = `${circlePx}px`;
   }
 
+  // Throttle coordinate updates to reduce DOM operations during drag
+  let lastCoordUpdateTime = 0;
+  let coordUpdatePending = false;
+  const COORD_UPDATE_INTERVAL = 100; // ms - update at most 10 times per second
+
   function updateCoordinates(): void {
+    const now = performance.now();
+    if (now - lastCoordUpdateTime < COORD_UPDATE_INTERVAL) {
+      // Schedule update if not already pending
+      if (!coordUpdatePending) {
+        coordUpdatePending = true;
+        requestAnimationFrame(() => {
+          coordUpdatePending = false;
+          updateCoordinatesImmediate();
+        });
+      }
+      return;
+    }
+    updateCoordinatesImmediate();
+  }
+
+  function updateCoordinatesImmediate(): void {
+    lastCoordUpdateTime = performance.now();
     const { ra, dec } = controls.getRaDec();
     const { fov } = controls.getCameraState();
     if (coordRaEl) coordRaEl.textContent = formatRA(ra);
@@ -1259,9 +1292,9 @@ async function main(): Promise<void> {
   }
 
   // Update coordinates initially
-  updateCoordinates();
+  updateCoordinatesImmediate();
 
-  // Update coordinates on camera change
+  // Update coordinates on camera change (throttled)
   const originalOnCameraChange = controls.onCameraChange;
   controls.onCameraChange = () => {
     originalOnCameraChange?.();

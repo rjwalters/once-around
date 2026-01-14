@@ -1047,6 +1047,40 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   // Constellation line pairs (HR numbers)
   const constellationPairs = getAllConstellationLines();
 
+  // Pre-allocated buffers for star rendering (avoid GC pressure)
+  // These are sized for max stars and reused each frame
+  const MAX_STARS_BUFFER = 50000;
+  let starPositionBuffer = new Float32Array(MAX_STARS_BUFFER * 3);
+  let starColorBuffer = new Float32Array(MAX_STARS_BUFFER * 3);
+  let starPositionAttr = new THREE.BufferAttribute(starPositionBuffer, 3);
+  let starColorAttr = new THREE.BufferAttribute(starColorBuffer, 3);
+  starPositionAttr.setUsage(THREE.DynamicDrawUsage);
+  starColorAttr.setUsage(THREE.DynamicDrawUsage);
+  starsGeometry.setAttribute("position", starPositionAttr);
+  starsGeometry.setAttribute("color", starColorAttr);
+
+  // Pre-allocated buffers for constellation lines
+  const MAX_CONSTELLATION_LINES = 2000;
+  let constellationPositionBuffer = new Float32Array(MAX_CONSTELLATION_LINES * 2 * 3);
+  let constellationPositionAttr = new THREE.BufferAttribute(constellationPositionBuffer, 3);
+  constellationPositionAttr.setUsage(THREE.DynamicDrawUsage);
+  constellationGeometry.setAttribute("position", constellationPositionAttr);
+
+  // Pre-allocated buffers for star flag lines
+  const MAX_STAR_FLAGS = 30;
+  let starFlagPositionBuffer = new Float32Array(MAX_STAR_FLAGS * 2 * 3);
+  let starFlagPositionAttr = new THREE.BufferAttribute(starFlagPositionBuffer, 3);
+  starFlagPositionAttr.setUsage(THREE.DynamicDrawUsage);
+  starFlagLinesGeometry.setAttribute("position", starFlagPositionAttr);
+
+  // Reusable Vector3 and Color objects to avoid allocations
+  const tempVec3 = new THREE.Vector3();
+  const tempColor = new THREE.Color();
+
+  // Track if constellation positions need update (only on star position change)
+  let constellationsDirty = true;
+  let lastConstellationUpdateFov = -1;
+
   // Build the constellation star position map from all stars buffer (called once)
   function buildConstellationStarMap(engine: SkyEngine): void {
     const positions = getAllStarsPositionBuffer(engine);
@@ -1077,8 +1111,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     starPositionMap = new Map();
 
     if (totalStars === 0) {
-      starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
-      starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
+      starsGeometry.setDrawRange(0, 0);
+      renderedStarCount = 0;
       return;
     }
 
@@ -1111,10 +1145,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const faintTarget = Math.max(0, targetStars - brightCount);
     const faintProbability = faintCount > 0 ? Math.min(1.0, faintTarget / faintCount) : 1.0;
 
-    // Second pass: build arrays with LOD sampling
-    // Pre-allocate for worst case (all stars), then trim
-    const scaledPositions: number[] = [];
-    const colors: number[] = [];
+    // Second pass: fill pre-allocated buffers with LOD sampling
+    let starIndex = 0;
 
     for (let i = 0; i < totalStars; i++) {
       const vmag = meta[i * 4];
@@ -1126,6 +1158,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       const includeInRender = isBright || (starIdHash(id) < faintProbability);
 
       // Always store position for constellation/label lookup (even if not rendered)
+      // Use readPositionFromBuffer for correct coordinate transformation
       const pos = readPositionFromBuffer(positions, i, SKY_RADIUS);
       starPositionMap.set(id, pos);
 
@@ -1144,26 +1177,76 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     renderedStarCount = scaledPositions.length / 3;
   }
 
+  // Optimized version that writes directly to a Color object (kept for future use)
+  function bvToColorInPlace(bv: number, color: THREE.Color): void {
+    bv = Math.max(-0.4, Math.min(2.0, bv));
+
+    let r: number, g: number, b: number;
+
+    if (bv < -0.1) {
+      const t = (bv + 0.4) / 0.3;
+      r = 0.5 + 0.35 * t;
+      g = 0.6 + 0.3 * t;
+      b = 1.0;
+    } else if (bv < 0.3) {
+      const t = (bv + 0.1) / 0.4;
+      r = 0.85 + 0.15 * t;
+      g = 0.9 + 0.1 * t;
+      b = 1.0;
+    } else if (bv < 0.6) {
+      const t = (bv - 0.3) / 0.3;
+      r = 1.0;
+      g = 1.0 - 0.05 * t;
+      b = 0.95 - 0.15 * t;
+    } else if (bv < 0.8) {
+      const t = (bv - 0.6) / 0.2;
+      r = 1.0;
+      g = 0.95 - 0.1 * t;
+      b = 0.8 - 0.2 * t;
+    } else if (bv < 1.2) {
+      const t = (bv - 0.8) / 0.4;
+      r = 1.0;
+      g = 0.85 - 0.25 * t;
+      b = 0.6 - 0.35 * t;
+    } else {
+      const t = Math.min(1.0, (bv - 1.2) / 0.8);
+      r = 1.0;
+      g = 0.6 - 0.25 * t;
+      b = 0.25 - 0.15 * t;
+    }
+
+    color.setRGB(r, g, b);
+  }
+
   function updateConstellations(): void {
-    // Build line segment positions from star pairs
-    // Use constellationStarPositionMap (all stars) to draw complete constellation lines
-    // regardless of current magnitude limit
-    const linePositions: number[] = [];
+    // Only update constellation lines if star positions changed
+    // Constellation star positions come from constellationStarPositionMap which is built once
+    // so we only need to rebuild when that map is rebuilt
+    if (!constellationsDirty) {
+      return;
+    }
+
+    // Build line segment positions from star pairs using pre-allocated buffer
+    let lineIndex = 0;
 
     for (const [hr1, hr2] of constellationPairs) {
       const pos1 = constellationStarPositionMap.get(hr1);
       const pos2 = constellationStarPositionMap.get(hr2);
 
-      if (pos1 && pos2) {
-        linePositions.push(pos1.x, pos1.y, pos1.z);
-        linePositions.push(pos2.x, pos2.y, pos2.z);
+      if (pos1 && pos2 && lineIndex < MAX_CONSTELLATION_LINES) {
+        const idx = lineIndex * 6; // 2 points * 3 coords
+        constellationPositionBuffer[idx] = pos1.x;
+        constellationPositionBuffer[idx + 1] = pos1.y;
+        constellationPositionBuffer[idx + 2] = pos1.z;
+        constellationPositionBuffer[idx + 3] = pos2.x;
+        constellationPositionBuffer[idx + 4] = pos2.y;
+        constellationPositionBuffer[idx + 5] = pos2.z;
+        lineIndex++;
       }
     }
 
-    constellationGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(new Float32Array(linePositions), 3)
-    );
+    constellationPositionAttr.needsUpdate = true;
+    constellationGeometry.setDrawRange(0, lineIndex * 2);
 
     // Update constellation label positions (centroid of all stars in constellation)
     for (const constellation of CONSTELLATIONS) {
@@ -1206,33 +1289,66 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       }
     }
 
-    // Update major star label positions with offset and flag lines
-    const starFlagPositions: number[] = [];
+    // Update major star label positions with offset and flag lines using pre-allocated buffer
+    let flagIndex = 0;
 
     for (const [hr, _name] of MAJOR_STARS) {
       const label = starLabels.get(hr);
       if (!label) continue;
 
       const pos = starPositionMap.get(hr);
-      if (pos) {
-        // Calculate offset label position
-        const labelPos = calculateLabelOffset(pos, LABEL_OFFSET);
-        label.position.copy(labelPos);
+      if (pos && flagIndex < MAX_STAR_FLAGS) {
+        // Calculate offset label position using reusable tempVec3
+        calculateLabelOffsetInPlace(pos, LABEL_OFFSET, tempVec3);
+        label.position.copy(tempVec3);
         label.visible = true;
 
         // Add flag line from star to label
-        starFlagPositions.push(pos.x, pos.y, pos.z);
-        starFlagPositions.push(labelPos.x, labelPos.y, labelPos.z);
-      } else {
+        const idx = flagIndex * 6;
+        starFlagPositionBuffer[idx] = pos.x;
+        starFlagPositionBuffer[idx + 1] = pos.y;
+        starFlagPositionBuffer[idx + 2] = pos.z;
+        starFlagPositionBuffer[idx + 3] = tempVec3.x;
+        starFlagPositionBuffer[idx + 4] = tempVec3.y;
+        starFlagPositionBuffer[idx + 5] = tempVec3.z;
+        flagIndex++;
+      } else if (label) {
         label.visible = false;
       }
     }
 
-    // Update star flag lines geometry
-    starFlagLinesGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(new Float32Array(starFlagPositions), 3)
-    );
+    starFlagPositionAttr.needsUpdate = true;
+    starFlagLinesGeometry.setDrawRange(0, flagIndex * 2);
+
+    constellationsDirty = false;
+  }
+
+  // Reusable vectors for label offset calculation
+  const offsetRadial = new THREE.Vector3();
+  const offsetEast = new THREE.Vector3();
+  const offsetDown = new THREE.Vector3();
+  const worldUpVec = new THREE.Vector3(0, 1, 0);
+
+  // Optimized version that writes result to an existing Vector3
+  function calculateLabelOffsetInPlace(objectPos: THREE.Vector3, offset: number, result: THREE.Vector3): void {
+    offsetRadial.copy(objectPos).normalize();
+
+    // Calculate "east" direction (perpendicular to radial and up)
+    offsetEast.crossVectors(worldUpVec, offsetRadial);
+
+    // Handle case where object is at celestial poles
+    if (offsetEast.lengthSq() < 0.001) {
+      offsetEast.set(1, 0, 0);
+    }
+    offsetEast.normalize();
+
+    // Calculate "down" direction on sphere surface (toward south)
+    offsetDown.crossVectors(offsetRadial, offsetEast).normalize();
+
+    // Offset position, then re-project to sphere
+    result.copy(objectPos).addScaledVector(offsetDown, offset);
+    const radius = objectPos.length();
+    result.normalize().multiplyScalar(radius);
   }
 
   function updateBodies(engine: SkyEngine): void {
