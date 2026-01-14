@@ -79,12 +79,59 @@ export function getPlanetsPositionBuffer(engine: SkyEngine): Float32Array {
 
 /**
  * Create a Float32Array view into the celestial bodies position buffer.
- * 7 bodies * 3 coords = 21 floats.
- * Order: Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn
+ * 9 bodies * 3 coords = 27 floats.
+ * Order: Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune
  */
 export function getBodiesPositionBuffer(engine: SkyEngine): Float32Array {
   const memory = getWasmMemory();
   const ptr = engine.bodies_pos_ptr();
   const len = engine.bodies_pos_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}
+
+/**
+ * Create a Float32Array view into the celestial bodies angular diameters buffer.
+ * 9 floats (one per body, in radians).
+ * Order: Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune
+ */
+export function getBodiesAngularDiametersBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.bodies_angular_diameters_ptr();
+  const len = engine.bodies_angular_diameters_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}
+
+/**
+ * Create a Float32Array view into the planetary moons position buffer.
+ * 5 moons * 4 floats (x, y, z, angular_diameter) = 20 floats.
+ * Order: Io, Europa, Ganymede, Callisto, Titan
+ */
+export function getPlanetaryMoonsBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.planetary_moons_pos_ptr();
+  const len = engine.planetary_moons_pos_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}
+
+/**
+ * Create a Float32Array view into the ALL stars position buffer.
+ * Contains all stars regardless of magnitude limit (for constellation drawing).
+ */
+export function getAllStarsPositionBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.all_stars_pos_ptr();
+  const len = engine.all_stars_pos_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}
+
+/**
+ * Create a Float32Array view into the ALL stars metadata buffer.
+ * Layout per star: [vmag, bv_color, id, padding]
+ * Contains all stars regardless of magnitude limit (for constellation drawing).
+ */
+export function getAllStarsMetaBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.all_stars_meta_ptr();
+  const len = engine.all_stars_meta_len();
   return new Float32Array(memory.buffer, ptr, len);
 }

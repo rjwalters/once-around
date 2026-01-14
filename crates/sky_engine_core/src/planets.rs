@@ -3,6 +3,19 @@ use crate::time::SkyTime;
 use std::f64::consts::PI;
 use vsop87::vsop87a;
 
+// Planet and Sun radii in km (IAU values)
+pub const SUN_RADIUS_KM: f64 = 696340.0;
+pub const MERCURY_RADIUS_KM: f64 = 2439.7;
+pub const VENUS_RADIUS_KM: f64 = 6051.8;
+pub const MARS_RADIUS_KM: f64 = 3389.5;
+pub const JUPITER_RADIUS_KM: f64 = 69911.0;
+pub const SATURN_RADIUS_KM: f64 = 58232.0;
+pub const URANUS_RADIUS_KM: f64 = 25362.0;
+pub const NEPTUNE_RADIUS_KM: f64 = 24622.0;
+
+/// Conversion factor from AU to km
+pub const AU_TO_KM: f64 = 149_597_870.7;
+
 /// Planets supported by the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -65,11 +78,13 @@ pub enum CelestialBody {
     Mars = 4,
     Jupiter = 5,
     Saturn = 6,
+    Uranus = 7,
+    Neptune = 8,
 }
 
 impl CelestialBody {
     /// All visible celestial bodies in display order.
-    pub const ALL: [CelestialBody; 7] = [
+    pub const ALL: [CelestialBody; 9] = [
         CelestialBody::Sun,
         CelestialBody::Moon,
         CelestialBody::Mercury,
@@ -77,6 +92,8 @@ impl CelestialBody {
         CelestialBody::Mars,
         CelestialBody::Jupiter,
         CelestialBody::Saturn,
+        CelestialBody::Uranus,
+        CelestialBody::Neptune,
     ];
 
     /// Get body name.
@@ -89,6 +106,8 @@ impl CelestialBody {
             CelestialBody::Mars => "Mars",
             CelestialBody::Jupiter => "Jupiter",
             CelestialBody::Saturn => "Saturn",
+            CelestialBody::Uranus => "Uranus",
+            CelestialBody::Neptune => "Neptune",
         }
     }
 }
@@ -112,24 +131,42 @@ fn heliocentric_position(planet: Planet, jde: f64) -> (f64, f64, f64) {
 /// Compute the apparent direction to a planet as seen from Earth.
 /// Returns a unit vector in equatorial coordinates (J2000).
 pub fn compute_planet_position(planet: Planet, time: &SkyTime) -> CartesianCoord {
+    compute_planet_position_full(planet, time).direction
+}
+
+/// Compute the full position data for a planet (direction, distance, angular diameter).
+pub fn compute_planet_position_full(planet: Planet, time: &SkyTime) -> PlanetPosition {
     let jde = time.julian_date_tdb();
 
-    // Get heliocentric positions (ecliptic coordinates)
+    // Get heliocentric positions (ecliptic coordinates) in AU
     let earth_pos = heliocentric_position(Planet::Earth, jde);
     let planet_pos = heliocentric_position(planet, jde);
 
-    // Geocentric position (planet relative to Earth)
+    // Geocentric position (planet relative to Earth) in AU
     let geo_x = planet_pos.0 - earth_pos.0;
     let geo_y = planet_pos.1 - earth_pos.1;
     let geo_z = planet_pos.2 - earth_pos.2;
 
+    // Distance in AU, then convert to km
+    let distance_au = (geo_x * geo_x + geo_y * geo_y + geo_z * geo_z).sqrt();
+    let distance_km = distance_au * AU_TO_KM;
+
     // Convert to spherical ecliptic coordinates
-    let r = (geo_x * geo_x + geo_y * geo_y + geo_z * geo_z).sqrt();
     let lon = geo_y.atan2(geo_x);
-    let lat = (geo_z / r).asin();
+    let lat = (geo_z / distance_au).asin();
 
     // Convert to equatorial coordinates
-    ecliptic_to_equatorial(lon, lat, OBLIQUITY_J2000).normalize()
+    let direction = ecliptic_to_equatorial(lon, lat, OBLIQUITY_J2000).normalize();
+
+    // Angular diameter: 2 * atan(radius / distance)
+    let radius_km = planet_radius_km(planet);
+    let angular_diameter_rad = 2.0 * (radius_km / distance_km).atan();
+
+    PlanetPosition {
+        direction,
+        distance_km,
+        angular_diameter_rad,
+    }
 }
 
 /// Compute positions for all visible planets.
@@ -140,9 +177,14 @@ pub fn compute_all_planet_positions(time: &SkyTime) -> [(Planet, CartesianCoord)
 /// Compute the apparent direction to the Sun as seen from Earth.
 /// Returns a unit vector in equatorial coordinates (J2000).
 pub fn compute_sun_position(time: &SkyTime) -> CartesianCoord {
+    compute_sun_position_full(time).direction
+}
+
+/// Compute the full position data for the Sun (direction, distance, angular diameter).
+pub fn compute_sun_position_full(time: &SkyTime) -> SunPosition {
     let jde = time.julian_date_tdb();
 
-    // Get Earth's heliocentric position
+    // Get Earth's heliocentric position in AU
     let earth_pos = heliocentric_position(Planet::Earth, jde);
 
     // Sun is in the opposite direction from Earth's position
@@ -150,13 +192,25 @@ pub fn compute_sun_position(time: &SkyTime) -> CartesianCoord {
     let geo_y = -earth_pos.1;
     let geo_z = -earth_pos.2;
 
+    // Distance in AU, then convert to km
+    let distance_au = (geo_x * geo_x + geo_y * geo_y + geo_z * geo_z).sqrt();
+    let distance_km = distance_au * AU_TO_KM;
+
     // Convert to spherical ecliptic coordinates
-    let r = (geo_x * geo_x + geo_y * geo_y + geo_z * geo_z).sqrt();
     let lon = geo_y.atan2(geo_x);
-    let lat = (geo_z / r).asin();
+    let lat = (geo_z / distance_au).asin();
 
     // Convert to equatorial coordinates
-    ecliptic_to_equatorial(lon, lat, OBLIQUITY_J2000).normalize()
+    let direction = ecliptic_to_equatorial(lon, lat, OBLIQUITY_J2000).normalize();
+
+    // Angular diameter: 2 * atan(radius / distance)
+    let angular_diameter_rad = 2.0 * (SUN_RADIUS_KM / distance_km).atan();
+
+    SunPosition {
+        direction,
+        distance_km,
+        angular_diameter_rad,
+    }
 }
 
 /// Moon's mean radius in km
@@ -170,6 +224,40 @@ pub struct MoonPosition {
     pub distance_km: f64,
     /// Angular diameter in radians
     pub angular_diameter_rad: f64,
+}
+
+/// Result of planet position calculation (with distance and angular diameter)
+pub struct PlanetPosition {
+    /// Direction to planet (unit vector in equatorial J2000)
+    pub direction: CartesianCoord,
+    /// Distance to planet in km
+    pub distance_km: f64,
+    /// Angular diameter in radians
+    pub angular_diameter_rad: f64,
+}
+
+/// Result of Sun position calculation
+pub struct SunPosition {
+    /// Direction to Sun (unit vector in equatorial J2000)
+    pub direction: CartesianCoord,
+    /// Distance to Sun in km
+    pub distance_km: f64,
+    /// Angular diameter in radians
+    pub angular_diameter_rad: f64,
+}
+
+/// Get the radius of a planet in km.
+pub fn planet_radius_km(planet: Planet) -> f64 {
+    match planet {
+        Planet::Mercury => MERCURY_RADIUS_KM,
+        Planet::Venus => VENUS_RADIUS_KM,
+        Planet::Earth => 6371.0, // Not used but included for completeness
+        Planet::Mars => MARS_RADIUS_KM,
+        Planet::Jupiter => JUPITER_RADIUS_KM,
+        Planet::Saturn => SATURN_RADIUS_KM,
+        Planet::Uranus => URANUS_RADIUS_KM,
+        Planet::Neptune => NEPTUNE_RADIUS_KM,
+    }
 }
 
 /// Compute the apparent direction and distance to the Moon as seen from Earth.
@@ -279,7 +367,7 @@ fn normalize_degrees(deg: f64) -> f64 {
 }
 
 /// Compute positions for all visible celestial bodies (Sun, Moon, planets).
-pub fn compute_all_body_positions(time: &SkyTime) -> [(CelestialBody, CartesianCoord); 7] {
+pub fn compute_all_body_positions(time: &SkyTime) -> [(CelestialBody, CartesianCoord); 9] {
     [
         (CelestialBody::Sun, compute_sun_position(time)),
         (CelestialBody::Moon, compute_moon_position(time)),
@@ -303,6 +391,92 @@ pub fn compute_all_body_positions(time: &SkyTime) -> [(CelestialBody, CartesianC
             CelestialBody::Saturn,
             compute_planet_position(Planet::Saturn, time),
         ),
+        (
+            CelestialBody::Uranus,
+            compute_planet_position(Planet::Uranus, time),
+        ),
+        (
+            CelestialBody::Neptune,
+            compute_planet_position(Planet::Neptune, time),
+        ),
+    ]
+}
+
+/// Full position data for a celestial body including angular diameter.
+pub struct CelestialBodyPosition {
+    pub body: CelestialBody,
+    pub direction: CartesianCoord,
+    pub distance_km: f64,
+    pub angular_diameter_rad: f64,
+}
+
+/// Compute full position data (with angular diameters) for all visible celestial bodies.
+pub fn compute_all_body_positions_full(time: &SkyTime) -> [CelestialBodyPosition; 9] {
+    let sun = compute_sun_position_full(time);
+    let moon = compute_moon_position_full(time);
+    let mercury = compute_planet_position_full(Planet::Mercury, time);
+    let venus = compute_planet_position_full(Planet::Venus, time);
+    let mars = compute_planet_position_full(Planet::Mars, time);
+    let jupiter = compute_planet_position_full(Planet::Jupiter, time);
+    let saturn = compute_planet_position_full(Planet::Saturn, time);
+    let uranus = compute_planet_position_full(Planet::Uranus, time);
+    let neptune = compute_planet_position_full(Planet::Neptune, time);
+
+    [
+        CelestialBodyPosition {
+            body: CelestialBody::Sun,
+            direction: sun.direction,
+            distance_km: sun.distance_km,
+            angular_diameter_rad: sun.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Moon,
+            direction: moon.direction,
+            distance_km: moon.distance_km,
+            angular_diameter_rad: moon.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Mercury,
+            direction: mercury.direction,
+            distance_km: mercury.distance_km,
+            angular_diameter_rad: mercury.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Venus,
+            direction: venus.direction,
+            distance_km: venus.distance_km,
+            angular_diameter_rad: venus.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Mars,
+            direction: mars.direction,
+            distance_km: mars.distance_km,
+            angular_diameter_rad: mars.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Jupiter,
+            direction: jupiter.direction,
+            distance_km: jupiter.distance_km,
+            angular_diameter_rad: jupiter.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Saturn,
+            direction: saturn.direction,
+            distance_km: saturn.distance_km,
+            angular_diameter_rad: saturn.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Uranus,
+            direction: uranus.direction,
+            distance_km: uranus.distance_km,
+            angular_diameter_rad: uranus.angular_diameter_rad,
+        },
+        CelestialBodyPosition {
+            body: CelestialBody::Neptune,
+            direction: neptune.direction,
+            distance_km: neptune.distance_km,
+            angular_diameter_rad: neptune.angular_diameter_rad,
+        },
     ]
 }
 

@@ -1,6 +1,7 @@
 use sky_engine_core::{
     catalog::StarCatalog,
-    planets::{compute_all_body_positions, compute_moon_position_full, CelestialBody},
+    planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
+    planets::{compute_all_body_positions_full, compute_moon_position_full, CelestialBody},
     time::SkyTime,
 };
 use wasm_bindgen::prelude::*;
@@ -14,9 +15,15 @@ pub struct SkyEngine {
     mag_limit: f32,
 
     // Output buffers (owned by Rust, read by JS)
-    stars_pos: Vec<f32>,  // x,y,z,x,y,z,... unit vectors
-    stars_meta: Vec<f32>, // vmag, bv_color, id (as f32), padding
-    bodies_pos: Vec<f32>, // 7 celestial bodies * 3 coords = 21 floats (Sun, Moon, 5 planets)
+    stars_pos: Vec<f32>,  // x,y,z,x,y,z,... unit vectors (magnitude-filtered)
+    stars_meta: Vec<f32>, // vmag, bv_color, id (as f32), padding (magnitude-filtered)
+    bodies_pos: Vec<f32>, // 9 celestial bodies * 3 coords = 27 floats (Sun, Moon, 7 planets)
+    bodies_angular_diameters: Vec<f32>, // 9 angular diameters in radians
+    planetary_moons_pos: Vec<f32>, // 5 moons * 4 floats (x, y, z, angular_diam) = 20
+
+    // All star positions for constellation line drawing (not magnitude-filtered)
+    all_stars_pos: Vec<f32>,  // x,y,z for ALL stars in catalog
+    all_stars_meta: Vec<f32>, // vmag, bv_color, id, padding for ALL stars
 
     // Cached visible star count
     visible_count: usize,
@@ -43,10 +50,16 @@ impl SkyEngine {
             mag_limit: 6.5, // Default: dark sky (naked eye limit)
             stars_pos: vec![0.0; star_count * 3],
             stars_meta: vec![0.0; star_count * 4], // vmag, bv, id, padding
-            bodies_pos: vec![0.0; 7 * 3], // Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn
+            bodies_pos: vec![0.0; 9 * 3], // Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune
+            bodies_angular_diameters: vec![0.0; 9], // Angular diameters for each body
+            planetary_moons_pos: vec![0.0; 5 * 4], // Io, Europa, Ganymede, Callisto, Titan
+            all_stars_pos: vec![0.0; star_count * 3],
+            all_stars_meta: vec![0.0; star_count * 4],
             visible_count: 0,
         };
 
+        // Compute all star positions once (for constellation drawing)
+        engine.compute_all_stars();
         engine.recompute();
         Ok(engine)
     }
@@ -90,6 +103,7 @@ impl SkyEngine {
     pub fn recompute(&mut self) {
         self.recompute_stars();
         self.recompute_bodies();
+        self.recompute_planetary_moons();
     }
 
     fn recompute_stars(&mut self) {
@@ -124,13 +138,47 @@ impl SkyEngine {
     }
 
     fn recompute_bodies(&mut self) {
-        let positions = compute_all_body_positions(&self.time);
-        for (i, (_body, pos)) in positions.iter().enumerate() {
-            let (x, y, z) = pos.to_f32();
+        let positions = compute_all_body_positions_full(&self.time);
+        for (i, body_pos) in positions.iter().enumerate() {
+            let (x, y, z) = body_pos.direction.to_f32();
             let idx = i * 3;
             self.bodies_pos[idx] = x;
             self.bodies_pos[idx + 1] = y;
             self.bodies_pos[idx + 2] = z;
+            self.bodies_angular_diameters[i] = body_pos.angular_diameter_rad as f32;
+        }
+    }
+
+    fn recompute_planetary_moons(&mut self) {
+        let positions = compute_all_planetary_moon_positions(&self.time);
+        for (i, moon_pos) in positions.iter().enumerate() {
+            let (x, y, z) = moon_pos.direction.to_f32();
+            let idx = i * 4;
+            self.planetary_moons_pos[idx] = x;
+            self.planetary_moons_pos[idx + 1] = y;
+            self.planetary_moons_pos[idx + 2] = z;
+            self.planetary_moons_pos[idx + 3] = moon_pos.angular_diameter_rad as f32;
+        }
+    }
+
+    /// Compute positions for ALL stars in the catalog (regardless of magnitude).
+    /// This is used for constellation line drawing. Called once at initialization
+    /// since star positions are fixed in J2000 coordinates.
+    fn compute_all_stars(&mut self) {
+        for (i, star) in self.catalog.stars().iter().enumerate() {
+            let dir = star.direction();
+            let (x, y, z) = dir.to_f32();
+
+            let pos_idx = i * 3;
+            self.all_stars_pos[pos_idx] = x;
+            self.all_stars_pos[pos_idx + 1] = y;
+            self.all_stars_pos[pos_idx + 2] = z;
+
+            let meta_idx = i * 4;
+            self.all_stars_meta[meta_idx] = star.vmag;
+            self.all_stars_meta[meta_idx + 1] = star.bv_color;
+            self.all_stars_meta[meta_idx + 2] = star.id as f32;
+            self.all_stars_meta[meta_idx + 3] = 0.0; // padding
         }
     }
 
@@ -164,19 +212,84 @@ impl SkyEngine {
     }
 
     /// Get length of celestial bodies position buffer.
-    /// Always 21 (7 bodies * 3 coords): Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn.
+    /// Always 27 (9 bodies * 3 coords): Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune.
     pub fn bodies_pos_len(&self) -> usize {
         self.bodies_pos.len()
     }
 
-    /// Get celestial body name by index (0-6).
+    /// Get pointer to celestial bodies angular diameters buffer.
+    pub fn bodies_angular_diameters_ptr(&self) -> *const f32 {
+        self.bodies_angular_diameters.as_ptr()
+    }
+
+    /// Get length of celestial bodies angular diameters buffer.
+    /// Always 9 (one angular diameter per body in radians).
+    pub fn bodies_angular_diameters_len(&self) -> usize {
+        self.bodies_angular_diameters.len()
+    }
+
+    /// Get angular diameter for a specific body by index (0-8).
+    /// Returns angular diameter in radians.
+    pub fn body_angular_diameter(&self, index: usize) -> f32 {
+        self.bodies_angular_diameters.get(index).copied().unwrap_or(0.0)
+    }
+
+    /// Get celestial body name by index (0-8).
     pub fn body_name(&self, index: usize) -> Option<String> {
         CelestialBody::ALL.get(index).map(|b| b.name().to_string())
     }
 
     /// Get Moon's angular diameter in radians.
     pub fn moon_angular_diameter(&self) -> f32 {
-        compute_moon_position_full(&self.time).angular_diameter_rad as f32
+        self.bodies_angular_diameters.get(1).copied().unwrap_or(
+            compute_moon_position_full(&self.time).angular_diameter_rad as f32
+        )
+    }
+
+    // --- Planetary moons buffer accessors ---
+
+    /// Get pointer to planetary moons position buffer.
+    /// 5 moons * 4 floats (x, y, z, angular_diameter) = 20 floats.
+    /// Order: Io, Europa, Ganymede, Callisto, Titan
+    pub fn planetary_moons_pos_ptr(&self) -> *const f32 {
+        self.planetary_moons_pos.as_ptr()
+    }
+
+    /// Get length of planetary moons position buffer.
+    /// Always 20 (5 moons * 4 floats).
+    pub fn planetary_moons_pos_len(&self) -> usize {
+        self.planetary_moons_pos.len()
+    }
+
+    /// Get planetary moon name by index (0-4).
+    pub fn planetary_moon_name(&self, index: usize) -> Option<String> {
+        PlanetaryMoon::ALL.get(index).map(|m| m.name().to_string())
+    }
+
+    // --- All stars buffer accessors (for constellation drawing, not magnitude-filtered) ---
+
+    /// Get pointer to all stars position buffer (for constellation line drawing).
+    /// Contains ALL stars in the catalog regardless of magnitude limit.
+    pub fn all_stars_pos_ptr(&self) -> *const f32 {
+        self.all_stars_pos.as_ptr()
+    }
+
+    /// Get length of all stars position buffer (in f32 elements).
+    /// Always total_stars() * 3.
+    pub fn all_stars_pos_len(&self) -> usize {
+        self.catalog.len() * 3
+    }
+
+    /// Get pointer to all stars metadata buffer (for constellation line drawing).
+    /// 4 floats per star: vmag, bv_color, id, padding.
+    pub fn all_stars_meta_ptr(&self) -> *const f32 {
+        self.all_stars_meta.as_ptr()
+    }
+
+    /// Get length of all stars metadata buffer (in f32 elements).
+    /// Always total_stars() * 4.
+    pub fn all_stars_meta_len(&self) -> usize {
+        self.catalog.len() * 4
     }
 
     // Legacy aliases for backwards compatibility

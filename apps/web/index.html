@@ -130,6 +130,14 @@
         color: #ff8844;
         font-weight: 500;
         text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+        pointer-events: auto !important;
+        cursor: pointer;
+        transition: color 0.15s, text-shadow 0.15s;
+      }
+
+      .star-label:hover {
+        color: #ffaa66;
+        text-shadow: 0 0 8px rgba(255, 136, 68, 0.6);
       }
 
       .video-label {
@@ -355,12 +363,182 @@
         text-align: center;
       }
 
+      /* Star info modal */
+      .star-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        transition: opacity 0.2s ease;
+      }
+
+      .star-modal.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .star-modal-content {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 480px;
+        width: 90%;
+        position: relative;
+        box-shadow: 0 8px 32px rgba(255, 136, 68, 0.2);
+        border: 1px solid #333;
+      }
+
+      .star-modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 24px;
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.2s;
+      }
+
+      .star-modal-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      .star-modal-header {
+        margin-bottom: 16px;
+        padding-right: 40px;
+      }
+
+      .star-modal-name {
+        color: #ff8844;
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+      }
+
+      .star-modal-designation {
+        color: #888;
+        font-size: 13px;
+        font-style: italic;
+      }
+
+      .star-modal-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+      }
+
+      .star-stat {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .star-stat-label {
+        color: #666;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 2px;
+      }
+
+      .star-stat-value {
+        color: #ccc;
+        font-size: 13px;
+      }
+
+      .star-modal-type {
+        color: #aaa;
+        font-size: 12px;
+        margin-bottom: 16px;
+        padding: 8px 12px;
+        background: rgba(255, 136, 68, 0.1);
+        border-radius: 6px;
+        border-left: 3px solid #ff8844;
+      }
+
+      .star-modal-description {
+        color: #ccc;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
       #info {
         position: fixed;
         bottom: 20px;
         left: 20px;
         font-size: 12px;
         color: #666;
+      }
+
+      #coordinates {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        font-family: monospace;
+        font-size: 12px;
+        color: #4a4;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 6px 10px;
+        border-radius: 4px;
+        z-index: 100;
+      }
+
+      #coordinates .label {
+        color: #384;
+        margin-right: 4px;
+      }
+
+      #coordinates .value {
+        color: #6c6;
+      }
+
+      #crosshair {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 50;
+      }
+
+      #crosshair::before,
+      #crosshair::after {
+        content: '';
+        position: absolute;
+        background: rgba(102, 204, 102, 0.6);
+      }
+
+      #crosshair::before {
+        /* Horizontal line */
+        width: 20px;
+        height: 1px;
+        left: -10px;
+        top: 0;
+      }
+
+      #crosshair::after {
+        /* Vertical line */
+        width: 1px;
+        height: 20px;
+        left: 0;
+        top: -10px;
       }
 
       #debug {
@@ -423,6 +601,35 @@
       <button class="about-button" id="about-btn">About This Project</button>
     </div>
 
+    <!-- Star Info Modal -->
+    <div class="star-modal hidden" id="star-modal">
+      <div class="star-modal-content">
+        <button class="star-modal-close" id="star-modal-close">&times;</button>
+        <div class="star-modal-header">
+          <h2 class="star-modal-name" id="star-modal-name">Sirius</h2>
+          <div class="star-modal-designation" id="star-modal-designation">Alpha Canis Majoris</div>
+        </div>
+        <div class="star-modal-stats">
+          <div class="star-stat">
+            <span class="star-stat-label">Constellation</span>
+            <span class="star-stat-value" id="star-modal-constellation">Canis Major</span>
+          </div>
+          <div class="star-stat">
+            <span class="star-stat-label">Magnitude</span>
+            <span class="star-stat-value" id="star-modal-magnitude">-1.46</span>
+          </div>
+          <div class="star-stat">
+            <span class="star-stat-label">Distance</span>
+            <span class="star-stat-value" id="star-modal-distance">8.6 light-years</span>
+          </div>
+        </div>
+        <div class="star-modal-type" id="star-modal-type">A1V - White main-sequence star</div>
+        <p class="star-modal-description" id="star-modal-description">
+          The brightest star in the night sky.
+        </p>
+      </div>
+    </div>
+
     <!-- About Modal -->
     <div class="about-modal hidden" id="about-modal">
       <div class="about-content">
@@ -464,6 +671,16 @@
     </div>
 
     <div id="info">Drag to look around | Scroll to zoom | Space = galactic center</div>
+
+    <div id="crosshair"></div>
+
+    <div id="coordinates">
+      <span class="label">RA</span><span id="coord-ra" class="value">0h 0m</span>
+      &nbsp;
+      <span class="label">Dec</span><span id="coord-dec" class="value">+0° 0'</span>
+      &nbsp;
+      <span class="label">FOV</span><span id="coord-fov" class="value">60°</span>
+    </div>
 
     <!-- Debug panel: add ?debug to URL to show -->
     <div id="debug" style="display: none;">

@@ -13,6 +13,21 @@ export interface VideoPlacement {
 
 const SKY_RADIUS = 50;
 const VIDEO_MARKER_COLOR = new THREE.Color(0.6, 0.3, 0.9); // Purple
+const LABEL_REPULSION_DISTANCE = 3.5; // Minimum distance between labels before repulsion kicks in
+const LABEL_REPULSION_STRENGTH = 0.3; // How strongly labels repel each other
+const LABEL_REPULSION_ITERATIONS = 8; // Number of iterations to settle labels
+
+// Co-location grouping constants
+const COORDINATE_TOLERANCE = 0.01; // degrees (~36 arcsec) for grouping nearby videos
+const ARC_GAP = 0.08; // radians (~4.5 degrees) gap between pie slices
+
+// Interface for grouped videos at the same location
+interface VideoGroup {
+  ra: number;
+  dec: number;
+  position: THREE.Vector3;
+  videos: VideoPlacement[];
+}
 
 // Convert RA/Dec to 3D position on sky sphere
 function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3 {
@@ -29,10 +44,129 @@ function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3
   return new THREE.Vector3(x, y, z);
 }
 
+// Group videos that share the same or very close coordinates
+function groupVideosByLocation(videos: VideoPlacement[]): VideoGroup[] {
+  const groups: VideoGroup[] = [];
+
+  for (const video of videos) {
+    // Find existing group within coordinate tolerance
+    let foundGroup: VideoGroup | null = null;
+    for (const group of groups) {
+      const raDiff = Math.abs(group.ra - video.ra);
+      const decDiff = Math.abs(group.dec - video.dec);
+      if (raDiff < COORDINATE_TOLERANCE && decDiff < COORDINATE_TOLERANCE) {
+        foundGroup = group;
+        break;
+      }
+    }
+
+    if (foundGroup) {
+      foundGroup.videos.push(video);
+    } else {
+      const position = raDecToPosition(video.ra, video.dec, SKY_RADIUS - 0.5);
+      groups.push({
+        ra: video.ra,
+        dec: video.dec,
+        position,
+        videos: [video],
+      });
+    }
+  }
+
+  return groups;
+}
+
 // Create ring geometry for video markers
 function createRingGeometry(innerRadius: number, outerRadius: number, segments: number = 32): THREE.BufferGeometry {
   const geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments);
   return geometry;
+}
+
+// Create arc geometry for pie-slice markers when multiple videos share a location
+function createArcGeometry(
+  innerRadius: number,
+  outerRadius: number,
+  sliceIndex: number,
+  totalSlices: number,
+  segments: number = 24
+): THREE.BufferGeometry {
+  // Calculate arc parameters
+  const totalGap = ARC_GAP * totalSlices;
+  const availableAngle = Math.PI * 2 - totalGap;
+  const arcLength = availableAngle / totalSlices;
+
+  // Each slice starts after the previous slice plus a gap
+  const thetaStart = sliceIndex * (arcLength + ARC_GAP);
+
+  // THREE.RingGeometry accepts thetaStart and thetaLength
+  const geometry = new THREE.RingGeometry(
+    innerRadius,
+    outerRadius,
+    segments,
+    1,
+    thetaStart,
+    arcLength
+  );
+
+  return geometry;
+}
+
+// Create arc hit detection geometry for clickable area
+function createArcHitGeometry(
+  outerRadius: number,
+  sliceIndex: number,
+  totalSlices: number,
+  segments: number = 24
+): THREE.BufferGeometry {
+  const totalGap = ARC_GAP * totalSlices;
+  const availableAngle = Math.PI * 2 - totalGap;
+  const arcLength = availableAngle / totalSlices;
+  const thetaStart = sliceIndex * (arcLength + ARC_GAP);
+
+  // Use RingGeometry with small inner radius for hit detection
+  // Larger outer radius for easier clicking
+  const geometry = new THREE.RingGeometry(
+    0.2, // Small inner radius
+    outerRadius * 1.3, // Larger outer radius for easier clicking
+    segments,
+    1,
+    thetaStart,
+    arcLength
+  );
+
+  return geometry;
+}
+
+// Calculate label position for videos in a group, spreading them radially
+function calculateGroupedLabelPosition(
+  markerPosition: THREE.Vector3,
+  sliceIndex: number,
+  totalSlices: number,
+  labelOffset: number
+): THREE.Vector3 {
+  const radial = markerPosition.clone().normalize();
+  const worldUp = new THREE.Vector3(0, 1, 0);
+
+  // Calculate tangent vectors on the sphere surface
+  const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
+  const north = new THREE.Vector3().crossVectors(radial, east).normalize();
+
+  // Calculate arc center angle for this slice
+  const totalGap = ARC_GAP * totalSlices;
+  const availableAngle = Math.PI * 2 - totalGap;
+  const arcLength = availableAngle / totalSlices;
+  const thetaStart = sliceIndex * (arcLength + ARC_GAP);
+  const arcCenter = thetaStart + arcLength / 2;
+
+  // Direction from marker center toward arc center (on tangent plane)
+  const labelDir = east
+    .clone()
+    .multiplyScalar(Math.cos(arcCenter))
+    .add(north.clone().multiplyScalar(-Math.sin(arcCenter)));
+
+  // Offset position on the sphere
+  const labelPos = markerPosition.clone().add(labelDir.multiplyScalar(labelOffset));
+  return labelPos.normalize().multiplyScalar(markerPosition.length());
 }
 
 // Create a text sprite using canvas
@@ -76,6 +210,81 @@ function createTextSprite(text: string, color: string = "#b366ff"): THREE.Sprite
   sprite.scale.set(spriteHeight * aspectRatio, spriteHeight, 1);
 
   return sprite;
+}
+
+// Apply repulsion between labels to prevent overlapping
+// Labels are pushed apart on the sphere surface while staying close to their markers
+function applyLabelRepulsion(
+  labelPositions: Map<string, THREE.Vector3>,
+  markerPositions: Map<string, THREE.Vector3>
+): void {
+  const ids = Array.from(labelPositions.keys());
+
+  for (let iteration = 0; iteration < LABEL_REPULSION_ITERATIONS; iteration++) {
+    // Calculate repulsion forces for each label
+    const forces = new Map<string, THREE.Vector3>();
+
+    for (const id of ids) {
+      forces.set(id, new THREE.Vector3(0, 0, 0));
+    }
+
+    // Calculate pairwise repulsion
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const id1 = ids[i];
+        const id2 = ids[j];
+        const pos1 = labelPositions.get(id1)!;
+        const pos2 = labelPositions.get(id2)!;
+
+        const distance = pos1.distanceTo(pos2);
+
+        if (distance < LABEL_REPULSION_DISTANCE && distance > 0.01) {
+          // Calculate repulsion direction (tangent to sphere)
+          const midpoint = pos1.clone().add(pos2).multiplyScalar(0.5);
+          const radial = midpoint.clone().normalize();
+
+          // Direction from pos2 to pos1
+          const rawDir = pos1.clone().sub(pos2).normalize();
+
+          // Project onto tangent plane (remove radial component)
+          const tangentDir = rawDir.clone().sub(
+            radial.clone().multiplyScalar(rawDir.dot(radial))
+          ).normalize();
+
+          // Repulsion strength decreases with distance
+          const strength = LABEL_REPULSION_STRENGTH * (1 - distance / LABEL_REPULSION_DISTANCE);
+
+          // Apply equal and opposite forces
+          forces.get(id1)!.add(tangentDir.clone().multiplyScalar(strength));
+          forces.get(id2)!.add(tangentDir.clone().multiplyScalar(-strength));
+        }
+      }
+    }
+
+    // Apply forces and re-project to sphere
+    for (const id of ids) {
+      const pos = labelPositions.get(id)!;
+      const force = forces.get(id)!;
+      const markerPos = markerPositions.get(id)!;
+
+      // Apply force
+      pos.add(force);
+
+      // Re-project to sphere surface at same radius
+      const radius = markerPos.length();
+      pos.normalize().multiplyScalar(radius);
+
+      // Constrain: don't let label drift too far from its marker
+      const maxDrift = 4.0; // Maximum distance from marker
+      const driftDistance = pos.distanceTo(markerPos);
+      if (driftDistance > maxDrift) {
+        // Pull back toward marker
+        const toMarker = markerPos.clone().sub(pos).normalize();
+        pos.add(toMarker.multiplyScalar(driftDistance - maxDrift));
+        pos.normalize().multiplyScalar(radius);
+      }
+    }
+  }
 }
 
 export interface VideoMarkersLayer {
@@ -133,6 +342,10 @@ export async function createVideoMarkersLayer(
   // Create larger circle for hit detection
   const hitGeometry = new THREE.CircleGeometry(1.2, 24);
 
+  // Store positions for repulsion calculation
+  const labelPositions = new Map<string, THREE.Vector3>();
+  const markerPositions = new Map<string, THREE.Vector3>();
+
   // Create markers for each video
   for (const video of videos) {
     const position = raDecToPosition(video.ra, video.dec, SKY_RADIUS - 0.5);
@@ -153,6 +366,9 @@ export async function createVideoMarkersLayer(
     videoDataMap.set(video.id, video);
     group.add(marker);
 
+    // Store marker position for repulsion constraint
+    markerPositions.set(video.id, position.clone());
+
     // Create label sprite - positioned below the ring
     const labelText = video.object || video.title;
     const labelSprite = createTextSprite(labelText);
@@ -166,11 +382,49 @@ export async function createVideoMarkersLayer(
     // Offset the label position downward on the sphere
     const labelOffset = 1.5; // Units on the sky sphere
     const labelPosition = position.clone().add(down.multiplyScalar(labelOffset));
-    labelSprite.position.copy(labelPosition);
+
+    // Store initial label position for repulsion
+    labelPositions.set(video.id, labelPosition.clone());
 
     labels.set(video.id, labelSprite);
     labelsGroup.add(labelSprite);
   }
+
+  // Apply repulsion to spread out overlapping labels
+  applyLabelRepulsion(labelPositions, markerPositions);
+
+  // Update sprite positions with repelled positions
+  for (const [id, sprite] of labels) {
+    const newPosition = labelPositions.get(id);
+    if (newPosition) {
+      sprite.position.copy(newPosition);
+    }
+  }
+
+  // Create flag lines connecting markers to labels
+  const flagLinePositions: number[] = [];
+  for (const video of videos) {
+    const markerPos = markerPositions.get(video.id);
+    const labelPos = labelPositions.get(video.id);
+    if (markerPos && labelPos) {
+      // Line from marker to label
+      flagLinePositions.push(markerPos.x, markerPos.y, markerPos.z);
+      flagLinePositions.push(labelPos.x, labelPos.y, labelPos.z);
+    }
+  }
+
+  const flagLinesGeometry = new THREE.BufferGeometry();
+  flagLinesGeometry.setAttribute(
+    "position",
+    new THREE.BufferAttribute(new Float32Array(flagLinePositions), 3)
+  );
+  const flagLinesMaterial = new THREE.LineBasicMaterial({
+    color: VIDEO_MARKER_COLOR,
+    transparent: true,
+    opacity: 0.6,
+  });
+  const flagLines = new THREE.LineSegments(flagLinesGeometry, flagLinesMaterial);
+  labelsGroup.add(flagLines);
 
   // Setup click handling
   function getVideoAtPosition(raycaster: THREE.Raycaster): VideoPlacement | null {

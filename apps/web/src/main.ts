@@ -4,6 +4,8 @@ import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
 import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement } from "./videos";
+import { STAR_DATA, type StarInfo } from "./starData";
+import { loadSettings, createSettingsSaver } from "./settings";
 
 async function main(): Promise<void> {
   console.log("Initializing Once Around...");
@@ -21,6 +23,10 @@ async function main(): Promise<void> {
     `Engine loaded: ${engine.total_stars()} stars, ${engine.visible_stars()} visible`
   );
 
+  // Load saved settings
+  const settings = loadSettings();
+  const settingsSaver = createSettingsSaver();
+
   // Create Three.js renderer
   const renderer = createRenderer(container);
 
@@ -30,8 +36,23 @@ async function main(): Promise<void> {
     renderer.renderer.domElement
   );
 
+  // Restore camera state from settings
+  controls.setCameraState({
+    quaternion: settings.cameraQuaternion,
+    fov: settings.fov,
+  });
+
   // Initial render from engine
   renderer.updateFromEngine(engine);
+
+  // Save camera changes (debounced)
+  controls.onCameraChange = () => {
+    const state = controls.getCameraState();
+    settingsSaver.save({
+      cameraQuaternion: state.quaternion,
+      fov: state.fov,
+    });
+  };
 
   // Update rendered star count display
   const renderedStarsEl = document.getElementById("rendered-stars");
@@ -48,6 +69,41 @@ async function main(): Promise<void> {
     updateRenderedStars();
   };
 
+  // Get UI elements for settings restoration
+  const datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
+  const magnitudeInput = document.getElementById("magnitude") as HTMLInputElement | null;
+
+  // Restore datetime from settings
+  if (datetimeInput && settings.datetime) {
+    try {
+      const savedDate = new Date(settings.datetime);
+      if (!isNaN(savedDate.getTime())) {
+        // Convert to local datetime string for input
+        const year = savedDate.getFullYear();
+        const month = String(savedDate.getMonth() + 1).padStart(2, "0");
+        const day = String(savedDate.getDate()).padStart(2, "0");
+        const hours = String(savedDate.getHours()).padStart(2, "0");
+        const minutes = String(savedDate.getMinutes()).padStart(2, "0");
+        datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        applyTimeToEngine(engine, savedDate);
+        engine.recompute();
+      }
+    } catch {
+      // Ignore invalid date, use default
+    }
+  }
+
+  // Restore magnitude from settings
+  if (magnitudeInput) {
+    magnitudeInput.value = String(settings.magnitude);
+    engine.set_mag_limit(settings.magnitude);
+    engine.recompute();
+  }
+
+  // Update display after restoring settings
+  renderer.updateFromEngine(engine);
+  renderer.setMilkyWayVisibility(settings.magnitude);
+
   // Setup UI
   setupUI(engine, {
     onTimeChange: (date: Date) => {
@@ -55,28 +111,41 @@ async function main(): Promise<void> {
       engine.recompute();
       renderer.updateFromEngine(engine);
       updateRenderedStars();
+      settingsSaver.save({ datetime: date.toISOString() });
     },
     onMagnitudeChange: (mag: number) => {
       engine.set_mag_limit(mag);
       engine.recompute();
       renderer.updateFromEngine(engine);
+      renderer.setMilkyWayVisibility(mag);
       updateRenderedStars();
+      settingsSaver.save({ magnitude: mag });
     },
   });
 
   // Constellation checkbox
   const constellationCheckbox = document.getElementById("constellations") as HTMLInputElement | null;
   if (constellationCheckbox) {
+    // Restore from settings
+    constellationCheckbox.checked = settings.constellationsVisible;
+    renderer.setConstellationsVisible(settings.constellationsVisible);
+
     constellationCheckbox.addEventListener("change", () => {
       renderer.setConstellationsVisible(constellationCheckbox.checked);
+      settingsSaver.save({ constellationsVisible: constellationCheckbox.checked });
     });
   }
 
   // Labels checkbox
   const labelsCheckbox = document.getElementById("labels") as HTMLInputElement | null;
   if (labelsCheckbox) {
+    // Restore from settings
+    labelsCheckbox.checked = settings.labelsVisible;
+    renderer.setLabelsVisible(settings.labelsVisible);
+
     labelsCheckbox.addEventListener("change", () => {
       renderer.setLabelsVisible(labelsCheckbox.checked);
+      settingsSaver.save({ labelsVisible: labelsCheckbox.checked });
     });
   }
 
@@ -96,14 +165,16 @@ async function main(): Promise<void> {
   // Videos checkbox
   const videosCheckbox = document.getElementById("videos") as HTMLInputElement | null;
   if (videosCheckbox) {
+    // Restore from settings
+    videosCheckbox.checked = settings.videosVisible;
+    videoMarkers.setVisible(settings.videosVisible);
+    videoMarkers.setLabelsVisible(settings.videosVisible);
+
     videosCheckbox.addEventListener("change", () => {
       videoMarkers.setVisible(videosCheckbox.checked);
-      // Also show labels when videos are visible
       videoMarkers.setLabelsVisible(videosCheckbox.checked);
+      settingsSaver.save({ videosVisible: videosCheckbox.checked });
     });
-    // Set initial visibility based on checkbox state (checked by default)
-    videoMarkers.setVisible(videosCheckbox.checked);
-    videoMarkers.setLabelsVisible(videosCheckbox.checked);
   }
 
   // About modal
@@ -126,6 +197,58 @@ async function main(): Promise<void> {
       }
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // Star info popup
+  // ---------------------------------------------------------------------------
+  const starModal = document.getElementById("star-modal");
+  const starModalClose = document.getElementById("star-modal-close");
+  const starModalName = document.getElementById("star-modal-name");
+  const starModalDesignation = document.getElementById("star-modal-designation");
+  const starModalConstellation = document.getElementById("star-modal-constellation");
+  const starModalMagnitude = document.getElementById("star-modal-magnitude");
+  const starModalDistance = document.getElementById("star-modal-distance");
+  const starModalType = document.getElementById("star-modal-type");
+  const starModalDescription = document.getElementById("star-modal-description");
+
+  function showStarInfo(hr: number): void {
+    const info = STAR_DATA[hr];
+    if (!info || !starModal) return;
+
+    if (starModalName) starModalName.textContent = info.name;
+    if (starModalDesignation) starModalDesignation.textContent = info.designation;
+    if (starModalConstellation) starModalConstellation.textContent = info.constellation;
+    if (starModalMagnitude) starModalMagnitude.textContent = info.magnitude.toFixed(2);
+    if (starModalDistance) starModalDistance.textContent = info.distance;
+    if (starModalType) starModalType.textContent = info.type;
+    if (starModalDescription) starModalDescription.textContent = info.description;
+
+    starModal.classList.remove("hidden");
+  }
+
+  // Close star modal
+  if (starModal && starModalClose) {
+    starModalClose.addEventListener("click", () => {
+      starModal.classList.add("hidden");
+    });
+
+    starModal.addEventListener("click", (e) => {
+      if (e.target === starModal) {
+        starModal.classList.add("hidden");
+      }
+    });
+  }
+
+  // Handle clicks on star labels (using event delegation)
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains("star-label") && target.dataset.hr) {
+      const hr = parseInt(target.dataset.hr, 10);
+      if (!isNaN(hr)) {
+        showStarInfo(hr);
+      }
+    }
+  });
 
   // Click handling for video markers
   const raycaster = new THREE.Raycaster();
@@ -205,6 +328,7 @@ async function main(): Promise<void> {
         if (labelsCheckbox) {
           labelsCheckbox.checked = !labelsCheckbox.checked;
           renderer.setLabelsVisible(labelsCheckbox.checked);
+          settingsSaver.save({ labelsVisible: labelsCheckbox.checked });
         }
         break;
       case "c":
@@ -212,6 +336,7 @@ async function main(): Promise<void> {
         if (constellationCheckbox) {
           constellationCheckbox.checked = !constellationCheckbox.checked;
           renderer.setConstellationsVisible(constellationCheckbox.checked);
+          settingsSaver.save({ constellationsVisible: constellationCheckbox.checked });
         }
         break;
       case "v":
@@ -220,6 +345,7 @@ async function main(): Promise<void> {
           videosCheckbox.checked = !videosCheckbox.checked;
           videoMarkers.setVisible(videosCheckbox.checked);
           videoMarkers.setLabelsVisible(videosCheckbox.checked);
+          settingsSaver.save({ videosVisible: videosCheckbox.checked });
         }
         break;
       case " ":
@@ -229,6 +355,55 @@ async function main(): Promise<void> {
         break;
     }
   });
+
+  // Flush settings before page unload
+  window.addEventListener("beforeunload", () => {
+    settingsSaver.flush();
+  });
+
+  // Coordinate display elements
+  const coordRaEl = document.getElementById("coord-ra");
+  const coordDecEl = document.getElementById("coord-dec");
+  const coordFovEl = document.getElementById("coord-fov");
+
+  /**
+   * Format RA in hours/minutes (e.g., "12h 34m")
+   */
+  function formatRA(raDeg: number): string {
+    const raHours = raDeg / 15; // 360° = 24h
+    const h = Math.floor(raHours);
+    const m = Math.floor((raHours - h) * 60);
+    return `${h}h ${m.toString().padStart(2, "0")}m`;
+  }
+
+  /**
+   * Format Dec in degrees/arcminutes (e.g., "+45° 30'")
+   */
+  function formatDec(decDeg: number): string {
+    const sign = decDeg >= 0 ? "+" : "-";
+    const absDec = Math.abs(decDeg);
+    const d = Math.floor(absDec);
+    const m = Math.floor((absDec - d) * 60);
+    return `${sign}${d}° ${m.toString().padStart(2, "0")}'`;
+  }
+
+  function updateCoordinates(): void {
+    const { ra, dec } = controls.getRaDec();
+    const { fov } = controls.getCameraState();
+    if (coordRaEl) coordRaEl.textContent = formatRA(ra);
+    if (coordDecEl) coordDecEl.textContent = formatDec(dec);
+    if (coordFovEl) coordFovEl.textContent = `${Math.round(fov)}°`;
+  }
+
+  // Update coordinates initially
+  updateCoordinates();
+
+  // Update coordinates on camera change
+  const originalOnCameraChange = controls.onCameraChange;
+  controls.onCameraChange = () => {
+    originalOnCameraChange?.();
+    updateCoordinates();
+  };
 
   // Animation loop
   function animate(): void {
