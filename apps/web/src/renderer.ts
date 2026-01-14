@@ -165,6 +165,17 @@ const LOD_MAX_STARS_WIDE_FOV = 8000;   // FOV > 70°
 const LOD_MAX_STARS_MEDIUM_FOV = 15000; // FOV 40-70°
 const LOD_MAX_STARS_NARROW_FOV = 40000; // FOV < 40°
 
+// Point source angular size in arcseconds - simulates telescope resolving power
+// A typical backyard telescope (6-8") has ~1 arcsec resolving power
+const POINT_SOURCE_ANGULAR_SIZE_ARCSEC = 1.0;
+const POINT_SOURCE_MIN_SIZE_PX = 1.5; // Minimum size so stars don't disappear at wide FOV
+
+// Convert angular size in arcseconds to pixels based on FOV and canvas height
+function angularSizeToPixels(arcsec: number, fovDegrees: number, canvasHeight: number): number {
+  const fovArcsec = fovDegrees * 3600;
+  return Math.max(POINT_SOURCE_MIN_SIZE_PX, (arcsec / fovArcsec) * canvasHeight);
+}
+
 // Deterministic hash for star ID - produces a value 0-1
 function starIdHash(id: number): number {
   // Simple hash using prime multiplication and bit operations
@@ -849,6 +860,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   // ---------------------------------------------------------------------------
 
   function updateStars(engine: SkyEngine, fov: number = 60): void {
+    // Update point size based on FOV (simulates telescope resolving power)
+    starsMaterial.size = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, container.clientHeight);
+
     const positions = getStarsPositionBuffer(engine);
     const meta = getStarsMetaBuffer(engine);
     const totalStars = engine.visible_stars();
@@ -1130,6 +1144,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       }
       return;
     }
+
+    // Update point size based on FOV (simulates telescope resolving power)
+    planetaryMoonsMaterial.size = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, container.clientHeight);
 
     const moonsBuffer = getPlanetaryMoonsBuffer(engine);
     const radius = SKY_RADIUS - 0.5; // Slightly in front of sky sphere
