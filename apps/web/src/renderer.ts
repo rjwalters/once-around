@@ -31,7 +31,7 @@ function rustToThreeJS(rustX: number, rustY: number, rustZ: number, scale: numbe
   return new THREE.Vector3(
     -rustX * scale,      // Negate X to fix east-west (RA increases eastward)
     rustZ * scale,       // Rust Z → Three.js Y (north pole up)
-    -rustY * scale       // Negate Y (→Z) to maintain right-handedness
+    rustY * scale        // Rust Y → Three.js Z (RA=90°)
   );
 }
 
@@ -212,6 +212,7 @@ const MAJOR_STARS: [number, string][] = [
   [7924, "Deneb"],        // α Cyg, mag 1.25
   [3982, "Regulus"],      // α Leo, mag 1.36
   [2891, "Castor"],       // α Gem, mag 1.58
+  [1790, "Bellatrix"],    // γ Ori, mag 1.64 - Orion's left shoulder
   // Second magnitude
   [8425, "Alnair"],       // α Gru, mag 1.74 - Grus
   [4905, "Alioth"],       // ε UMa, mag 1.77 - Ursa Major
@@ -225,6 +226,7 @@ const MAJOR_STARS: [number, string][] = [
   [617, "Hamal"],         // α Ari, mag 2.00 - Aries
   [3748, "Alphard"],      // α Hya, mag 2.00 - Hydra
   [188, "Diphda"],        // β Cet, mag 2.02 - Cetus
+  [2004, "Saiph"],        // κ Ori, mag 2.07 - Orion's right foot
   [168, "Schedar"],       // α Cas, mag 2.24 - Cassiopeia
   [5054, "Mizar"],        // ζ UMa, mag 2.23
   [6556, "Rasalhague"],   // α Oph, mag 2.08 - Ophiuchus
@@ -381,13 +383,13 @@ void main() {
 `;
 
 // Convert RA/Dec to 3D position on sky sphere
-// Matches rustToThreeJS: negate X and Z to fix east-west orientation
+// Matches rustToThreeJS: negate X to fix east-west orientation
 function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3 {
   const raRad = (ra * Math.PI) / 180;
   const decRad = (dec * Math.PI) / 180;
   const x = -radius * Math.cos(decRad) * Math.cos(raRad);
   const y = radius * Math.sin(decRad);
-  const z = -radius * Math.cos(decRad) * Math.sin(raRad);
+  const z = radius * Math.cos(decRad) * Math.sin(raRad);
   return new THREE.Vector3(x, y, z);
 }
 

@@ -395,13 +395,13 @@ export function createCelestialControls(
     // Convert RA/Dec to a direction vector
     // -X axis points to RA=0, Dec=0 (negated for east-west fix)
     // Y axis points to Dec=+90 (north celestial pole)
-    // -Z axis points to RA=90°, Dec=0 (negated for east-west fix)
-    // This matches getRaDec() which uses atan2(-z, -x) for RA
+    // +Z axis points to RA=90°, Dec=0
+    // This matches getRaDec() which uses atan2(z, -x) for RA
     const cosDec = Math.cos(decRad);
     const targetDir = new THREE.Vector3(
       -cosDec * Math.cos(raRad),
       Math.sin(decRad),
-      -cosDec * Math.sin(raRad)
+      cosDec * Math.sin(raRad)
     );
 
     // Our default view direction is +X
@@ -481,8 +481,8 @@ export function createCelestialControls(
    */
   function getRaDec(): { ra: number; dec: number } {
     const dir = getViewDirection();
-    // RA from atan2(-z, -x) to account for east-west coordinate fix
-    let ra = Math.atan2(-dir.z, -dir.x) * (180 / Math.PI);
+    // RA from atan2(z, -x) to account for east-west coordinate fix (only X negated)
+    let ra = Math.atan2(dir.z, -dir.x) * (180 / Math.PI);
     if (ra < 0) ra += 360;
     // Dec from asin(y), converted to degrees
     const dec = Math.asin(Math.max(-1, Math.min(1, dir.y))) * (180 / Math.PI);

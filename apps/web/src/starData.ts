@@ -254,6 +254,20 @@ export const STAR_DATA: Record<number, StarInfo> = {
     dec: 31.89,
   },
 
+  // Bellatrix - HR 1790
+  1790: {
+    name: "Bellatrix",
+    designation: "Gamma Orionis",
+    constellation: "Orion",
+    type: "B2III - Blue giant",
+    magnitude: 1.64,
+    distance: "250 light-years",
+    description:
+      "Orion's left shoulder, forming a rectangle with Betelgeuse, Rigel, and Saiph. The name means 'female warrior' in Latin. Bellatrix is one of the hottest stars visible to the naked eye, with a surface temperature of about 22,000 K - nearly 4 times hotter than the Sun.",
+    ra: 81.28,
+    dec: 6.35,
+  },
+
   // Mizar - HR 5054
   5054: {
     name: "Mizar",
@@ -498,6 +512,20 @@ export const STAR_DATA: Record<number, StarInfo> = {
       "The brightest star in Cetus, the Sea Monster, despite its beta designation. Also known as Deneb Kaitos ('tail of the whale'). Diphda is an evolved giant star about 145 times more luminous than the Sun, and one of the brightest X-ray sources among normal giant stars.",
     ra: 10.90,
     dec: -17.99,
+  },
+
+  // Saiph - HR 2004
+  2004: {
+    name: "Saiph",
+    designation: "Kappa Orionis",
+    constellation: "Orion",
+    type: "B0.5Ia - Blue supergiant",
+    magnitude: 2.07,
+    distance: "720 light-years",
+    description:
+      "Orion's right foot, diagonally opposite Betelgeuse. The name comes from Arabic 'saif al-jabbar' meaning 'sword of the giant'. Despite appearing dimmer than Rigel, Saiph is actually hotter and intrinsically more luminous - it just appears fainter because it's farther away and much of its light is in the ultraviolet.",
+    ra: 86.94,
+    dec: -9.67,
   },
 
   // Schedar - HR 168

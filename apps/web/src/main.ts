@@ -45,8 +45,8 @@ function positionToRaDec(pos: THREE.Vector3): { ra: number; dec: number } {
   // Dec is the angle from the equatorial plane (Y component)
   const dec = Math.asin(normalized.y) * (180 / Math.PI);
 
-  // RA is the angle in the XZ plane from the -X axis (negated coords for east-west fix)
-  let ra = Math.atan2(-normalized.z, -normalized.x) * (180 / Math.PI);
+  // RA is the angle in the XZ plane (X is negated for east-west fix)
+  let ra = Math.atan2(normalized.z, -normalized.x) * (180 / Math.PI);
   if (ra < 0) ra += 360;
 
   return { ra, dec };
