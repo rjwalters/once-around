@@ -218,6 +218,21 @@
         white-space: nowrap;
       }
 
+      .dso-label {
+        color: #88ccff;
+        font-size: 10px;
+        font-weight: 500;
+        text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+        pointer-events: auto !important;
+        cursor: pointer;
+        transition: color 0.15s, text-shadow 0.15s;
+      }
+
+      .dso-label:hover {
+        color: #aaddff;
+        text-shadow: 0 0 8px rgba(136, 204, 255, 0.6);
+      }
+
       /* Video popup styles */
       .video-popup {
         position: fixed;
@@ -689,6 +704,125 @@
         color: #4a9eff !important;
       }
 
+      /* DSO (Deep Sky Object) info modal */
+      .dso-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        transition: opacity 0.2s ease;
+      }
+
+      .dso-modal.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .dso-modal-content {
+        background: linear-gradient(135deg, #1a1e2e 0%, #161e3e 100%);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 520px;
+        width: 90%;
+        max-height: 85vh;
+        overflow-y: auto;
+        position: relative;
+        box-shadow: 0 8px 32px rgba(136, 204, 255, 0.2);
+        border: 1px solid #2a3a4a;
+      }
+
+      .dso-modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 24px;
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.2s;
+      }
+
+      .dso-modal-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      .dso-modal-header {
+        margin-bottom: 16px;
+        padding-right: 40px;
+      }
+
+      .dso-modal-name {
+        color: #88ccff;
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+      }
+
+      .dso-modal-subtitle {
+        color: #888;
+        font-size: 13px;
+      }
+
+      .dso-modal-type-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        background: rgba(136, 204, 255, 0.2);
+        border-radius: 4px;
+        font-size: 11px;
+        color: #88ccff;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-left: 8px;
+      }
+
+      .dso-modal-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+      }
+
+      .dso-stat {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .dso-stat-label {
+        color: #666;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 2px;
+      }
+
+      .dso-stat-value {
+        color: #ccc;
+        font-size: 13px;
+      }
+
+      .dso-modal-description {
+        color: #ccc;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
       #info {
         position: fixed;
         bottom: 20px;
@@ -949,6 +1083,13 @@
         </label>
       </div>
 
+      <div class="control-group checkbox-group">
+        <label>
+          <input type="checkbox" id="dsos" />
+          Show deep sky objects <span class="shortcut">(D)</span>
+        </label>
+      </div>
+
       <div id="stats">
         Visible: <span id="star-count">0</span> / <span id="total-stars">0</span><br />
         Rendered: <span id="rendered-stars">0</span>
@@ -1021,6 +1162,41 @@
         </div>
         <p class="constellation-modal-description" id="constellation-modal-description">
           One of the most recognizable constellations in the sky.
+        </p>
+      </div>
+    </div>
+
+    <!-- DSO Info Modal -->
+    <div class="dso-modal hidden" id="dso-modal">
+      <div class="dso-modal-content">
+        <button class="dso-modal-close" id="dso-modal-close">&times;</button>
+        <div class="dso-modal-header">
+          <h2 class="dso-modal-name" id="dso-modal-name">M31</h2>
+          <div class="dso-modal-subtitle">
+            <span id="dso-modal-common-name">Andromeda Galaxy</span>
+            <span class="dso-modal-type-badge" id="dso-modal-type-badge">Galaxy</span>
+          </div>
+        </div>
+        <div class="dso-modal-stats">
+          <div class="dso-stat">
+            <span class="dso-stat-label">Magnitude</span>
+            <span class="dso-stat-value" id="dso-modal-magnitude">3.4</span>
+          </div>
+          <div class="dso-stat">
+            <span class="dso-stat-label">Angular Size</span>
+            <span class="dso-stat-value" id="dso-modal-size">190' × 60'</span>
+          </div>
+          <div class="dso-stat">
+            <span class="dso-stat-label">Distance</span>
+            <span class="dso-stat-value" id="dso-modal-distance">2.5 million light-years</span>
+          </div>
+          <div class="dso-stat">
+            <span class="dso-stat-label">Coordinates</span>
+            <span class="dso-stat-value" id="dso-modal-coords">RA 0h 42m, Dec +41°</span>
+          </div>
+        </div>
+        <p class="dso-modal-description" id="dso-modal-description">
+          The nearest major galaxy to the Milky Way.
         </p>
       </div>
     </div>

@@ -4,6 +4,7 @@ import type { SkyEngine } from "./wasm/sky_engine";
 import { getStarsPositionBuffer, getStarsMetaBuffer, getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getPlanetaryMoonsBuffer, getAllStarsPositionBuffer, getAllStarsMetaBuffer } from "./engine";
 import { getAllConstellationLines, CONSTELLATIONS } from "./constellations";
 import { applyTimeToEngine } from "./ui";
+import { DSO_DATA, DSO_COLORS, getVisibleDSOs, type DSO, type DSOType } from "./dsoData";
 
 // -----------------------------------------------------------------------------
 // Coordinate conversion utilities
@@ -318,6 +319,87 @@ void main() {
 `;
 
 // -----------------------------------------------------------------------------
+// DSO (Deep Sky Object) shaders
+// -----------------------------------------------------------------------------
+
+// Vertex shader for DSO elliptical sprites
+const dsoVertexShader = `
+attribute float size;
+attribute vec3 color;
+attribute vec2 ellipseParams; // x = axisRatio, y = positionAngle (radians)
+
+varying vec3 vColor;
+varying vec2 vEllipseParams;
+
+void main() {
+  vColor = color;
+  vEllipseParams = ellipseParams;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  // Size is in pixels
+  gl_PointSize = size;
+}
+`;
+
+// Fragment shader for DSO elliptical sprites with gaussian falloff
+const dsoFragmentShader = `
+varying vec3 vColor;
+varying vec2 vEllipseParams;
+
+void main() {
+  // Get point coordinates (0,0 at center, -1 to 1 range)
+  vec2 coord = gl_PointCoord * 2.0 - 1.0;
+
+  // Apply rotation for position angle
+  float angle = vEllipseParams.y;
+  float cosA = cos(angle);
+  float sinA = sin(angle);
+  vec2 rotated = vec2(
+    coord.x * cosA - coord.y * sinA,
+    coord.x * sinA + coord.y * cosA
+  );
+
+  // Apply ellipse transformation (stretch along minor axis)
+  float axisRatio = vEllipseParams.x;
+  rotated.y /= axisRatio;
+
+  // Gaussian falloff
+  float dist = length(rotated);
+  float alpha = exp(-dist * dist * 2.0);
+
+  // Fade out at edges
+  alpha *= smoothstep(1.0, 0.7, dist);
+
+  if (alpha < 0.01) discard;
+
+  gl_FragColor = vec4(vColor, alpha * 0.6);
+}
+`;
+
+// Convert RA/Dec to 3D position on sky sphere
+function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3 {
+  const raRad = (ra * Math.PI) / 180;
+  const decRad = (dec * Math.PI) / 180;
+  const x = radius * Math.cos(decRad) * Math.cos(raRad);
+  const y = radius * Math.sin(decRad);
+  const z = radius * Math.cos(decRad) * Math.sin(raRad);
+  return new THREE.Vector3(x, y, z);
+}
+
+// Convert DSO type color string to THREE.Color
+function getDSOColor(type: DSOType): THREE.Color {
+  const hex = DSO_COLORS[type];
+  return new THREE.Color(hex);
+}
+
+// Calculate DSO angular size in pixels based on arcminutes and FOV
+function dsoSizeToPixels(sizeArcmin: number, fovDegrees: number, canvasHeight: number): number {
+  const sizeArcsec = sizeArcmin * 60;
+  const fovArcsec = fovDegrees * 3600;
+  return (sizeArcsec / fovArcsec) * canvasHeight;
+}
+
+// -----------------------------------------------------------------------------
 // Renderer configuration
 // -----------------------------------------------------------------------------
 
@@ -341,7 +423,7 @@ void main() {
 
 const milkyWayFragmentShader = `
 varying vec3 vPosition;
-uniform float uVisibility; // 0.0 = hidden, 1.0 = full brightness
+uniform float uLimitingMag; // Limiting magnitude of the sky
 
 // Transformation matrix from equatorial to galactic coordinates (column-major for GLSL)
 // Galactic north pole: RA=192.85948°, Dec=+27.12825° (12h 51m)
@@ -396,8 +478,9 @@ float fbm3(vec3 p) {
 }
 
 void main() {
-  // Early out if Milky Way is hidden
-  if (uVisibility < 0.01) {
+  // Early out if sky is too bright for any Milky Way visibility
+  // Brightest parts are ~mag 4.5, so nothing visible below ~4.0
+  if (uLimitingMag < 4.0) {
     gl_FragColor = vec4(0.0);
     return;
   }
@@ -445,10 +528,21 @@ void main() {
   vec3 edgeColor = vec3(0.7, 0.8, 1.0);
   vec3 color = mix(edgeColor, coreColor, brightness);
 
+  // Convert brightness to surface magnitude
+  // Peak brightness (1.0) = mag 4.5, following magnitude formula
+  // surfaceMag = peakMag - 2.5 * log10(brightness)
+  // Clamp brightness to avoid log(0)
+  float clampedBrightness = max(brightness, 0.001);
+  float surfaceMag = 4.5 - 2.5 * log(clampedBrightness) / log(10.0);
+
+  // Visibility based on whether this region's surface brightness
+  // is detectable given the limiting magnitude
+  // Use smoothstep for gradual transition over ~0.5 mag
+  float visibility = smoothstep(surfaceMag - 0.25, surfaceMag + 0.25, uLimitingMag);
+
   // Final output - subtle glow, not overpowering the stars
-  // Scale by visibility uniform (controlled by limiting magnitude setting)
-  float alpha = brightness * 0.4 * uVisibility;
-  gl_FragColor = vec4(color * brightness * 0.5 * uVisibility, alpha);
+  float alpha = brightness * 0.4 * visibility;
+  gl_FragColor = vec4(color * brightness * 0.5 * visibility, alpha);
 }
 `;
 
@@ -487,6 +581,8 @@ export interface SkyRenderer {
   focusOrbit(bodyIndex: number | null): void;
   computeOrbits(engine: SkyEngine, centerDate: Date): Promise<void>;
   setMilkyWayVisibility(limitingMagnitude: number): void;
+  updateDSOs(fov: number, magLimit: number): void;
+  setDSOsVisible(visible: boolean): void;
   getRenderedStarCount(): number;
   render(): void;
   resize(width: number, height: number): void;
@@ -512,7 +608,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     transparent: true,
     depthWrite: false,
     uniforms: {
-      uVisibility: { value: 1.0 },
+      uLimitingMag: { value: 6.0 },
     },
   });
   const milkyWaySphere = new THREE.Mesh(milkyWayGeometry, milkyWayMaterial);
@@ -742,6 +838,62 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   scene.add(constellationLines);
 
   // ---------------------------------------------------------------------------
+  // Deep Sky Objects (DSO) layer - galaxies, nebulae, clusters
+  // ---------------------------------------------------------------------------
+  const dsoCount = DSO_DATA.length;
+
+  // Create DSO geometry with custom attributes for elliptical rendering
+  const dsoGeometry = new THREE.BufferGeometry();
+  const dsoPositions = new Float32Array(dsoCount * 3);
+  const dsoColors = new Float32Array(dsoCount * 3);
+  const dsoSizes = new Float32Array(dsoCount);
+  const dsoEllipseParams = new Float32Array(dsoCount * 2); // [axisRatio, positionAngle]
+
+  // Initialize DSO positions and attributes
+  for (let i = 0; i < dsoCount; i++) {
+    const dso = DSO_DATA[i];
+    const pos = raDecToPosition(dso.ra, dso.dec, SKY_RADIUS);
+    dsoPositions[i * 3] = pos.x;
+    dsoPositions[i * 3 + 1] = pos.y;
+    dsoPositions[i * 3 + 2] = pos.z;
+
+    const color = getDSOColor(dso.type);
+    dsoColors[i * 3] = color.r;
+    dsoColors[i * 3 + 1] = color.g;
+    dsoColors[i * 3 + 2] = color.b;
+
+    // Axis ratio (minor/major), clamped to avoid degenerate cases
+    const axisRatio = Math.max(0.1, dso.sizeArcmin[1] / dso.sizeArcmin[0]);
+    // Position angle in radians (convert from degrees)
+    const paRad = (dso.positionAngle * Math.PI) / 180;
+    dsoEllipseParams[i * 2] = axisRatio;
+    dsoEllipseParams[i * 2 + 1] = paRad;
+
+    // Initial size (will be updated based on FOV)
+    dsoSizes[i] = 10;
+  }
+
+  dsoGeometry.setAttribute("position", new THREE.BufferAttribute(dsoPositions, 3));
+  dsoGeometry.setAttribute("color", new THREE.BufferAttribute(dsoColors, 3));
+  dsoGeometry.setAttribute("size", new THREE.BufferAttribute(dsoSizes, 1));
+  dsoGeometry.setAttribute("ellipseParams", new THREE.BufferAttribute(dsoEllipseParams, 2));
+
+  const dsoMaterial = new THREE.ShaderMaterial({
+    vertexShader: dsoVertexShader,
+    fragmentShader: dsoFragmentShader,
+    transparent: true,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  const dsoPoints = new THREE.Points(dsoGeometry, dsoMaterial);
+  dsoPoints.visible = false; // Hidden by default
+  scene.add(dsoPoints);
+
+  // Track DSO visibility state
+  let dsoVisible = false;
+
+  // ---------------------------------------------------------------------------
   // Orbit path lines layer
   // ---------------------------------------------------------------------------
   const orbitsGroup = new THREE.Group();
@@ -833,6 +985,19 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const label = new CSS2DObject(div);
     label.visible = false; // Hidden by default
     planetaryMoonLabels.push(label);
+    labelsGroup.add(label);
+  }
+
+  // Deep Sky Object labels (clickable for info popup)
+  const dsoLabels: Map<string, CSS2DObject> = new Map();
+  for (const dso of DSO_DATA) {
+    const div = document.createElement("div");
+    div.className = "sky-label dso-label";
+    div.textContent = dso.id; // Show catalog ID (M31, NGC7000, etc.)
+    div.dataset.dsoId = dso.id; // Store ID for click handler
+    const label = new CSS2DObject(div);
+    label.visible = false;
+    dsoLabels.set(dso.id, label);
     labelsGroup.add(label);
   }
 
@@ -1230,13 +1395,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   function updateFromEngine(engine: SkyEngine, fov?: number): void {
     // Build constellation star map once on first call
-    // This contains all star positions regardless of magnitude for complete constellation lines
     if (!constellationStarMapInitialized) {
       buildConstellationStarMap(engine);
       constellationStarMapInitialized = true;
     }
 
-    // Use provided FOV or get from camera
     const effectiveFov = fov ?? camera.fov;
     updateStars(engine, effectiveFov);
     updateConstellations();
@@ -1354,14 +1517,70 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   /**
    * Set Milky Way visibility based on limiting magnitude.
-   * The Milky Way becomes visible around mag 5.0 and reaches full brightness at mag 6.0+
+   * Uses physically realistic surface brightness model:
+   * - Galactic center (brightest): ~mag 4.5 surface brightness
+   * - Faint outer regions: ~mag 7+ surface brightness
+   * Each pixel appears when limiting magnitude exceeds its surface brightness.
    */
   function setMilkyWayVisibility(limitingMagnitude: number): void {
-    // Milky Way starts becoming visible at mag 5.0, fully visible at 6.0
-    const MIN_MAG = 5.0;
-    const MAX_MAG = 6.0;
-    const visibility = Math.max(0, Math.min(1, (limitingMagnitude - MIN_MAG) / (MAX_MAG - MIN_MAG)));
-    milkyWayMaterial.uniforms.uVisibility.value = visibility;
+    milkyWayMaterial.uniforms.uLimitingMag.value = limitingMagnitude;
+  }
+
+  /**
+   * Update DSO rendering based on current FOV and magnitude limit.
+   * Updates sprite sizes based on angular size and FOV.
+   * Updates label positions for visible DSOs.
+   */
+  function updateDSOs(fov: number, magLimit: number): void {
+    if (!dsoVisible) return;
+
+    const sizeAttr = dsoGeometry.getAttribute("size") as THREE.BufferAttribute;
+    const visibleDSOs = getVisibleDSOs(magLimit);
+    const visibleIds = new Set(visibleDSOs.map(d => d.id));
+
+    // Update sizes and label visibility
+    for (let i = 0; i < DSO_DATA.length; i++) {
+      const dso = DSO_DATA[i];
+      const isVisible = visibleIds.has(dso.id);
+
+      if (isVisible) {
+        // Calculate size in pixels based on major axis and FOV
+        // Minimum size of 4px to ensure visibility
+        const sizePixels = Math.max(4, dsoSizeToPixels(dso.sizeArcmin[0], fov, container.clientHeight));
+        sizeAttr.setX(i, sizePixels);
+
+        // Update label position and visibility
+        const label = dsoLabels.get(dso.id);
+        if (label) {
+          const pos = raDecToPosition(dso.ra, dso.dec, SKY_RADIUS);
+          const labelPos = calculateLabelOffset(pos, LABEL_OFFSET * 0.8);
+          label.position.copy(labelPos);
+          label.visible = labelsGroup.visible;
+        }
+      } else {
+        // Hide DSOs that shouldn't be visible at current mag limit
+        sizeAttr.setX(i, 0);
+        const label = dsoLabels.get(dso.id);
+        if (label) label.visible = false;
+      }
+    }
+
+    sizeAttr.needsUpdate = true;
+  }
+
+  /**
+   * Set DSOs visibility on/off.
+   */
+  function setDSOsVisible(visible: boolean): void {
+    dsoVisible = visible;
+    dsoPoints.visible = visible;
+
+    // Hide all DSO labels when DSOs are hidden
+    if (!visible) {
+      for (const label of dsoLabels.values()) {
+        label.visible = false;
+      }
+    }
   }
 
   function getRenderedStarCount(): number {
@@ -1391,6 +1610,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     focusOrbit,
     computeOrbits,
     setMilkyWayVisibility,
+    updateDSOs,
+    setDSOsVisible,
     getRenderedStarCount,
     render,
     resize,

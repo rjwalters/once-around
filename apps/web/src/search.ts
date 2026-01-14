@@ -2,7 +2,7 @@
  * Fuzzy search across planets, stars, constellations, and videos.
  */
 
-export type SearchItemType = 'planet' | 'star' | 'constellation' | 'video';
+export type SearchItemType = 'planet' | 'star' | 'constellation' | 'dso' | 'video';
 
 export interface SearchItem {
   name: string;
@@ -103,6 +103,7 @@ export const TYPE_COLORS: Record<SearchItemType, string> = {
   planet: '#ffcc66',
   star: '#ff8844',
   constellation: '#64a0dc',
+  dso: '#88ccff',
   video: '#b366ff',
 };
 

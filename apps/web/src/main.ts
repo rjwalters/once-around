@@ -6,6 +6,7 @@ import { setupUI, applyTimeToEngine } from "./ui";
 import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement, type BodyPositions } from "./videos";
 import { STAR_DATA, type StarInfo } from "./starData";
 import { CONSTELLATION_DATA, type ConstellationInfo } from "./constellationData";
+import { DSO_DATA, type DSO, type DSOType } from "./dsoData";
 import { loadSettings, createSettingsSaver } from "./settings";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import type { SkyEngine } from "./wasm/sky_engine";
@@ -507,6 +508,25 @@ async function main(): Promise<void> {
     });
   }
 
+  // DSOs (deep sky objects) checkbox
+  const dsosCheckbox = document.getElementById("dsos") as HTMLInputElement | null;
+  if (dsosCheckbox) {
+    // Restore from settings
+    dsosCheckbox.checked = settings.dsosVisible ?? false;
+    renderer.setDSOsVisible(settings.dsosVisible ?? false);
+
+    dsosCheckbox.addEventListener("change", () => {
+      renderer.setDSOsVisible(dsosCheckbox.checked);
+      // Update DSOs immediately when toggled on
+      if (dsosCheckbox.checked) {
+        const currentFov = controls.getCameraState().fov;
+        const currentMag = magnitudeInput ? parseFloat(magnitudeInput.value) : 6.5;
+        renderer.updateDSOs(currentFov, currentMag);
+      }
+      settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Search functionality
   // ---------------------------------------------------------------------------
@@ -550,6 +570,27 @@ async function main(): Promise<void> {
           ra: center.ra,
           dec: center.dec,
           subtitle: info.meaning,
+        });
+      }
+    }
+
+    // Add deep sky objects
+    for (const dso of DSO_DATA) {
+      items.push({
+        name: dso.name,
+        type: 'dso',
+        ra: dso.ra,
+        dec: dso.dec,
+        subtitle: dso.id,
+      });
+      // Also add by catalog ID for search
+      if (dso.id !== dso.name) {
+        items.push({
+          name: dso.id,
+          type: 'dso',
+          ra: dso.ra,
+          dec: dso.dec,
+          subtitle: dso.name,
         });
       }
     }
@@ -821,6 +862,85 @@ async function main(): Promise<void> {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // DSO (Deep Sky Object) info popup
+  // ---------------------------------------------------------------------------
+  const dsoModal = document.getElementById("dso-modal");
+  const dsoModalClose = document.getElementById("dso-modal-close");
+  const dsoModalName = document.getElementById("dso-modal-name");
+  const dsoModalCommonName = document.getElementById("dso-modal-common-name");
+  const dsoModalTypeBadge = document.getElementById("dso-modal-type-badge");
+  const dsoModalMagnitude = document.getElementById("dso-modal-magnitude");
+  const dsoModalSize = document.getElementById("dso-modal-size");
+  const dsoModalDistance = document.getElementById("dso-modal-distance");
+  const dsoModalCoords = document.getElementById("dso-modal-coords");
+  const dsoModalDescription = document.getElementById("dso-modal-description");
+
+  // Format DSO type for display
+  function formatDSOType(type: DSOType): string {
+    const typeLabels: Record<DSOType, string> = {
+      galaxy: "Galaxy",
+      emission_nebula: "Emission Nebula",
+      planetary_nebula: "Planetary Nebula",
+      reflection_nebula: "Reflection Nebula",
+      dark_nebula: "Dark Nebula",
+      globular_cluster: "Globular Cluster",
+      open_cluster: "Open Cluster",
+    };
+    return typeLabels[type] || type;
+  }
+
+  // Format RA for display (hours:minutes)
+  function formatRAForDSO(raDeg: number): string {
+    const raHours = raDeg / 15;
+    const h = Math.floor(raHours);
+    const m = Math.floor((raHours - h) * 60);
+    return `${h}h ${m.toString().padStart(2, "0")}m`;
+  }
+
+  // Format Dec for display (degrees)
+  function formatDecForDSO(decDeg: number): string {
+    const sign = decDeg >= 0 ? "+" : "";
+    return `${sign}${Math.round(decDeg)}°`;
+  }
+
+  function showDSOInfo(dsoId: string): void {
+    const dso = DSO_DATA.find(d => d.id === dsoId);
+    if (!dso || !dsoModal) return;
+
+    if (dsoModalName) dsoModalName.textContent = dso.id;
+    if (dsoModalCommonName) dsoModalCommonName.textContent = dso.name;
+    if (dsoModalTypeBadge) dsoModalTypeBadge.textContent = formatDSOType(dso.type);
+    if (dsoModalMagnitude) dsoModalMagnitude.textContent = dso.magnitude < 90 ? dso.magnitude.toFixed(1) : "N/A";
+    if (dsoModalSize) dsoModalSize.textContent = `${dso.sizeArcmin[0]}' × ${dso.sizeArcmin[1]}'`;
+    if (dsoModalDistance) dsoModalDistance.textContent = dso.distance;
+    if (dsoModalCoords) dsoModalCoords.textContent = `RA ${formatRAForDSO(dso.ra)}, Dec ${formatDecForDSO(dso.dec)}`;
+    if (dsoModalDescription) dsoModalDescription.textContent = dso.description;
+
+    dsoModal.classList.remove("hidden");
+  }
+
+  // Close DSO modal
+  if (dsoModal && dsoModalClose) {
+    dsoModalClose.addEventListener("click", () => {
+      dsoModal.classList.add("hidden");
+    });
+
+    dsoModal.addEventListener("click", (e) => {
+      if (e.target === dsoModal) {
+        dsoModal.classList.add("hidden");
+      }
+    });
+  }
+
+  // Handle clicks on DSO labels (using event delegation)
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains("dso-label") && target.dataset.dsoId) {
+      showDSOInfo(target.dataset.dsoId);
+    }
+  });
+
   // Handle clicks on planet labels to focus orbit
   // Track which planet is focused (null = show all, body index = focused)
   let focusedOrbitBody: number | null = null;
@@ -970,6 +1090,19 @@ async function main(): Promise<void> {
           // Clear any focused orbit when toggling
           focusedOrbitBody = null;
           settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
+        }
+        break;
+      case "d":
+        // Toggle DSOs (deep sky objects)
+        if (dsosCheckbox) {
+          dsosCheckbox.checked = !dsosCheckbox.checked;
+          renderer.setDSOsVisible(dsosCheckbox.checked);
+          if (dsosCheckbox.checked) {
+            const currentFov = controls.getCameraState().fov;
+            const currentMag = magnitudeInput ? parseFloat(magnitudeInput.value) : 6.5;
+            renderer.updateDSOs(currentFov, currentMag);
+          }
+          settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
         }
         break;
       case " ":
