@@ -154,6 +154,44 @@ async function main(): Promise<void> {
     renderer.resize(window.innerWidth, window.innerHeight);
   });
 
+  // Keyboard shortcuts
+  window.addEventListener("keydown", (event) => {
+    // Don't trigger shortcuts when typing in input fields
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+
+    switch (event.key.toLowerCase()) {
+      case "l":
+        // Toggle labels
+        if (labelsCheckbox) {
+          labelsCheckbox.checked = !labelsCheckbox.checked;
+          renderer.setLabelsVisible(labelsCheckbox.checked);
+        }
+        break;
+      case "c":
+        // Toggle constellations
+        if (constellationCheckbox) {
+          constellationCheckbox.checked = !constellationCheckbox.checked;
+          renderer.setConstellationsVisible(constellationCheckbox.checked);
+        }
+        break;
+      case "v":
+        // Toggle videos
+        if (videosCheckbox) {
+          videosCheckbox.checked = !videosCheckbox.checked;
+          videoMarkers.setVisible(videosCheckbox.checked);
+          videoMarkers.setLabelsVisible(videosCheckbox.checked);
+        }
+        break;
+      case " ":
+        // Spacebar: animate to galactic center (RA ~266.4°, Dec ~-29°)
+        event.preventDefault();
+        controls.animateToRaDec(266.4, -29, 1500);
+        break;
+    }
+  });
+
   // Animation loop
   function animate(): void {
     requestAnimationFrame(animate);

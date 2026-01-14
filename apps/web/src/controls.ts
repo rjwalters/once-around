@@ -14,6 +14,7 @@ export interface CelestialControls {
   update(): void;
   dispose(): void;
   lookAtRaDec(ra: number, dec: number): void;
+  animateToRaDec(ra: number, dec: number, durationMs?: number): void;
   onFovChange?: (fov: number) => void;
 }
 
@@ -81,6 +82,15 @@ export function createCelestialControls(
   const minFov = 10;
   const maxFov = 100;
   const zoomSpeed = 0.05;
+
+  // Animation state
+  let isAnimating = false;
+  let animStartTime = 0;
+  let animDuration = 1000;
+  let animStartTheta = 0;
+  let animStartPhi = 0;
+  let animTargetTheta = 0;
+  let animTargetPhi = 0;
 
   /**
    * Convert screen pixel offset from center to angular offset.
@@ -327,7 +337,43 @@ export function createCelestialControls(
   domElement.style.cursor = "grab";
   updateCameraDirection();
 
-  function update(): void {}
+  // Easing function for smooth animation
+  function easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  // Find the shortest angular path between two angles
+  function shortestAngleDelta(from: number, to: number): number {
+    let delta = to - from;
+    // Normalize to [-π, π]
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    return delta;
+  }
+
+  function update(): void {
+    if (!isAnimating) return;
+
+    const now = performance.now();
+    const elapsed = now - animStartTime;
+    const progress = Math.min(1, elapsed / animDuration);
+    const eased = easeInOutCubic(progress);
+
+    // Interpolate theta (handling wraparound)
+    const deltaTheta = shortestAngleDelta(animStartTheta, animTargetTheta);
+    theta = animStartTheta + deltaTheta * eased;
+    // Normalize theta to [0, 2π)
+    theta = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+    // Interpolate phi (no wraparound needed)
+    phi = animStartPhi + (animTargetPhi - animStartPhi) * eased;
+
+    updateCameraDirection();
+
+    if (progress >= 1) {
+      isAnimating = false;
+    }
+  }
 
   /**
    * Center the camera on a celestial object given its RA/Dec coordinates.
@@ -350,6 +396,30 @@ export function createCelestialControls(
     updateCameraDirection();
   }
 
+  /**
+   * Animate the camera to center on a celestial object given its RA/Dec coordinates.
+   * @param ra Right Ascension in degrees (0-360)
+   * @param dec Declination in degrees (-90 to +90)
+   * @param durationMs Animation duration in milliseconds (default 1000)
+   */
+  function animateToRaDec(ra: number, dec: number, durationMs: number = 1000): void {
+    const raRad = (ra * Math.PI) / 180;
+    const decRad = (dec * Math.PI) / 180;
+
+    // Convert RA/Dec to target theta/phi
+    const targetTheta = (((-raRad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
+    const targetPhi = Math.max(0.001, Math.min(Math.PI - 0.001, Math.PI / 2 - decRad));
+
+    // Store current position as start
+    animStartTheta = theta;
+    animStartPhi = phi;
+    animTargetTheta = targetTheta;
+    animTargetPhi = targetPhi;
+    animDuration = durationMs;
+    animStartTime = performance.now();
+    isAnimating = true;
+  }
+
   function dispose(): void {
     domElement.removeEventListener("mousedown", onMouseDown);
     domElement.removeEventListener("mousemove", onMouseMove);
@@ -366,6 +436,7 @@ export function createCelestialControls(
     update,
     dispose,
     lookAtRaDec,
+    animateToRaDec,
     onFovChange: undefined,
   };
 
