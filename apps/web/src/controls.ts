@@ -4,11 +4,9 @@ import * as THREE from "three";
  * Celestial camera controls - "grab the sphere from inside" model.
  *
  * When you grab a point on the sky and drag, that point should track your cursor
- * exactly. We achieve this by:
- * 1. Converting screen position to a direction on the sky sphere
- * 2. Computing the rotation needed to move the grabbed point to the cursor position
- * 3. Decomposing that rotation into yaw (around world Y) and pitch (around camera right)
- *    to prevent roll accumulation
+ * exactly. We achieve this by tracking the angular offset of the grabbed point
+ * from the view center and adjusting the view to keep that offset consistent
+ * with the cursor position.
  */
 export interface CelestialControls {
   update(): void;
@@ -74,9 +72,6 @@ export function createCelestialControls(
   let dragStartTheta = 0;
   let dragStartPhi = 0;
 
-  // The grabbed point as a 3D unit vector (where we clicked on the sky)
-  const grabDir = new THREE.Vector3();
-
   // FOV zoom settings
   const minFov = 10;
   const maxFov = 100;
@@ -92,129 +87,12 @@ export function createCelestialControls(
   let animTargetPhi = 0;
 
   /**
-   * Convert screen position to a 3D direction vector on the unit sphere.
-   * This properly handles the perspective projection without spherical coordinate singularities.
+   * Convert pixel delta to angular delta based on FOV.
    */
-  function screenToDirection(screenX: number, screenY: number): THREE.Vector3 {
+  function pixelToAngle(pixels: number): number {
     const rect = domElement.getBoundingClientRect();
-
-    // Normalized device coordinates (-1 to 1)
-    const ndcX = ((screenX - rect.left) / rect.width) * 2 - 1;
-    const ndcY = -((screenY - rect.top) / rect.height) * 2 + 1;
-
-    // Convert to view angles
     const fovRad = (camera.fov * Math.PI) / 180;
-    const aspect = rect.width / rect.height;
-
-    // Half-angles
-    const halfFovY = fovRad / 2;
-    const halfFovX = Math.atan(Math.tan(halfFovY) * aspect);
-
-    // Direction in camera space (camera looks down -Z in Three.js camera space)
-    const dirCamX = Math.tan(halfFovX) * ndcX;
-    const dirCamY = Math.tan(halfFovY) * ndcY;
-    const dirCamZ = -1; // Forward
-
-    // Create direction vector in camera space
-    const dirCam = new THREE.Vector3(dirCamX, dirCamY, dirCamZ).normalize();
-
-    // Transform to world space using camera's world matrix
-    // But our camera is at origin and we control it via theta/phi, so we need to
-    // manually construct the rotation
-    const viewDir = new THREE.Vector3(
-      Math.sin(phi) * Math.cos(theta),
-      Math.cos(phi),
-      Math.sin(phi) * Math.sin(theta)
-    );
-
-    // Camera's right vector (perpendicular to view and world up)
-    const worldUp = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(viewDir, worldUp).normalize();
-
-    // Camera's up vector (perpendicular to view and right)
-    const up = new THREE.Vector3().crossVectors(right, viewDir).normalize();
-
-    // Transform camera-space direction to world space
-    // dirCam.x -> right, dirCam.y -> up, dirCam.z -> -viewDir
-    const worldDir = new THREE.Vector3()
-      .addScaledVector(right, dirCam.x)
-      .addScaledVector(up, dirCam.y)
-      .addScaledVector(viewDir, -dirCam.z)
-      .normalize();
-
-    return worldDir;
-  }
-
-  /**
-   * Compute the view direction (theta, phi) such that a given world direction
-   * appears at the specified screen position.
-   *
-   * Uses vector math to avoid polar singularities.
-   */
-  function computeViewForDirectionAtScreen(
-    targetDir: THREE.Vector3,
-    screenX: number,
-    screenY: number
-  ): { theta: number; phi: number } {
-    const rect = domElement.getBoundingClientRect();
-
-    // Normalized device coordinates
-    const ndcX = ((screenX - rect.left) / rect.width) * 2 - 1;
-    const ndcY = -((screenY - rect.top) / rect.height) * 2 + 1;
-
-    // Convert to view angles
-    const fovRad = (camera.fov * Math.PI) / 180;
-    const aspect = rect.width / rect.height;
-    const halfFovY = fovRad / 2;
-    const halfFovX = Math.atan(Math.tan(halfFovY) * aspect);
-
-    // The offset angles from center
-    const angleX = Math.atan(Math.tan(halfFovX) * ndcX);
-    const angleY = Math.atan(Math.tan(halfFovY) * ndcY);
-
-    // We need to find a view direction V such that targetDir appears at (angleX, angleY)
-    // from the view center.
-
-    // Start with targetDir and rotate it to be the view center
-    // First, undo the vertical offset (pitch)
-    const pitchAxis = new THREE.Vector3(1, 0, 0); // Will be rotated
-    const yawAxis = new THREE.Vector3(0, 1, 0);
-
-    // We need to find V such that rotating V by angleY around camera-right
-    // and then by angleX around world-up gives us targetDir
-
-    // Work backwards: rotate targetDir by -angleX around world-up, then -angleY around right
-    const viewDir = targetDir.clone();
-
-    // Undo horizontal rotation (around world Y)
-    const yawQuat = new THREE.Quaternion().setFromAxisAngle(yawAxis, -angleX);
-    viewDir.applyQuaternion(yawQuat);
-
-    // For vertical rotation, we need the right vector of this intermediate view
-    const intermediateRight = new THREE.Vector3().crossVectors(viewDir, yawAxis);
-    if (intermediateRight.lengthSq() < 0.001) {
-      // Looking straight up or down - use a default right vector
-      intermediateRight.set(1, 0, 0);
-    }
-    intermediateRight.normalize();
-
-    // Undo vertical rotation
-    const pitchQuat = new THREE.Quaternion().setFromAxisAngle(intermediateRight, -angleY);
-    viewDir.applyQuaternion(pitchQuat);
-    viewDir.normalize();
-
-    // Convert viewDir back to theta/phi
-    // phi: angle from +Y axis (0 = up, π = down)
-    const newPhi = Math.acos(Math.max(-1, Math.min(1, viewDir.y)));
-
-    // theta: angle around Y axis
-    let newTheta = Math.atan2(viewDir.z, viewDir.x);
-    if (newTheta < 0) newTheta += 2 * Math.PI;
-
-    // Clamp phi to avoid exact poles
-    const clampedPhi = Math.max(0.01, Math.min(Math.PI - 0.01, newPhi));
-
-    return { theta: newTheta, phi: clampedPhi };
+    return (pixels / rect.height) * fovRad;
   }
 
   /**
@@ -241,12 +119,22 @@ export function createCelestialControls(
     const dx = currentX - dragStartX;
     const dy = currentY - dragStartY;
 
-    // Compute the view direction that puts the grabbed sky point at the current cursor position
-    const newView = computeViewForDirectionAtScreen(grabDir, currentX, currentY);
+    // Convert pixel movement to angular movement
+    // Vertical movement (dy) directly changes phi
+    // Horizontal movement (dx) changes theta, scaled by 1/sin(phi) to maintain
+    // consistent speed at different latitudes
+    const dPhi = pixelToAngle(dy);
+    const dTheta = pixelToAngle(dx) / Math.max(0.1, Math.sin(phi));
+
+    // Apply deltas (negative because dragging right should rotate view left)
+    theta = dragStartTheta - dTheta;
+    phi = dragStartPhi + dPhi;
+
+    // Clamp phi to avoid poles
+    phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi));
 
     // Wrap theta to [0, 2π)
-    theta = ((newView.theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-    phi = newView.phi;
+    theta = ((theta % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
     updateDebug({
       theta,
@@ -269,13 +157,11 @@ export function createCelestialControls(
     if (event.button !== 0) return;
 
     isDragging = true;
+    isAnimating = false; // Cancel any ongoing animation
     dragStartX = event.clientX;
     dragStartY = event.clientY;
     dragStartTheta = theta;
     dragStartPhi = phi;
-
-    // Compute the 3D direction of the grabbed point
-    grabDir.copy(screenToDirection(event.clientX, event.clientY));
 
     domElement.style.cursor = "grabbing";
 
@@ -330,13 +216,11 @@ export function createCelestialControls(
   function onTouchStart(event: TouchEvent): void {
     if (event.touches.length === 1) {
       isDragging = true;
+      isAnimating = false;
       dragStartX = event.touches[0].clientX;
       dragStartY = event.touches[0].clientY;
       dragStartTheta = theta;
       dragStartPhi = phi;
-
-      // Compute the 3D direction of the grabbed point
-      grabDir.copy(screenToDirection(dragStartX, dragStartY));
     } else if (event.touches.length === 2) {
       isDragging = false;
       initialPinchDistance = getTouchDistance(event.touches);
@@ -436,8 +320,9 @@ export function createCelestialControls(
     phi = Math.PI / 2 - decRad;
 
     // Clamp phi to valid range
-    phi = Math.max(0.001, Math.min(Math.PI - 0.001, phi));
+    phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi));
 
+    isAnimating = false;
     updateCameraDirection();
   }
 
@@ -453,7 +338,7 @@ export function createCelestialControls(
 
     // Convert RA/Dec to target theta/phi
     const targetTheta = (((-raRad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
-    const targetPhi = Math.max(0.001, Math.min(Math.PI - 0.001, Math.PI / 2 - decRad));
+    const targetPhi = Math.max(0.01, Math.min(Math.PI - 0.01, Math.PI / 2 - decRad));
 
     // Store current position as start
     animStartTheta = theta;

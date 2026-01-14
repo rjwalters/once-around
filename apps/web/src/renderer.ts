@@ -98,9 +98,9 @@ const MAJOR_STARS: [number, string][] = [
   [7924, "Deneb"],        // α Cyg, mag 1.25
   [3982, "Regulus"],      // α Leo, mag 1.36
   [2891, "Castor"],       // α Gem, mag 1.58
-  [5267, "Mizar"],        // ζ UMa, mag 2.23
+  [5054, "Mizar"],        // ζ UMa, mag 2.23
   [424, "Polaris"],       // α UMi, mag 1.98
-  [6527, "Rasalhague"],   // α Oph, mag 2.08
+  [6556, "Rasalhague"],   // α Oph, mag 2.08
 ];
 
 // -----------------------------------------------------------------------------
