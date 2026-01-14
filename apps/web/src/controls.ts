@@ -108,8 +108,8 @@ export function createCelestialControls(
    * Get the current view direction from the quaternion.
    */
   function getViewDirection(): THREE.Vector3 {
-    // Default view direction is +X (before any rotation)
-    return new THREE.Vector3(1, 0, 0).applyQuaternion(viewQuaternion);
+    // Default view direction is -X (RA=0 after east-west fix)
+    return new THREE.Vector3(-1, 0, 0).applyQuaternion(viewQuaternion);
   }
 
   /**
@@ -124,9 +124,7 @@ export function createCelestialControls(
    * Get the camera's local right vector from the quaternion.
    */
   function getCameraRight(): THREE.Vector3 {
-    // Default right is +Z (in our coordinate system), transformed by view quaternion
-    // Actually: right = forward × up, but we can derive it from the quaternion directly
-    // For a view looking at +X with up +Y, right is -Z
+    // Default right is -Z (when forward = -X and up = +Y, right = -Z)
     return new THREE.Vector3(0, 0, -1).applyQuaternion(viewQuaternion);
   }
 
@@ -198,7 +196,7 @@ export function createCelestialControls(
    * Apply incremental rotation from pixel delta.
    */
   function applyDragDelta(dx: number, dy: number): void {
-    const angleX = -pixelToAngle(dx); // Flip horizontal
+    const angleX = pixelToAngle(dx); // No flip needed after east-west coordinate fix
     const angleY = pixelToAngle(dy);
     applyRotation(angleX, angleY);
   }
@@ -325,10 +323,10 @@ export function createCelestialControls(
 
     switch (event.key) {
       case "ArrowLeft":
-        angleX = -ARROW_KEY_SPEED;
+        angleX = ARROW_KEY_SPEED; // Flipped for east-west coordinate fix
         break;
       case "ArrowRight":
-        angleX = ARROW_KEY_SPEED;
+        angleX = -ARROW_KEY_SPEED; // Flipped for east-west coordinate fix
         break;
       case "ArrowUp":
         angleY = ARROW_KEY_SPEED;
@@ -404,8 +402,8 @@ export function createCelestialControls(
       cosDec * Math.sin(raRad)
     );
 
-    // Our default view direction is +X
-    const defaultDir = new THREE.Vector3(1, 0, 0);
+    // Our default view direction is -X (matches RA=0 after east-west fix)
+    const defaultDir = new THREE.Vector3(-1, 0, 0);
 
     // Create quaternion that rotates default to target
     const quat = new THREE.Quaternion();
