@@ -106,6 +106,28 @@ impl SkyEngine {
         self.recompute_planetary_moons();
     }
 
+    /// Add more stars to the catalog from binary data.
+    /// Returns the number of new stars added (duplicates are skipped).
+    /// Call recompute() after this to refresh position buffers.
+    pub fn add_stars(&mut self, additional_bytes: &[u8]) -> Result<usize, JsError> {
+        let added = self.catalog.extend(additional_bytes)
+            .map_err(|e| JsError::new(e))?;
+
+        if added > 0 {
+            // Reallocate buffers for new capacity
+            let new_count = self.catalog.len();
+            self.stars_pos.resize(new_count * 3, 0.0);
+            self.stars_meta.resize(new_count * 4, 0.0);
+            self.all_stars_pos.resize(new_count * 3, 0.0);
+            self.all_stars_meta.resize(new_count * 4, 0.0);
+
+            // Recompute all star positions (for constellation drawing)
+            self.compute_all_stars();
+        }
+
+        Ok(added)
+    }
+
     fn recompute_stars(&mut self) {
         let mut pos_idx = 0;
         let mut meta_idx = 0;

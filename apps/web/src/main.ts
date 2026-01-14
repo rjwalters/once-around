@@ -7,6 +7,7 @@ import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement, type Bo
 import { STAR_DATA, type StarInfo } from "./starData";
 import { CONSTELLATION_DATA, type ConstellationInfo } from "./constellationData";
 import { loadSettings, createSettingsSaver } from "./settings";
+import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import type { SkyEngine } from "./wasm/sky_engine";
 
 // Body names in the order they appear in the position buffer
@@ -30,6 +31,24 @@ function getBodyPositions(engine: SkyEngine): BodyPositions {
   }
 
   return positions;
+}
+
+/**
+ * Convert a 3D position (Three.js coordinates) to RA/Dec in degrees.
+ * Three.js uses Y-up: X→RA=0°, Y→North pole, Z→RA=90°
+ */
+function positionToRaDec(pos: THREE.Vector3): { ra: number; dec: number } {
+  // Normalize the position
+  const normalized = pos.clone().normalize();
+
+  // Dec is the angle from the equatorial plane (Y component)
+  const dec = Math.asin(normalized.y) * (180 / Math.PI);
+
+  // RA is the angle in the XZ plane from the X axis
+  let ra = Math.atan2(normalized.z, normalized.x) * (180 / Math.PI);
+  if (ra < 0) ra += 360;
+
+  return { ra, dec };
 }
 
 async function main(): Promise<void> {
@@ -356,6 +375,183 @@ async function main(): Promise<void> {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Search functionality
+  // ---------------------------------------------------------------------------
+  const searchInput = document.getElementById("search") as HTMLInputElement | null;
+  const searchResults = document.getElementById("search-results");
+  let searchIndex: SearchItem[] = [];
+  let selectedResultIndex = -1;
+
+  // Build search index from all available data
+  async function buildSearchIndex(): Promise<SearchItem[]> {
+    const items: SearchItem[] = [];
+
+    // Add planets (get current positions)
+    const currentBodyPositions = getBodyPositions(engine);
+    for (const name of BODY_NAMES) {
+      const pos = currentBodyPositions.get(name);
+      if (pos) {
+        const { ra, dec } = positionToRaDec(pos);
+        items.push({ name, type: 'planet', ra, dec });
+      }
+    }
+
+    // Add named stars
+    for (const [_hr, star] of Object.entries(STAR_DATA)) {
+      items.push({
+        name: star.name,
+        type: 'star',
+        ra: star.ra,
+        dec: star.dec,
+        subtitle: star.designation,
+      });
+    }
+
+    // Add constellations
+    for (const [name, info] of Object.entries(CONSTELLATION_DATA)) {
+      const center = CONSTELLATION_CENTERS[name];
+      if (center) {
+        items.push({
+          name: info.name,
+          type: 'constellation',
+          ra: center.ra,
+          dec: center.dec,
+          subtitle: info.meaning,
+        });
+      }
+    }
+
+    // Add videos
+    try {
+      const response = await fetch("/videos.json");
+      const videos: VideoPlacement[] = await response.json();
+      for (const video of videos) {
+        items.push({
+          name: video.object,
+          type: 'video',
+          ra: video.ra,
+          dec: video.dec,
+          subtitle: video.title,
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to load videos for search index:", e);
+    }
+
+    return items;
+  }
+
+  // Render search results dropdown
+  function renderSearchResults(results: SearchResult[]): void {
+    if (!searchResults) return;
+
+    if (results.length === 0) {
+      searchResults.innerHTML = '<div class="search-empty">No results found</div>';
+      searchResults.classList.add("visible");
+      return;
+    }
+
+    searchResults.innerHTML = results.map((result, i) => `
+      <div class="search-result${i === selectedResultIndex ? ' selected' : ''}" data-index="${i}">
+        <div class="search-result-dot" style="background: ${TYPE_COLORS[result.type]}"></div>
+        <div class="search-result-info">
+          <div class="search-result-name">${result.name}</div>
+          ${result.subtitle ? `<div class="search-result-subtitle">${result.subtitle}</div>` : ''}
+        </div>
+        <div class="search-result-type">${result.type}</div>
+      </div>
+    `).join('');
+
+    searchResults.classList.add("visible");
+  }
+
+  // Hide search results
+  function hideSearchResults(): void {
+    if (searchResults) {
+      searchResults.classList.remove("visible");
+      searchResults.innerHTML = '';
+    }
+    selectedResultIndex = -1;
+  }
+
+  // Navigate to a search result
+  function navigateToResult(result: SearchResult): void {
+    controls.animateToRaDec(result.ra, result.dec, 1000);
+    hideSearchResults();
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.blur();
+    }
+  }
+
+  // Initialize search
+  buildSearchIndex().then(index => {
+    searchIndex = index;
+    console.log(`Search index built: ${index.length} items`);
+  });
+
+  // Search input event handlers
+  if (searchInput && searchResults) {
+    let currentResults: SearchResult[] = [];
+
+    searchInput.addEventListener("input", () => {
+      const query = searchInput.value.trim();
+      if (query.length === 0) {
+        hideSearchResults();
+        currentResults = [];
+        return;
+      }
+
+      currentResults = search(query, searchIndex, 8);
+      selectedResultIndex = currentResults.length > 0 ? 0 : -1;
+      renderSearchResults(currentResults);
+    });
+
+    searchInput.addEventListener("keydown", (e) => {
+      if (currentResults.length === 0) return;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          selectedResultIndex = Math.min(selectedResultIndex + 1, currentResults.length - 1);
+          renderSearchResults(currentResults);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          selectedResultIndex = Math.max(selectedResultIndex - 1, 0);
+          renderSearchResults(currentResults);
+          break;
+        case "Enter":
+          e.preventDefault();
+          if (selectedResultIndex >= 0 && selectedResultIndex < currentResults.length) {
+            navigateToResult(currentResults[selectedResultIndex]);
+          }
+          break;
+        case "Escape":
+          hideSearchResults();
+          searchInput.blur();
+          break;
+      }
+    });
+
+    searchInput.addEventListener("blur", () => {
+      // Delay hiding to allow click events on results
+      setTimeout(hideSearchResults, 150);
+    });
+
+    // Click on search result
+    searchResults.addEventListener("click", (e) => {
+      const target = (e.target as HTMLElement).closest(".search-result");
+      if (target) {
+        const index = parseInt(target.getAttribute("data-index") || "-1", 10);
+        if (index >= 0 && index < currentResults.length) {
+          navigateToResult(currentResults[index]);
+        }
+      }
+    });
+  }
+
   // About modal
   const aboutBtn = document.getElementById("about-btn");
   const aboutModal = document.getElementById("about-modal");
@@ -664,6 +860,13 @@ async function main(): Promise<void> {
       case "p":
         // Toggle play/pause
         togglePlayback();
+        break;
+      case "/":
+        // Focus search
+        event.preventDefault();
+        if (searchInput) {
+          searchInput.focus();
+        }
         break;
     }
   });

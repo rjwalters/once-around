@@ -6,5 +6,12 @@ export default defineConfig({
   plugins: [wasm(), topLevelAwait()],
   build: {
     target: "esnext",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ["three"],
+        },
+      },
+    },
   },
 });

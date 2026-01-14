@@ -6,15 +6,27 @@
 //!
 //! Usage:
 //!   preprocess_stars <input.dat> <output.bin> [--hipparcos]
+//!   preprocess_stars <input.dat> <output_dir/> --tiered
+//!   preprocess_stars <input.dat> <output.bin> --hr-list <comma-separated-ids>
 //!
 //! The format is auto-detected, or use --hipparcos flag to force.
+//!
+//! Modes:
+//!   Default: Output all stars to a single binary file
+//!   --tiered: Output three files by magnitude tier:
+//!     - <output_dir>/bsc5-tier1.bin (mag < 3.0)
+//!     - <output_dir>/bsc5-tier2.bin (mag 3.0-5.0)
+//!     - <output_dir>/bsc5-tier3.bin (mag 5.0-6.5)
+//!   --hr-list: Output only stars with specified HR/HIP numbers
 
+use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::f64::consts::PI;
+use std::path::Path;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Star {
     id: u32,       // HR number (BSC) or HIP number (Hipparcos)
     ra_rad: f32,
@@ -101,11 +113,34 @@ fn detect_format(first_line: &str) -> &'static str {
     }
 }
 
+/// Write stars to a binary file
+fn write_binary(stars: &[Star], output_path: &str) {
+    let mut out = File::create(output_path).expect("Failed to create output file");
+
+    // Header: star count
+    out.write_all(&(stars.len() as u32).to_le_bytes())
+        .expect("Failed to write header");
+
+    // Per star: ra_rad, dec_rad, vmag, bv, id (20 bytes each)
+    for star in stars {
+        out.write_all(&star.ra_rad.to_le_bytes()).unwrap();
+        out.write_all(&star.dec_rad.to_le_bytes()).unwrap();
+        out.write_all(&star.vmag.to_le_bytes()).unwrap();
+        out.write_all(&star.bv.to_le_bytes()).unwrap();
+        out.write_all(&star.id.to_le_bytes()).unwrap();
+    }
+
+    let file_size = 4 + stars.len() * 20;
+    println!("Wrote {} stars ({:.1} KB) to {}", stars.len(), file_size as f64 / 1024.0, output_path);
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
         eprintln!("Usage: {} <input.dat> <output.bin> [--hipparcos]", args[0]);
+        eprintln!("       {} <input.dat> <output_dir/> --tiered", args[0]);
+        eprintln!("       {} <input.dat> <output.bin> --hr-list <comma-separated-ids>", args[0]);
         eprintln!();
         eprintln!("Supported catalogs:");
         eprintln!("  Yale BSC (bsc5.dat):");
@@ -119,6 +154,17 @@ fn main() {
     let input_path = &args[1];
     let output_path = &args[2];
     let force_hipparcos = args.iter().any(|a| a == "--hipparcos");
+    let tiered_mode = args.iter().any(|a| a == "--tiered");
+
+    // Parse --hr-list argument
+    let hr_list: Option<HashSet<u32>> = args.iter()
+        .position(|a| a == "--hr-list")
+        .and_then(|pos| args.get(pos + 1))
+        .map(|list| {
+            list.split(',')
+                .filter_map(|s| s.trim().parse::<u32>().ok())
+                .collect()
+        });
 
     let file = File::open(input_path).expect("Failed to open input file");
     let reader = BufReader::new(file);
@@ -175,22 +221,46 @@ fn main() {
         }
     }
 
-    // Write binary output
-    let mut out = File::create(output_path).expect("Failed to create output file");
+    // Handle different output modes
+    if tiered_mode {
+        // Tiered output mode
+        let output_dir = Path::new(output_path);
 
-    // Header: star count
-    out.write_all(&(stars.len() as u32).to_le_bytes())
-        .expect("Failed to write header");
+        // Tier 1: mag < 3.0 (brightest, ~170 stars)
+        let tier1: Vec<Star> = stars.iter()
+            .filter(|s| s.vmag < 3.0)
+            .cloned()
+            .collect();
 
-    // Per star: ra_rad, dec_rad, vmag, bv, id (20 bytes each)
-    for star in &stars {
-        out.write_all(&star.ra_rad.to_le_bytes()).unwrap();
-        out.write_all(&star.dec_rad.to_le_bytes()).unwrap();
-        out.write_all(&star.vmag.to_le_bytes()).unwrap();
-        out.write_all(&star.bv.to_le_bytes()).unwrap();
-        out.write_all(&star.id.to_le_bytes()).unwrap();
+        // Tier 2: 3.0 <= mag < 5.0 (~1400 stars)
+        let tier2: Vec<Star> = stars.iter()
+            .filter(|s| s.vmag >= 3.0 && s.vmag < 5.0)
+            .cloned()
+            .collect();
+
+        // Tier 3: 5.0 <= mag <= 6.5 (~7400 stars)
+        let tier3: Vec<Star> = stars.iter()
+            .filter(|s| s.vmag >= 5.0 && s.vmag <= 6.5)
+            .cloned()
+            .collect();
+
+        println!("\nTiered output:");
+        write_binary(&tier1, output_dir.join("bsc5-tier1.bin").to_str().unwrap());
+        write_binary(&tier2, output_dir.join("bsc5-tier2.bin").to_str().unwrap());
+        write_binary(&tier3, output_dir.join("bsc5-tier3.bin").to_str().unwrap());
+
+    } else if let Some(ref hr_set) = hr_list {
+        // HR list filter mode
+        let filtered: Vec<Star> = stars.iter()
+            .filter(|s| hr_set.contains(&s.id))
+            .cloned()
+            .collect();
+
+        println!("\nFiltered by HR list ({} IDs requested, {} found):", hr_set.len(), filtered.len());
+        write_binary(&filtered, output_path);
+
+    } else {
+        // Default: single output file
+        write_binary(&stars, output_path);
     }
-
-    let file_size = 4 + stars.len() * 20;
-    println!("\nWrote {} bytes ({:.1} KB) to {}", file_size, file_size as f64 / 1024.0, output_path);
 }

@@ -185,8 +185,11 @@ function starIdHash(id: number): number {
   return (h >>> 0) / 4294967295; // Convert to 0-1 range
 }
 
-// Major stars - HR (Harvard Revised / BSC) number → name
+// Major stars to label - includes all stars named in constellation descriptions
+// HR (Harvard Revised / BSC) number → name
+// Sorted roughly by magnitude (brightest first)
 const MAJOR_STARS: [number, string][] = [
+  // First magnitude and brighter
   [2491, "Sirius"],       // α CMa, mag -1.46
   [2326, "Canopus"],      // α Car, mag -0.72
   [5340, "Arcturus"],     // α Boo, mag -0.05
@@ -195,7 +198,9 @@ const MAJOR_STARS: [number, string][] = [
   [1713, "Rigel"],        // β Ori, mag 0.13
   [2943, "Procyon"],      // α CMi, mag 0.34
   [2061, "Betelgeuse"],   // α Ori, mag 0.42
+  [472, "Achernar"],      // α Eri, mag 0.46
   [7557, "Altair"],       // α Aql, mag 0.76
+  [4730, "Acrux"],        // α Cru, mag 0.77
   [1457, "Aldebaran"],    // α Tau, mag 0.85
   [5056, "Spica"],        // α Vir, mag 0.97
   [6134, "Antares"],      // α Sco, mag 1.06
@@ -204,9 +209,36 @@ const MAJOR_STARS: [number, string][] = [
   [7924, "Deneb"],        // α Cyg, mag 1.25
   [3982, "Regulus"],      // α Leo, mag 1.36
   [2891, "Castor"],       // α Gem, mag 1.58
-  [5054, "Mizar"],        // ζ UMa, mag 2.23
+  // Second magnitude
+  [8425, "Alnair"],       // α Gru, mag 1.74 - Grus
+  [4905, "Alioth"],       // ε UMa, mag 1.77 - Ursa Major
+  [1017, "Mirfak"],       // α Per, mag 1.80 - Perseus
+  [6879, "Kaus Australis"], // ε Sgr, mag 1.85 - Sagittarius
+  [6217, "Atria"],        // α TrA, mag 1.92 - Triangulum Australe
+  [7790, "Peacock"],      // α Pav, mag 1.94 - Pavo
   [424, "Polaris"],       // α UMi, mag 1.98
-  [6556, "Rasalhague"],   // α Oph, mag 2.08
+  [617, "Hamal"],         // α Ari, mag 2.00 - Aries
+  [3748, "Alphard"],      // α Hya, mag 2.00 - Hydra
+  [188, "Diphda"],        // β Cet, mag 2.02 - Cetus
+  [168, "Schedar"],       // α Cas, mag 2.24 - Cassiopeia
+  [5054, "Mizar"],        // ζ UMa, mag 2.23
+  [6556, "Rasalhague"],   // α Oph, mag 2.08 - Ophiuchus
+  [5793, "Alphecca"],     // α CrB, mag 2.23 - Corona Borealis
+  [15, "Alpheratz"],      // α And, mag 2.07 - Andromeda
+  [6705, "Eltanin"],      // γ Dra, mag 2.23 - Draco
+  [8308, "Enif"],         // ε Peg, mag 2.38 - Pegasus
+  // Third magnitude (notable constellation stars)
+  [99, "Ankaa"],          // α Phe, mag 2.40 - Phoenix
+  [5685, "Zubeneschamali"], // β Lib, mag 2.61 - Libra
+  [5854, "Unukalhai"],    // α Ser, mag 2.63 - Serpens
+  [6148, "Kornephoros"],  // β Her, mag 2.78 - Hercules
+  [3634, "Suhail"],       // γ Vel, mag 2.23 - Vela
+  [3165, "Naos"],         // ζ Pup, mag 2.21 - Puppis
+  [4662, "Gienah"],       // γ Crv, mag 2.58 - Corvus
+  [1865, "Arneb"],        // α Lep, mag 2.58 - Lepus
+  [1956, "Phact"],        // α Col, mag 2.65 - Columba
+  [8322, "Deneb Algedi"], // δ Cap, mag 2.85 - Capricornus
+  [8232, "Sadalsuud"],    // β Aqr, mag 2.90 - Aquarius
 ];
 
 // -----------------------------------------------------------------------------

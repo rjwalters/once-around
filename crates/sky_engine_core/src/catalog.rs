@@ -1,4 +1,5 @@
 use crate::coords::CartesianCoord;
+use std::collections::HashSet;
 
 /// A star from the catalog with position and photometric data.
 #[derive(Debug, Clone, Copy)]
@@ -198,6 +199,26 @@ impl StarCatalog {
     /// Check if catalog is empty.
     pub fn is_empty(&self) -> bool {
         self.stars.is_empty()
+    }
+
+    /// Extend catalog with additional stars from binary data.
+    /// Skips stars that already exist (by ID) to avoid duplicates.
+    /// Returns the number of new stars added.
+    pub fn extend(&mut self, data: &[u8]) -> Result<usize, &'static str> {
+        let additional = Self::from_binary(data)?;
+
+        // Build set of existing IDs for deduplication
+        let existing_ids: HashSet<u32> = self.stars.iter().map(|s| s.id).collect();
+
+        let mut added = 0;
+        for star in additional.stars {
+            if !existing_ids.contains(&star.id) {
+                self.stars.push(star);
+                added += 1;
+            }
+        }
+
+        Ok(added)
     }
 }
 

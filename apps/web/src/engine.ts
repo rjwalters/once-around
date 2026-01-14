@@ -2,30 +2,91 @@ import init, { SkyEngine } from "./wasm/sky_engine";
 
 let wasmMemory: WebAssembly.Memory | null = null;
 
-/**
- * Initialize the WASM module and create a SkyEngine instance.
- * Loads the BSC catalog (~9k stars) which uses HR numbers for constellation compatibility.
- * Falls back to embedded bright stars if catalog fails to load.
- */
-export async function createEngine(): Promise<SkyEngine> {
-  const wasm = await init();
-  wasmMemory = wasm.memory;
+// Callback for when new stars are loaded (so renderer can refresh)
+let onStarsLoadedCallback: (() => void) | null = null;
 
-  // Load BSC catalog (9k stars with HR numbers for constellation compatibility)
-  // Note: Hipparcos uses HIP numbers which don't match constellation line data
-  let catalogBytes = new Uint8Array(0);
+/**
+ * Set a callback to be called when additional star tiers are loaded.
+ * Use this to trigger renderer updates when the catalog grows.
+ */
+export function onStarsLoaded(callback: () => void): void {
+  onStarsLoadedCallback = callback;
+}
+
+/**
+ * Load additional star tiers in the background.
+ * Called after initial engine creation to progressively load more stars.
+ */
+async function loadRemainingTiers(engine: SkyEngine): Promise<void> {
+  // Tier 2: Load immediately after init (medium brightness stars)
   try {
-    const response = await fetch("/data/stars/bsc5.bin");
-    if (response.ok) {
-      const buffer = await response.arrayBuffer();
-      catalogBytes = new Uint8Array(buffer);
-      console.log(`Loaded BSC catalog: ${catalogBytes.length} bytes (${Math.floor(catalogBytes.length / 20)} stars)`);
+    const tier2 = await fetch("/data/stars/bsc5-tier2.bin");
+    if (tier2.ok) {
+      const buffer = await tier2.arrayBuffer();
+      const added = engine.add_stars(new Uint8Array(buffer));
+      console.log(`Loaded tier 2: +${added} stars (total: ${engine.total_stars()})`);
+      engine.recompute();
+      onStarsLoadedCallback?.();
     }
   } catch (e) {
-    console.warn("Failed to load star catalog, using embedded bright stars:", e);
+    console.warn("Failed to load tier 2 stars:", e);
   }
 
-  const engine = new SkyEngine(catalogBytes);
+  // Tier 3: Load after a short delay (faint stars for dark sky viewing)
+  setTimeout(async () => {
+    try {
+      const tier3 = await fetch("/data/stars/bsc5-tier3.bin");
+      if (tier3.ok) {
+        const buffer = await tier3.arrayBuffer();
+        const added = engine.add_stars(new Uint8Array(buffer));
+        console.log(`Loaded tier 3: +${added} stars (total: ${engine.total_stars()})`);
+        engine.recompute();
+        onStarsLoadedCallback?.();
+      }
+    } catch (e) {
+      console.warn("Failed to load tier 3 stars:", e);
+    }
+  }, 500);
+}
+
+/**
+ * Initialize the WASM module and create a SkyEngine instance.
+ * Uses tiered loading for fast initial render:
+ * - Tier 1 (mag < 3.0): ~170 brightest stars, loaded immediately
+ * - Constellation stars: ~700 stars for constellation lines, loaded immediately
+ * - Tier 2 (mag 3-5): ~1400 medium stars, loaded after init
+ * - Tier 3 (mag 5-6.5): ~6800 faint stars, loaded after delay
+ */
+export async function createEngine(): Promise<SkyEngine> {
+  // Parallel load: WASM + tier 1 + constellation stars
+  const [wasm, tier1Resp, constResp] = await Promise.all([
+    init(),
+    fetch("/data/stars/bsc5-tier1.bin"),
+    fetch("/data/stars/constellation-stars.bin"),
+  ]);
+  wasmMemory = wasm.memory;
+
+  // Get tier 1 bytes (brightest stars)
+  let tier1Bytes = new Uint8Array(0);
+  if (tier1Resp.ok) {
+    tier1Bytes = new Uint8Array(await tier1Resp.arrayBuffer());
+    console.log(`Loaded tier 1: ${tier1Bytes.length} bytes (${Math.floor(tier1Bytes.length / 20)} stars)`);
+  }
+
+  // Initialize engine with tier 1 stars
+  const engine = new SkyEngine(tier1Bytes);
+
+  // Add constellation stars (deduped internally by HR number)
+  if (constResp.ok) {
+    const constBytes = new Uint8Array(await constResp.arrayBuffer());
+    const added = engine.add_stars(constBytes);
+    console.log(`Loaded constellation stars: +${added} unique stars (total: ${engine.total_stars()})`);
+    engine.recompute();
+  }
+
+  // Load remaining tiers in background (non-blocking)
+  loadRemainingTiers(engine);
+
   return engine;
 }
 
