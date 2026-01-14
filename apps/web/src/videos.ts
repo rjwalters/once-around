@@ -70,7 +70,7 @@ export async function createVideoMarkersLayer(
   const labels = new Map<string, CSS2DObject>();
   const videoDataMap = new Map<string, VideoPlacement>();
 
-  // Create marker material
+  // Create marker material (visible ring)
   const markerMaterial = new THREE.MeshBasicMaterial({
     color: VIDEO_MARKER_COLOR,
     side: THREE.DoubleSide,
@@ -78,18 +78,32 @@ export async function createVideoMarkersLayer(
     opacity: 0.8,
   });
 
-  // Create ring geometry (shared)
-  const ringGeometry = createRingGeometry(0.3, 0.5, 24);
+  // Create invisible hit area material (larger clickable area)
+  const hitAreaMaterial = new THREE.MeshBasicMaterial({
+    color: VIDEO_MARKER_COLOR,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.0, // Invisible
+  });
+
+  // Create ring geometry for visual display
+  const ringGeometry = createRingGeometry(0.4, 0.7, 24);
+  // Create larger circle for hit detection
+  const hitGeometry = new THREE.CircleGeometry(1.2, 24);
 
   // Create markers for each video
   for (const video of videos) {
     const position = raDecToPosition(video.ra, video.dec, SKY_RADIUS - 0.5);
 
-    // Create ring mesh
-    const marker = new THREE.Mesh(ringGeometry, markerMaterial.clone());
-    marker.position.copy(position);
+    // Create visible ring mesh
+    const ringMesh = new THREE.Mesh(ringGeometry, markerMaterial.clone());
+    ringMesh.position.copy(position);
+    ringMesh.lookAt(0, 0, 0);
+    group.add(ringMesh);
 
-    // Orient ring to face camera (billboarding will be handled in render)
+    // Create larger invisible hit area mesh
+    const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial.clone());
+    marker.position.copy(position);
     marker.lookAt(0, 0, 0);
 
     marker.userData = { videoId: video.id };

@@ -149,6 +149,41 @@ async function main(): Promise<void> {
     }
   });
 
+  // Hover detection for video markers - change cursor to pointer
+  let isHoveringVideo = false;
+  renderer.renderer.domElement.addEventListener("mousemove", (event) => {
+    // Only process if videos layer is visible
+    if (!videoMarkers.group.visible) {
+      if (isHoveringVideo) {
+        renderer.renderer.domElement.style.cursor = "grab";
+        isHoveringVideo = false;
+      }
+      return;
+    }
+
+    // Calculate mouse position in normalized device coordinates
+    const rect = renderer.renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Update raycaster
+    raycaster.setFromCamera(mouse, renderer.camera);
+
+    // Check for video marker intersection
+    const video = videoMarkers.getVideoAtPosition(raycaster);
+    if (video) {
+      if (!isHoveringVideo) {
+        renderer.renderer.domElement.style.cursor = "pointer";
+        isHoveringVideo = true;
+      }
+    } else {
+      if (isHoveringVideo) {
+        renderer.renderer.domElement.style.cursor = "grab";
+        isHoveringVideo = false;
+      }
+    }
+  });
+
   // Handle window resize
   window.addEventListener("resize", () => {
     renderer.resize(window.innerWidth, window.innerHeight);
