@@ -4,25 +4,22 @@ let wasmMemory: WebAssembly.Memory | null = null;
 
 /**
  * Initialize the WASM module and create a SkyEngine instance.
- * Loads the Hipparcos catalog (~118k stars) from /data/stars/hipparcos.bin.
- * Falls back to BSC (~9k stars) or embedded bright stars if catalog fails to load.
+ * Loads the BSC catalog (~9k stars) which uses HR numbers for constellation compatibility.
+ * Falls back to embedded bright stars if catalog fails to load.
  */
 export async function createEngine(): Promise<SkyEngine> {
   const wasm = await init();
   wasmMemory = wasm.memory;
 
-  // Try to load Hipparcos catalog (118k stars), fallback to BSC (9k stars)
+  // Load BSC catalog (9k stars with HR numbers for constellation compatibility)
+  // Note: Hipparcos uses HIP numbers which don't match constellation line data
   let catalogBytes = new Uint8Array(0);
   try {
-    let response = await fetch("/data/stars/hipparcos.bin");
-    if (!response.ok) {
-      console.log("Hipparcos catalog not found, trying BSC...");
-      response = await fetch("/data/stars/bsc5.bin");
-    }
+    const response = await fetch("/data/stars/bsc5.bin");
     if (response.ok) {
       const buffer = await response.arrayBuffer();
       catalogBytes = new Uint8Array(buffer);
-      console.log(`Loaded catalog: ${catalogBytes.length} bytes (${Math.floor(catalogBytes.length / 20)} stars)`);
+      console.log(`Loaded BSC catalog: ${catalogBytes.length} bytes (${Math.floor(catalogBytes.length / 20)} stars)`);
     }
   } catch (e) {
     console.warn("Failed to load star catalog, using embedded bright stars:", e);
