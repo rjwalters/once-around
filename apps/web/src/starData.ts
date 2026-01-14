@@ -360,6 +360,34 @@ export const STAR_DATA: Record<number, StarInfo> = {
     dec: 55.96,
   },
 
+  // Dubhe - HR 4301
+  4301: {
+    name: "Dubhe",
+    designation: "Alpha Ursae Majoris",
+    constellation: "Ursa Major",
+    type: "K0III + F0V - Orange giant binary",
+    magnitude: 1.79,
+    distance: "123 light-years",
+    description:
+      "One of the two 'Pointer Stars' in the Big Dipper - draw a line through Merak and Dubhe and extend it about 5× their separation to find Polaris. The name means 'bear' in Arabic. Dubhe is actually a binary system with an orange giant primary and a yellow-white companion orbiting every 44 years.",
+    ra: 165.93,
+    dec: 61.75,
+  },
+
+  // Merak - HR 4295
+  4295: {
+    name: "Merak",
+    designation: "Beta Ursae Majoris",
+    constellation: "Ursa Major",
+    type: "A1V - White main-sequence star",
+    magnitude: 2.37,
+    distance: "79 light-years",
+    description:
+      "The second 'Pointer Star' in the Big Dipper, forming a line with Dubhe that points to Polaris. The name comes from Arabic 'al-maraqq' meaning 'the loins' of the bear. Merak has an infrared excess indicating a debris disk of dust and possibly asteroids orbiting the star.",
+    ra: 165.46,
+    dec: 56.38,
+  },
+
   // Algol - HR 936
   936: {
     name: "Algol",
