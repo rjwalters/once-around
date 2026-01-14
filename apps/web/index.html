@@ -94,6 +94,14 @@
         accent-color: #4a9eff;
       }
 
+      /* Keyboard shortcut hints */
+      .shortcut {
+        font-size: 10px;
+        color: #666;
+        margin-left: 4px;
+        font-weight: normal;
+      }
+
       /* Sky labels */
       .sky-label {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -389,21 +397,21 @@
       <div class="control-group checkbox-group">
         <label>
           <input type="checkbox" id="constellations" />
-          Show constellations
+          Show constellations <span class="shortcut">(C)</span>
         </label>
       </div>
 
       <div class="control-group checkbox-group">
         <label>
           <input type="checkbox" id="labels" />
-          Show labels
+          Show labels <span class="shortcut">(L)</span>
         </label>
       </div>
 
       <div class="control-group checkbox-group">
         <label>
           <input type="checkbox" id="videos" checked />
-          Show videos (107)
+          Show videos (107) <span class="shortcut">(V)</span>
         </label>
       </div>
 
@@ -455,7 +463,7 @@
       </div>
     </div>
 
-    <div id="info">Drag to look around | Scroll to zoom | L=labels C=constellations V=videos Space=galactic center</div>
+    <div id="info">Drag to look around | Scroll to zoom | Space = galactic center</div>
 
     <!-- Debug panel: add ?debug to URL to show -->
     <div id="debug" style="display: none;">
