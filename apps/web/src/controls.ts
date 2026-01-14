@@ -13,6 +13,7 @@ import * as THREE from "three";
 export interface CelestialControls {
   update(): void;
   dispose(): void;
+  onFovChange?: (fov: number) => void;
 }
 
 // Debug elements
@@ -247,9 +248,14 @@ export function createCelestialControls(
   function onWheel(event: WheelEvent): void {
     event.preventDefault();
     const delta = event.deltaY * zoomSpeed;
-    camera.fov = Math.max(minFov, Math.min(maxFov, camera.fov + delta));
-    camera.updateProjectionMatrix();
-    updateCameraDirection();
+    const newFov = Math.max(minFov, Math.min(maxFov, camera.fov + delta));
+    if (newFov !== camera.fov) {
+      camera.fov = newFov;
+      camera.updateProjectionMatrix();
+      updateCameraDirection();
+      // Notify about FOV change for LOD updates
+      controlsApi.onFovChange?.(camera.fov);
+    }
   }
 
   // --- Touch handlers ---
@@ -290,9 +296,14 @@ export function createCelestialControls(
     } else if (event.touches.length === 2) {
       const currentDistance = getTouchDistance(event.touches);
       const scale = initialPinchDistance / currentDistance;
-      camera.fov = Math.max(minFov, Math.min(maxFov, initialFov * scale));
-      camera.updateProjectionMatrix();
-      updateCameraDirection();
+      const newFov = Math.max(minFov, Math.min(maxFov, initialFov * scale));
+      if (newFov !== camera.fov) {
+        camera.fov = newFov;
+        camera.updateProjectionMatrix();
+        updateCameraDirection();
+        // Notify about FOV change for LOD updates
+        controlsApi.onFovChange?.(camera.fov);
+      }
     }
   }
 
@@ -328,5 +339,12 @@ export function createCelestialControls(
     domElement.removeEventListener("touchend", onTouchEnd);
   }
 
-  return { update, dispose };
+  // Create API object so handlers can access onFovChange
+  const controlsApi: CelestialControls = {
+    update,
+    dispose,
+    onFovChange: undefined,
+  };
+
+  return controlsApi;
 }

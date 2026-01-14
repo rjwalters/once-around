@@ -33,17 +33,34 @@ async function main(): Promise<void> {
   // Initial render from engine
   renderer.updateFromEngine(engine);
 
+  // Update rendered star count display
+  const renderedStarsEl = document.getElementById("rendered-stars");
+  function updateRenderedStars(): void {
+    if (renderedStarsEl) {
+      renderedStarsEl.textContent = renderer.getRenderedStarCount().toLocaleString();
+    }
+  }
+  updateRenderedStars();
+
+  // Update star LOD when FOV changes (zooming)
+  controls.onFovChange = (fov: number) => {
+    renderer.updateFromEngine(engine, fov);
+    updateRenderedStars();
+  };
+
   // Setup UI
   setupUI(engine, {
     onTimeChange: (date: Date) => {
       applyTimeToEngine(engine, date);
       engine.recompute();
       renderer.updateFromEngine(engine);
+      updateRenderedStars();
     },
     onMagnitudeChange: (mag: number) => {
       engine.set_mag_limit(mag);
       engine.recompute();
       renderer.updateFromEngine(engine);
+      updateRenderedStars();
     },
   });
 

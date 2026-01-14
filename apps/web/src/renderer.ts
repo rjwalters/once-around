@@ -154,6 +154,7 @@ export interface SkyRenderer {
   updateFromEngine(engine: SkyEngine, fov?: number): void;
   setConstellationsVisible(visible: boolean): void;
   setLabelsVisible(visible: boolean): void;
+  getRenderedStarCount(): number;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -290,6 +291,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   // Star ID → position lookup (built during updateStars)
   let starPositionMap: Map<number, THREE.Vector3> = new Map();
 
+  // Track rendered star count (after LOD culling)
+  let renderedStarCount = 0;
+
   // Constellation line pairs (HR numbers)
   const constellationPairs = getAllConstellationLines();
 
@@ -370,6 +374,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
     starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(scaledPositions), 3));
     starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(colors), 3));
+
+    // Update rendered count (scaledPositions has 3 floats per star)
+    renderedStarCount = scaledPositions.length / 3;
   }
 
   function updateConstellations(): void {
@@ -528,6 +535,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     labelsGroup.visible = visible;
   }
 
+  function getRenderedStarCount(): number {
+    return renderedStarCount;
+  }
+
   function render(): void {
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
@@ -547,6 +558,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     updateFromEngine,
     setConstellationsVisible,
     setLabelsVisible,
+    getRenderedStarCount,
     render,
     resize,
   };
