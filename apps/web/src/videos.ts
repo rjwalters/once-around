@@ -86,8 +86,8 @@ export async function createVideoMarkersLayer(
     opacity: 0.0, // Invisible
   });
 
-  // Create ring geometry for visual display
-  const ringGeometry = createRingGeometry(0.4, 0.7, 24);
+  // Create ring geometry for visual display (inner 0.475, outer 0.625 = thickness 0.15)
+  const ringGeometry = createRingGeometry(0.475, 0.625, 24);
   // Create larger circle for hit detection
   const hitGeometry = new THREE.CircleGeometry(1.2, 24);
 
