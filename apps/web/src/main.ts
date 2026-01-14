@@ -9,6 +9,7 @@ import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA, type DSOType } from "./dsoData";
 import { loadSettings, createSettingsSaver } from "./settings";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
+import { getNextTotalSolarEclipse, getSunMoonSeparation, type TotalSolarEclipse } from "./eclipseData";
 import type { SkyEngine } from "./wasm/sky_engine";
 
 // Build-time constants injected by Vite
@@ -55,6 +56,23 @@ function positionToRaDec(pos: THREE.Vector3): { ra: number; dec: number } {
   if (ra < 0) ra += 360;
 
   return { ra, dec };
+}
+
+/**
+ * Calculate the angular separation between Sun and Moon for eclipse detection.
+ * @param bodyPositions Map of body positions from the engine
+ * @returns Angular separation in degrees, or null if positions unavailable
+ */
+function calculateSunMoonSeparation(bodyPositions: BodyPositions): number | null {
+  const sunPos = bodyPositions.get("Sun");
+  const moonPos = bodyPositions.get("Moon");
+
+  if (!sunPos || !moonPos) return null;
+
+  const sunRaDec = positionToRaDec(sunPos);
+  const moonRaDec = positionToRaDec(moonPos);
+
+  return getSunMoonSeparation(sunRaDec.ra, sunRaDec.dec, moonRaDec.ra, moonRaDec.dec);
 }
 
 /**
@@ -250,6 +268,10 @@ async function main(): Promise<void> {
         if (pendingFov !== null) {
           renderer.updateFromEngine(engine, pendingFov);
           updateRenderedStars();
+          // Update DSO sizes based on new FOV
+          const magInput = document.getElementById("magnitude") as HTMLInputElement | null;
+          const mag = magInput ? parseFloat(magInput.value) : 6.5;
+          renderer.updateDSOs(pendingFov, mag);
         }
         fovUpdateTimeout = null;
         pendingFov = null;
@@ -397,6 +419,54 @@ async function main(): Promise<void> {
     datetimeInput.addEventListener("focus", stopPlayback);
   }
 
+  // ---------------------------------------------------------------------------
+  // Next Total Eclipse button
+  // ---------------------------------------------------------------------------
+  const nextEclipseBtn = document.getElementById("next-eclipse");
+  if (nextEclipseBtn) {
+    nextEclipseBtn.addEventListener("click", () => {
+      stopPlayback(); // Stop any time playback
+
+      // Get current date from datetime input or use now
+      const currentTime = datetimeInput?.value ? new Date(datetimeInput.value) : new Date();
+      const nextEclipse = getNextTotalSolarEclipse(currentTime);
+
+      if (nextEclipse) {
+        const eclipseDate = new Date(nextEclipse.datetime);
+
+        // Update the datetime input
+        if (datetimeInput) {
+          const year = eclipseDate.getFullYear();
+          const month = String(eclipseDate.getMonth() + 1).padStart(2, "0");
+          const day = String(eclipseDate.getDate()).padStart(2, "0");
+          const hours = String(eclipseDate.getHours()).padStart(2, "0");
+          const minutes = String(eclipseDate.getMinutes()).padStart(2, "0");
+          datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+          // Trigger the change event to update the engine
+          datetimeInput.dispatchEvent(new Event("change"));
+        }
+
+        // Wait a frame for positions to update, then focus on the Sun
+        requestAnimationFrame(() => {
+          const bodyPos = getBodyPositions(engine);
+          const sunPos = bodyPos.get("Sun");
+          if (sunPos) {
+            const { ra, dec } = positionToRaDec(sunPos);
+            controls.animateToRaDec(ra, dec, 1000);
+          }
+        });
+
+        // Show eclipse info toast
+        console.log(`Next total solar eclipse: ${nextEclipse.datetime}`);
+        console.log(`Path: ${nextEclipse.path}`);
+        console.log(`Duration: ${nextEclipse.durationSec}s`);
+      } else {
+        console.log("No more total solar eclipses in the catalog (extends to 2045)");
+      }
+    });
+  }
+
   // Update display after restoring settings (pass saved FOV for consistent LOD)
   renderer.updateFromEngine(engine, settings.fov);
   renderer.setMilkyWayVisibility(settings.magnitude);
@@ -420,8 +490,14 @@ async function main(): Promise<void> {
         void renderer.computeOrbits(engine, currentDate);
       }
       // Update moving video markers (planets)
+      const bodyPos = getBodyPositions(engine);
       if (videoMarkersRef) {
-        videoMarkersRef.updateMovingPositions(getBodyPositions(engine));
+        videoMarkersRef.updateMovingPositions(bodyPos);
+      }
+      // Update eclipse rendering
+      const sunMoonSep = calculateSunMoonSeparation(bodyPos);
+      if (sunMoonSep !== null) {
+        renderer.updateEclipse(sunMoonSep);
       }
       settingsSaver.save({ datetime: date.toISOString() });
       // Update URL with new time
@@ -433,6 +509,9 @@ async function main(): Promise<void> {
       renderer.updateFromEngine(engine);
       renderer.setMilkyWayVisibility(mag);
       updateRenderedStars();
+      // Update DSO visibility based on new magnitude limit
+      const currentFov = controls.getCameraState().fov;
+      renderer.updateDSOs(currentFov, mag);
       settingsSaver.save({ magnitude: mag });
       // Update URL with new magnitude
       updateUrlState({ mag });
@@ -529,6 +608,13 @@ async function main(): Promise<void> {
     // Restore from settings
     dsosCheckbox.checked = settings.dsosVisible ?? false;
     renderer.setDSOsVisible(settings.dsosVisible ?? false);
+
+    // Initialize DSO positions if restored as visible
+    if (settings.dsosVisible) {
+      const currentFov = controls.getCameraState().fov;
+      const currentMag = magnitudeInput ? parseFloat(magnitudeInput.value) : 6.5;
+      renderer.updateDSOs(currentFov, currentMag);
+    }
 
     dsosCheckbox.addEventListener("change", () => {
       renderer.setDSOsVisible(dsosCheckbox.checked);
@@ -1159,6 +1245,12 @@ async function main(): Promise<void> {
           settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
         }
         break;
+      case "e":
+        // Next Total Eclipse
+        if (nextEclipseBtn) {
+          nextEclipseBtn.click();
+        }
+        break;
       case " ":
         // Spacebar: animate to galactic center (RA ~266.4°, Dec ~-29°)
         event.preventDefault();
@@ -1316,6 +1408,13 @@ async function main(): Promise<void> {
   requestAnimationFrame(() => {
     renderer.updateFromEngine(engine, settings.fov);
     updateRenderedStars();
+
+    // Initial eclipse detection
+    const initialBodyPos = getBodyPositions(engine);
+    const initialSunMoonSep = calculateSunMoonSeparation(initialBodyPos);
+    if (initialSunMoonSep !== null) {
+      renderer.updateEclipse(initialSunMoonSep);
+    }
   });
 
   console.log("Once Around ready!");

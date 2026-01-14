@@ -399,6 +399,113 @@ function getDSOColor(type: DSOType): THREE.Color {
   return new THREE.Color(hex);
 }
 
+// -----------------------------------------------------------------------------
+// Solar Corona shaders for total solar eclipse rendering
+// -----------------------------------------------------------------------------
+
+const coronaVertexShader = `
+varying vec2 vUv;
+varying vec3 vNormal;
+
+void main() {
+  vUv = uv;
+  vNormal = normalize(normalMatrix * normal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+// Procedural corona fragment shader with streamers and K-corona glow
+const coronaFragmentShader = `
+uniform float uTime;
+uniform float uIntensity;
+
+varying vec2 vUv;
+varying vec3 vNormal;
+
+// Simplex-like noise for streamer variation
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  for (int i = 0; i < 4; i++) {
+    value += amplitude * noise(p);
+    p *= 2.0;
+    amplitude *= 0.5;
+  }
+  return value;
+}
+
+void main() {
+  // Center coordinates
+  vec2 centered = vUv * 2.0 - 1.0;
+  float dist = length(centered);
+  float angle = atan(centered.y, centered.x);
+
+  // Inner cutoff (where the Moon is covering the Sun)
+  // Corona starts at ~1.0 solar radii (the edge of the Sun)
+  float innerRadius = 0.15;
+  float outerRadius = 1.0;
+
+  // Mask out the center and beyond the corona
+  if (dist < innerRadius || dist > outerRadius) {
+    discard;
+  }
+
+  // Radial falloff - K-corona brightness falls off as r^-2 to r^-3
+  float radialFalloff = pow(innerRadius / dist, 2.5);
+
+  // Streamer structure - coronal streamers extend outward
+  // More streamers near solar equator, fewer at poles
+  float numStreamers = 8.0;
+  float streamerAngle = angle * numStreamers;
+
+  // Add noise to break up regularity
+  float noiseVal = fbm(vec2(angle * 3.0 + uTime * 0.1, dist * 5.0));
+  float streamerNoise = fbm(vec2(angle * 6.0, dist * 2.0 + uTime * 0.05));
+
+  // Streamer pattern - brighter at certain angles
+  float streamers = 0.5 + 0.5 * sin(streamerAngle + noiseVal * 2.0);
+  streamers = pow(streamers, 1.5);
+
+  // Add fine structure variation
+  float fineStructure = 0.7 + 0.3 * streamerNoise;
+
+  // Combine effects
+  float brightness = radialFalloff * (0.5 + 0.5 * streamers) * fineStructure;
+
+  // Corona color - pearly white with slight warmth
+  vec3 coronaColor = vec3(1.0, 0.98, 0.95);
+
+  // Add subtle color variation at edges
+  float edgeTint = smoothstep(0.3, 1.0, dist);
+  coronaColor = mix(coronaColor, vec3(0.95, 0.9, 1.0), edgeTint * 0.3);
+
+  // Apply intensity control
+  brightness *= uIntensity;
+
+  // Soft edge falloff
+  float edgeFade = smoothstep(outerRadius, outerRadius * 0.7, dist);
+
+  gl_FragColor = vec4(coronaColor * brightness, brightness * edgeFade);
+}
+`;
+
 // Calculate DSO angular size in pixels based on arcminutes and FOV
 function dsoSizeToPixels(sizeArcmin: number, fovDegrees: number, canvasHeight: number): number {
   const sizeArcsec = sizeArcmin * 60;
@@ -591,6 +698,8 @@ export interface SkyRenderer {
   updateDSOs(fov: number, magLimit: number): void;
   setDSOsVisible(visible: boolean): void;
   getRenderedStarCount(): number;
+  /** Update eclipse rendering based on Sun-Moon angular separation */
+  updateEclipse(sunMoonSeparationDeg: number): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -775,6 +884,30 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   });
   const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
   scene.add(moonMesh);
+
+  // ---------------------------------------------------------------------------
+  // Solar Corona for eclipse rendering
+  // A billboard plane that follows the Sun, rendered with procedural corona shader
+  // ---------------------------------------------------------------------------
+  const coronaGeometry = new THREE.PlaneGeometry(1, 1);
+  const coronaMaterial = new THREE.ShaderMaterial({
+    vertexShader: coronaVertexShader,
+    fragmentShader: coronaFragmentShader,
+    uniforms: {
+      uTime: { value: 0.0 },
+      uIntensity: { value: 0.0 }, // Starts invisible
+    },
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const coronaMesh = new THREE.Mesh(coronaGeometry, coronaMaterial);
+  coronaMesh.visible = false; // Hidden until eclipse
+  scene.add(coronaMesh);
+
+  // Track corona animation time
+  let coronaTime = 0;
 
   // ---------------------------------------------------------------------------
   // Planetary moons (Io, Europa, Ganymede, Callisto, Titan)
@@ -1712,7 +1845,53 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     return renderedStarCount;
   }
 
+  // Eclipse thresholds in degrees
+  const ECLIPSE_FULL_VISIBILITY_THRESHOLD = 0.3; // Full corona visible below this
+  const ECLIPSE_FADE_START_THRESHOLD = 1.5; // Corona starts fading in at this separation
+
+  /**
+   * Update eclipse rendering based on Sun-Moon angular separation.
+   * Shows the solar corona when the Moon is close enough to the Sun.
+   * @param sunMoonSeparationDeg Angular separation in degrees
+   */
+  function updateEclipse(sunMoonSeparationDeg: number): void {
+    // Calculate corona intensity based on separation
+    let intensity = 0;
+
+    if (sunMoonSeparationDeg < ECLIPSE_FULL_VISIBILITY_THRESHOLD) {
+      // Full totality - maximum corona
+      intensity = 1.0;
+    } else if (sunMoonSeparationDeg < ECLIPSE_FADE_START_THRESHOLD) {
+      // Partial - fade corona in/out
+      intensity = 1.0 - (sunMoonSeparationDeg - ECLIPSE_FULL_VISIBILITY_THRESHOLD) /
+        (ECLIPSE_FADE_START_THRESHOLD - ECLIPSE_FULL_VISIBILITY_THRESHOLD);
+      intensity = Math.max(0, Math.min(1, intensity));
+    }
+
+    // Update corona visibility and intensity
+    coronaMaterial.uniforms.uIntensity.value = intensity;
+    coronaMesh.visible = intensity > 0.01;
+
+    // Position corona at Sun location, facing camera
+    if (coronaMesh.visible) {
+      // Copy Sun position
+      coronaMesh.position.copy(sunMesh.position);
+
+      // Make corona face the camera (billboard)
+      coronaMesh.lookAt(camera.position);
+
+      // Scale corona to be larger than the Sun
+      // Corona extends to about 3-6 solar radii, we'll use 4x
+      const coronaScale = sunMesh.scale.x * 8;
+      coronaMesh.scale.setScalar(coronaScale);
+    }
+  }
+
   function render(): void {
+    // Update corona animation time
+    coronaTime += 0.016; // ~60fps assumed
+    coronaMaterial.uniforms.uTime.value = coronaTime;
+
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
   }
@@ -1738,6 +1917,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     updateDSOs,
     setDSOsVisible,
     getRenderedStarCount,
+    updateEclipse,
     render,
     resize,
   };

@@ -133,6 +133,37 @@
         background: #3a5a4a;
       }
 
+      .eclipse-btn {
+        margin-top: 6px;
+        padding: 6px 12px;
+        background: linear-gradient(135deg, #2a2a3a 0%, #3a2a3a 100%);
+        border: 1px solid #664477;
+        color: #cc88ff;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        width: 100%;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .eclipse-btn:hover {
+        background: linear-gradient(135deg, #3a3a4a 0%, #4a3a4a 100%);
+        border-color: #8855aa;
+        color: #dd99ff;
+      }
+
+      .eclipse-btn:active {
+        background: linear-gradient(135deg, #4a4a5a 0%, #5a4a5a 100%);
+      }
+
+      .eclipse-btn .icon {
+        font-size: 14px;
+      }
+
       .mag-hint {
         font-size: 10px;
         color: #666;
@@ -1047,6 +1078,9 @@
           <button id="time-step-unit" class="time-step-unit" title="Click to change step size">1h</button>
           <button id="time-forward" class="time-step-btn" title="Step forward (→)">▶|</button>
         </div>
+        <button id="next-eclipse" class="eclipse-btn" title="Jump to next total solar eclipse (E)">
+          <span class="icon">☀</span> Next Total Eclipse <span class="shortcut">(E)</span>
+        </button>
       </div>
 
       <div class="control-group search-group">
@@ -1248,7 +1282,7 @@
       </div>
     </div>
 
-    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | Space = galactic center</div>
+    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | E = eclipse | Space = galactic center</div>
 
     <div id="crosshair"></div>
     <div id="reference-circle" title="50 arcsec reference circle"></div>
