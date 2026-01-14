@@ -396,7 +396,7 @@ export function createCelestialControls(
     const targetDir = new THREE.Vector3(
       cosDec * Math.cos(raRad),
       Math.sin(decRad),
-      cosDec * Math.sin(raRad)
+      -cosDec * Math.sin(raRad)
     );
 
     // Our default view direction is +X

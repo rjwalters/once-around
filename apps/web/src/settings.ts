@@ -19,6 +19,7 @@ export interface Settings {
   constellationsVisible: boolean;
   labelsVisible: boolean;
   videosVisible: boolean;
+  orbitsVisible: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -29,6 +30,7 @@ const DEFAULT_SETTINGS: Settings = {
   constellationsVisible: false,
   labelsVisible: false,
   videosVisible: true,
+  orbitsVisible: false,
 };
 
 /**

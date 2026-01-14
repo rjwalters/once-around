@@ -1,11 +1,35 @@
 import * as THREE from "three";
-import { createEngine } from "./engine";
+import { createEngine, getBodiesPositionBuffer } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
-import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement } from "./videos";
+import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement, type BodyPositions } from "./videos";
 import { STAR_DATA, type StarInfo } from "./starData";
 import { loadSettings, createSettingsSaver } from "./settings";
+import type { SkyEngine } from "./wasm/sky_engine";
+
+// Body names in the order they appear in the position buffer
+const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
+const SKY_RADIUS = 50;
+
+// Build a map of body names to their current 3D positions
+function getBodyPositions(engine: SkyEngine): BodyPositions {
+  const bodyPositions = getBodiesPositionBuffer(engine);
+  const positions: BodyPositions = new Map();
+  // Use SKY_RADIUS - 0.5 to match video marker positioning
+  const radius = SKY_RADIUS - 0.5;
+
+  for (let i = 0; i < BODY_NAMES.length; i++) {
+    const x = bodyPositions[i * 3];
+    const y = bodyPositions[i * 3 + 1];
+    const z = bodyPositions[i * 3 + 2];
+    // Normalize and scale to sky sphere radius
+    const pos = new THREE.Vector3(x, y, z).normalize().multiplyScalar(radius);
+    positions.set(BODY_NAMES[i], pos);
+  }
+
+  return positions;
+}
 
 async function main(): Promise<void> {
   console.log("Initializing Once Around...");
@@ -104,13 +128,21 @@ async function main(): Promise<void> {
   renderer.updateFromEngine(engine);
   renderer.setMilkyWayVisibility(settings.magnitude);
 
+  // Track current date for orbit computation (updated in onTimeChange)
+  let currentDate = settings.datetime ? new Date(settings.datetime) : new Date();
+
   // Setup UI
   setupUI(engine, {
     onTimeChange: (date: Date) => {
+      currentDate = date;
       applyTimeToEngine(engine, date);
       engine.recompute();
       renderer.updateFromEngine(engine);
       updateRenderedStars();
+      // Recompute orbits if they are visible
+      if (orbitsCheckbox?.checked) {
+        renderer.computeOrbits(engine, currentDate);
+      }
       settingsSaver.save({ datetime: date.toISOString() });
     },
     onMagnitudeChange: (mag: number) => {
@@ -154,12 +186,16 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   const videoPopup = createVideoPopup();
 
+  // Get current body positions for matching moving object videos to planets
+  const bodyPositions = getBodyPositions(engine);
+
   const videoMarkers = await createVideoMarkersLayer(
     renderer.scene,
     (video: VideoPlacement) => {
       console.log("Video clicked:", video.title);
       videoPopup.show(video);
-    }
+    },
+    bodyPositions
   );
 
   // Videos checkbox
@@ -174,6 +210,30 @@ async function main(): Promise<void> {
       videoMarkers.setVisible(videosCheckbox.checked);
       videoMarkers.setLabelsVisible(videosCheckbox.checked);
       settingsSaver.save({ videosVisible: videosCheckbox.checked });
+    });
+  }
+
+  // Orbits checkbox
+  const orbitsCheckbox = document.getElementById("orbits") as HTMLInputElement | null;
+  if (orbitsCheckbox) {
+    // Restore from settings
+    orbitsCheckbox.checked = settings.orbitsVisible;
+    renderer.setOrbitsVisible(settings.orbitsVisible);
+
+    // Compute initial orbits if visible
+    if (settings.orbitsVisible) {
+      renderer.computeOrbits(engine, currentDate);
+    }
+
+    orbitsCheckbox.addEventListener("change", () => {
+      renderer.setOrbitsVisible(orbitsCheckbox.checked);
+      // Compute orbits when turning on (they may not have been computed yet)
+      if (orbitsCheckbox.checked) {
+        renderer.computeOrbits(engine, currentDate);
+      }
+      // Clear any focused orbit when toggling
+      focusedOrbitBody = null;
+      settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
     });
   }
 
@@ -246,6 +306,45 @@ async function main(): Promise<void> {
       const hr = parseInt(target.dataset.hr, 10);
       if (!isNaN(hr)) {
         showStarInfo(hr);
+      }
+    }
+  });
+
+  // Handle clicks on planet labels to focus orbit
+  // Track which planet is focused (null = show all, body index = focused)
+  let focusedOrbitBody: number | null = null;
+
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains("planet-label") && target.dataset.body) {
+      const bodyIndex = parseInt(target.dataset.body, 10);
+      if (!isNaN(bodyIndex)) {
+        // Only handle planets with orbits (indices 2-8: Mercury through Neptune)
+        // Sun (0) and Moon (1) don't have orbit lines
+        if (bodyIndex >= 2 && bodyIndex <= 8) {
+          // If orbits are visible, toggle focus
+          if (orbitsCheckbox?.checked) {
+            if (focusedOrbitBody === bodyIndex) {
+              // Clicking the same planet again: show all orbits
+              focusedOrbitBody = null;
+              renderer.focusOrbit(null);
+            } else {
+              // Focus on this planet's orbit
+              focusedOrbitBody = bodyIndex;
+              renderer.focusOrbit(bodyIndex);
+            }
+          } else {
+            // Orbits not visible: turn them on and focus on this planet
+            if (orbitsCheckbox) {
+              orbitsCheckbox.checked = true;
+              renderer.setOrbitsVisible(true);
+              renderer.computeOrbits(engine, currentDate);
+              focusedOrbitBody = bodyIndex;
+              renderer.focusOrbit(bodyIndex);
+              settingsSaver.save({ orbitsVisible: true });
+            }
+          }
+        }
       }
     }
   });
@@ -346,6 +445,20 @@ async function main(): Promise<void> {
           videoMarkers.setVisible(videosCheckbox.checked);
           videoMarkers.setLabelsVisible(videosCheckbox.checked);
           settingsSaver.save({ videosVisible: videosCheckbox.checked });
+        }
+        break;
+      case "o":
+        // Toggle orbits
+        if (orbitsCheckbox) {
+          orbitsCheckbox.checked = !orbitsCheckbox.checked;
+          renderer.setOrbitsVisible(orbitsCheckbox.checked);
+          // Compute orbits when turning on
+          if (orbitsCheckbox.checked) {
+            renderer.computeOrbits(engine, currentDate);
+          }
+          // Clear any focused orbit when toggling
+          focusedOrbitBody = null;
+          settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
         }
         break;
       case " ":

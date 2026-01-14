@@ -116,6 +116,14 @@
         color: #ffcc66;
         font-weight: 500;
         text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+        pointer-events: auto !important;
+        cursor: pointer;
+        transition: color 0.15s, text-shadow 0.15s;
+      }
+
+      .planet-label:hover {
+        color: #ffdd88;
+        text-shadow: 0 0 8px rgba(255, 204, 102, 0.6);
       }
 
       .constellation-label {
@@ -590,6 +598,13 @@
         <label>
           <input type="checkbox" id="videos" checked />
           Show videos (107) <span class="shortcut">(V)</span>
+        </label>
+      </div>
+
+      <div class="control-group checkbox-group">
+        <label>
+          <input type="checkbox" id="orbits" />
+          Show orbits <span class="shortcut">(O)</span>
         </label>
       </div>
 

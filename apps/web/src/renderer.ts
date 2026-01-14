@@ -3,6 +3,7 @@ import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer
 import type { SkyEngine } from "./wasm/sky_engine";
 import { getStarsPositionBuffer, getStarsMetaBuffer, getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getPlanetaryMoonsBuffer, getAllStarsPositionBuffer, getAllStarsMetaBuffer } from "./engine";
 import { getAllConstellationLines, CONSTELLATIONS } from "./constellations";
+import { applyTimeToEngine } from "./ui";
 
 // -----------------------------------------------------------------------------
 // Color utilities
@@ -13,31 +14,42 @@ function bvToColor(bv: number): THREE.Color {
 
   let r: number, g: number, b: number;
 
-  if (bv < 0) {
-    const t = (bv + 0.4) / 0.4;
-    r = 0.6 + 0.4 * t;
-    g = 0.7 + 0.3 * t;
+  if (bv < -0.1) {
+    // Hot blue-white stars (O/B type): Rigel, Spica
+    const t = (bv + 0.4) / 0.3;
+    r = 0.5 + 0.35 * t;
+    g = 0.6 + 0.3 * t;
     b = 1.0;
-  } else if (bv < 0.4) {
-    const t = bv / 0.4;
-    r = 0.9 + 0.1 * t;
+  } else if (bv < 0.3) {
+    // White/blue-white stars (A type): Sirius, Vega
+    const t = (bv + 0.1) / 0.4;
+    r = 0.85 + 0.15 * t;
     g = 0.9 + 0.1 * t;
     b = 1.0;
+  } else if (bv < 0.6) {
+    // Yellow-white stars (F type): Procyon, Canopus
+    const t = (bv - 0.3) / 0.3;
+    r = 1.0;
+    g = 1.0 - 0.05 * t;
+    b = 0.95 - 0.15 * t;
   } else if (bv < 0.8) {
-    const t = (bv - 0.4) / 0.4;
+    // Yellow stars (G type): Sun, Capella
+    const t = (bv - 0.6) / 0.2;
     r = 1.0;
-    g = 1.0 - 0.2 * t;
-    b = 1.0 - 0.3 * t;
-  } else if (bv < 1.4) {
-    const t = (bv - 0.8) / 0.6;
+    g = 0.95 - 0.1 * t;
+    b = 0.8 - 0.2 * t;
+  } else if (bv < 1.2) {
+    // Orange stars (K type): Arcturus, Aldebaran
+    const t = (bv - 0.8) / 0.4;
     r = 1.0;
-    g = 0.8 - 0.3 * t;
-    b = 0.7 - 0.4 * t;
+    g = 0.85 - 0.25 * t;
+    b = 0.6 - 0.35 * t;
   } else {
-    const t = (bv - 1.4) / 0.6;
+    // Red stars (M type): Betelgeuse, Antares
+    const t = Math.min(1.0, (bv - 1.2) / 0.8);
     r = 1.0;
-    g = 0.5 - 0.2 * t;
-    b = 0.3 - 0.2 * t;
+    g = 0.6 - 0.25 * t;
+    b = 0.25 - 0.15 * t;
   }
 
   return new THREE.Color(r, g, b);
@@ -57,6 +69,26 @@ const BODY_COLORS: THREE.Color[] = [
 ];
 
 const CONSTELLATION_COLOR = new THREE.Color(0.2, 0.4, 0.6);
+
+// -----------------------------------------------------------------------------
+// Orbit path configuration
+// -----------------------------------------------------------------------------
+// Planets to show orbits for: Mercury(2), Venus(3), Mars(4), Jupiter(5), Saturn(6), Uranus(7), Neptune(8)
+// Exclude Sun(0) and Moon(1) - Moon's path is complex, Sun defines the ecliptic
+const ORBIT_PLANET_INDICES = [2, 3, 4, 5, 6, 7, 8];
+const ORBIT_NUM_POINTS = 400; // Points per orbit path (more for smoother long orbits)
+
+// Orbital periods in days - use full period to show complete apparent path
+// Outer planets capped at ~30 years to keep computation reasonable
+const ORBIT_PERIODS_DAYS: Record<number, number> = {
+  2: 88,      // Mercury
+  3: 225,     // Venus
+  4: 687,     // Mars (~2 years)
+  5: 4333,    // Jupiter (~12 years)
+  6: 10759,   // Saturn (~29 years)
+  7: 10950,   // Uranus - capped at 30 years (actual: 84 years)
+  8: 10950,   // Neptune - capped at 30 years (actual: 165 years)
+};
 
 const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
 
@@ -128,9 +160,46 @@ varying vec3 vNormal;
 varying vec3 vPosition;
 
 void main() {
-  vNormal = normalize(normalMatrix * normal);
+  // Transform normal to world space (not view space)
+  // Use the upper 3x3 of modelMatrix for normal transformation
+  vNormal = normalize(mat3(modelMatrix) * normal);
   vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+// Vertex shader for textured planets (includes UV coordinates)
+const texturedPlanetVertexShader = `
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vUv;
+
+void main() {
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+// Fragment shader for textured planets with phase lighting
+const texturedPlanetFragmentShader = `
+uniform vec3 sunDirection;
+uniform sampler2D planetTexture;
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vUv;
+
+void main() {
+  vec3 texColor = texture2D(planetTexture, vUv).rgb;
+
+  float illumination = dot(vNormal, sunDirection);
+  float lit = smoothstep(-0.1, 0.1, illumination);
+  float ambient = 0.03;
+  float brightness = ambient + (1.0 - ambient) * lit;
+
+  gl_FragColor = vec4(texColor * brightness, 1.0);
 }
 `;
 
@@ -310,6 +379,9 @@ export interface SkyRenderer {
   updateFromEngine(engine: SkyEngine, fov?: number): void;
   setConstellationsVisible(visible: boolean): void;
   setLabelsVisible(visible: boolean): void;
+  setOrbitsVisible(visible: boolean): void;
+  focusOrbit(bodyIndex: number | null): void;
+  computeOrbits(engine: SkyEngine, centerDate: Date): void;
   setMilkyWayVisibility(limitingMagnitude: number): void;
   getRenderedStarCount(): number;
   render(): void;
@@ -387,6 +459,12 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   // Mercury and Venus use phase lighting, outer planets use simple materials
   // ---------------------------------------------------------------------------
   const planetGeometry = new THREE.SphereGeometry(1, 24, 24);
+  const jupiterGeometry = new THREE.SphereGeometry(1, 48, 48); // Higher detail for texture
+
+  // Load Jupiter texture
+  const textureLoader = new THREE.TextureLoader();
+  const jupiterTexture = textureLoader.load("/jupiter.jpg");
+  jupiterTexture.colorSpace = THREE.SRGBColorSpace;
 
   // Planet meshes array: [Mercury, Venus, Mars, Jupiter, Saturn]
   const planetMeshes: THREE.Mesh[] = [];
@@ -399,18 +477,34 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const bodyIdx = PLANET_INDICES[i];
     const color = BODY_COLORS[bodyIdx];
 
-    // Mercury and Venus (indices 2, 3) use phase lighting
-    // Outer planets use simple emissive material (fully lit from Earth)
-    const material = new THREE.ShaderMaterial({
-      vertexShader: moonVertexShader,
-      fragmentShader: moonFragmentShader,
-      uniforms: {
-        sunDirection: { value: new THREE.Vector3(1, 0, 0) },
-        moonColor: { value: new THREE.Vector3(color.r, color.g, color.b) },
-      },
-    });
+    let material: THREE.ShaderMaterial;
+    let geometry: THREE.SphereGeometry;
 
-    const mesh = new THREE.Mesh(planetGeometry, material);
+    if (bodyIdx === 5) {
+      // Jupiter - use textured shader
+      material = new THREE.ShaderMaterial({
+        vertexShader: texturedPlanetVertexShader,
+        fragmentShader: texturedPlanetFragmentShader,
+        uniforms: {
+          sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+          planetTexture: { value: jupiterTexture },
+        },
+      });
+      geometry = jupiterGeometry;
+    } else {
+      // Other planets - use solid color shader
+      material = new THREE.ShaderMaterial({
+        vertexShader: moonVertexShader,
+        fragmentShader: moonFragmentShader,
+        uniforms: {
+          sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+          moonColor: { value: new THREE.Vector3(color.r, color.g, color.b) },
+        },
+      });
+      geometry = planetGeometry;
+    }
+
+    const mesh = new THREE.Mesh(geometry, material);
     planetMeshes.push(mesh);
     planetMaterials.push(material);
     scene.add(mesh);
@@ -507,6 +601,28 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   scene.add(constellationLines);
 
   // ---------------------------------------------------------------------------
+  // Orbit path lines layer
+  // ---------------------------------------------------------------------------
+  const orbitsGroup = new THREE.Group();
+  orbitsGroup.visible = false;
+  scene.add(orbitsGroup);
+
+  // Create a line for each planet's orbit path
+  const orbitLines: THREE.Line[] = [];
+  for (const bodyIdx of ORBIT_PLANET_INDICES) {
+    const color = BODY_COLORS[bodyIdx];
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.LineBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.5,
+    });
+    const line = new THREE.Line(geometry, material);
+    orbitLines.push(line);
+    orbitsGroup.add(line);
+  }
+
+  // ---------------------------------------------------------------------------
   // CSS2D Label renderer
   // ---------------------------------------------------------------------------
   const labelRenderer = new CSS2DRenderer();
@@ -528,6 +644,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const div = document.createElement("div");
     div.className = "sky-label planet-label";
     div.textContent = BODY_NAMES[i];
+    div.dataset.body = String(i); // Store body index for click handler
     const label = new CSS2DObject(div);
     bodyLabels.push(label);
     labelsGroup.add(label);
@@ -839,10 +956,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const sunPos = new THREE.Vector3(sunX * radius, sunY * radius, sunZ * radius);
     sunMesh.position.copy(sunPos);
 
-    // Scale Sun based on angular diameter (same exaggeration as Moon since they appear similar size)
+    // Scale Sun based on true angular diameter
     const sunAngDiam = angularDiameters[0];
-    const sunScale = (sunAngDiam * SKY_RADIUS) / 2;
-    const sunDisplayScale = Math.max(sunScale * 8, 0.4);
+    const sunDisplayScale = (sunAngDiam * SKY_RADIUS) / 2;
     sunMesh.scale.setScalar(sunDisplayScale);
 
     const sunLabelPos = calculateLabelOffset(sunPos, LABEL_OFFSET);
@@ -859,11 +975,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     // Update Moon mesh position
     moonMesh.position.copy(moonPos);
 
-    // Scale Moon based on angular diameter
+    // Scale Moon based on true angular diameter
     const moonAngDiam = angularDiameters[1];
-    const moonScale = (moonAngDiam * SKY_RADIUS) / 2;
-    // Exaggerate for visibility (real Moon is tiny at sky scale)
-    const moonDisplayScale = Math.max(moonScale * 8, 0.4);
+    const moonDisplayScale = (moonAngDiam * SKY_RADIUS) / 2;
     moonMesh.scale.setScalar(moonDisplayScale);
 
     // Update Moon shader uniform - sun direction FROM MOON TO SUN for phase lighting
@@ -885,11 +999,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       // Update position
       planetMeshes[i].position.copy(planetPos);
 
-      // Scale based on angular diameter
+      // Scale based on true angular diameter
       const angDiam = angularDiameters[bodyIdx];
-      const scale = (angDiam * SKY_RADIUS) / 2;
-      // Larger exaggeration for planets (they're much smaller than Moon)
-      const displayScale = Math.max(scale * 40, 0.15);
+      const displayScale = (angDiam * SKY_RADIUS) / 2;
       planetMeshes[i].scale.setScalar(displayScale);
 
       // Update phase shader uniform - sun direction FROM PLANET TO SUN
@@ -946,9 +1058,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       const mesh = planetaryMoonMeshes[i];
       mesh.position.set(x, y, z);
 
-      // Scale - planetary moons are tiny, need significant exaggeration
-      // Ganymede (largest) is ~1.7 arcsec at opposition = ~8e-6 rad
-      const displayScale = Math.max((angDiam * SKY_RADIUS / 2) * 200, 0.08);
+      // Scale based on true angular diameter
+      const displayScale = (angDiam * SKY_RADIUS) / 2;
       mesh.scale.setScalar(displayScale);
       mesh.visible = true;
 
@@ -987,6 +1098,79 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     labelsGroup.visible = visible;
   }
 
+  function setOrbitsVisible(visible: boolean): void {
+    orbitsGroup.visible = visible;
+    // When turning orbits on, show all orbits (clear any focus)
+    if (visible) {
+      for (const line of orbitLines) {
+        line.visible = true;
+      }
+    }
+  }
+
+  /**
+   * Focus on a single planet's orbit, hiding all others.
+   * Pass the body index (2=Mercury, 3=Venus, etc.) or null to show all.
+   */
+  function focusOrbit(bodyIndex: number | null): void {
+    for (let i = 0; i < ORBIT_PLANET_INDICES.length; i++) {
+      if (bodyIndex === null) {
+        // Show all orbits
+        orbitLines[i].visible = true;
+      } else {
+        // Show only the matching orbit
+        orbitLines[i].visible = ORBIT_PLANET_INDICES[i] === bodyIndex;
+      }
+    }
+  }
+
+  /**
+   * Compute orbital paths for all planets by sampling positions over time.
+   * Uses each planet's orbital period to show complete apparent path.
+   */
+  function computeOrbits(engine: SkyEngine, centerDate: Date): void {
+    const radius = SKY_RADIUS - 1;
+    const msPerDay = 24 * 60 * 60 * 1000;
+
+    // For each planet, collect positions over its orbital period
+    for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
+      const bodyIdx = ORBIT_PLANET_INDICES[planetIdx];
+      const orbitPeriod = ORBIT_PERIODS_DAYS[bodyIdx];
+      const halfSpan = orbitPeriod / 2;
+      const positions: number[] = [];
+
+      for (let i = 0; i < ORBIT_NUM_POINTS; i++) {
+        // Calculate date for this sample point (spread across orbital period)
+        const t = i / (ORBIT_NUM_POINTS - 1); // 0 to 1
+        const dayOffset = -halfSpan + t * orbitPeriod;
+        const sampleDate = new Date(centerDate.getTime() + dayOffset * msPerDay);
+
+        // Set engine to this time and recompute
+        applyTimeToEngine(engine, sampleDate);
+        engine.recompute();
+
+        // Get the planet position at this time
+        const bodyPositions = getBodiesPositionBuffer(engine);
+        const x = bodyPositions[bodyIdx * 3] * radius;
+        const y = bodyPositions[bodyIdx * 3 + 1] * radius;
+        const z = bodyPositions[bodyIdx * 3 + 2] * radius;
+
+        positions.push(x, y, z);
+      }
+
+      // Update this planet's orbit line geometry
+      const geometry = orbitLines[planetIdx].geometry;
+      geometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(new Float32Array(positions), 3)
+      );
+    }
+
+    // Restore the original time
+    applyTimeToEngine(engine, centerDate);
+    engine.recompute();
+  }
+
   /**
    * Set Milky Way visibility based on limiting magnitude.
    * The Milky Way becomes visible around mag 5.0 and reaches full brightness at mag 6.0+
@@ -1022,6 +1206,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     updateFromEngine,
     setConstellationsVisible,
     setLabelsVisible,
+    setOrbitsVisible,
+    focusOrbit,
+    computeOrbits,
     setMilkyWayVisibility,
     getRenderedStarCount,
     render,

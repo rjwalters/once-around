@@ -21,6 +21,52 @@ const LABEL_REPULSION_ITERATIONS = 8; // Number of iterations to settle labels
 const COORDINATE_TOLERANCE = 0.01; // degrees (~36 arcsec) for grouping nearby videos
 const ARC_GAP = 0.08; // radians (~4.5 degrees) gap between pie slices
 
+// Body position type - maps body name to 3D position
+export type BodyPositions = Map<string, THREE.Vector3>;
+
+// Match video object names to body names for moving objects
+// Returns the body name if matched, null otherwise
+function matchVideoToBody(objectName: string): string | null {
+  const lowerName = objectName.toLowerCase();
+
+  // Exact matches (case-insensitive)
+  const exactMatches: Record<string, string> = {
+    mercury: "Mercury",
+    venus: "Venus",
+    mars: "Mars",
+    jupiter: "Jupiter",
+    saturn: "Saturn",
+    uranus: "Uranus",
+    neptune: "Neptune",
+  };
+
+  for (const [key, bodyName] of Object.entries(exactMatches)) {
+    if (lowerName === key) {
+      return bodyName;
+    }
+  }
+
+  // "the Moons of X" patterns
+  const moonsMatch = lowerName.match(/^the moons of (\w+)$/);
+  if (moonsMatch) {
+    const planet = moonsMatch[1].toLowerCase();
+    if (planet === "neptune") return "Neptune";
+    if (planet === "mars") return "Mars";
+    if (planet === "jupiter") return "Jupiter";
+    if (planet === "saturn") return "Saturn";
+    if (planet === "uranus") return "Uranus";
+    // Pluto not in our body list
+  }
+
+  // Special cases for specific moons
+  if (lowerName === "triton") return "Neptune"; // Triton is Neptune's moon
+  if (lowerName === "janus and epimetheus") return "Saturn"; // Saturn's moons
+  if (lowerName === "the ice giants") return "Uranus"; // Pick Uranus for ice giants
+  if (lowerName === "ceres") return "Mars"; // Ceres is in asteroid belt, closest to Mars
+
+  return null;
+}
+
 // Interface for grouped videos at the same location
 interface VideoGroup {
   ra: number;
@@ -45,31 +91,87 @@ function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3
 }
 
 // Group videos that share the same or very close coordinates
-function groupVideosByLocation(videos: VideoPlacement[]): VideoGroup[] {
+// For moving objects, use body positions if available to match by name
+function groupVideosByLocation(
+  videos: VideoPlacement[],
+  bodyPositions?: BodyPositions
+): VideoGroup[] {
   const groups: VideoGroup[] = [];
+  // Track which body each group is associated with (for matching moving objects)
+  const groupBodyNames = new Map<VideoGroup, string>();
 
   for (const video of videos) {
-    // Find existing group within coordinate tolerance
+    let targetBodyName: string | null = null;
+
+    // For moving objects, try to match to a body by name
+    if (video.moving && bodyPositions) {
+      targetBodyName = matchVideoToBody(video.object);
+    }
+
+    // Find existing group - either by body name match or by coordinate proximity
     let foundGroup: VideoGroup | null = null;
+
     for (const group of groups) {
-      const raDiff = Math.abs(group.ra - video.ra);
-      const decDiff = Math.abs(group.dec - video.dec);
-      if (raDiff < COORDINATE_TOLERANCE && decDiff < COORDINATE_TOLERANCE) {
+      const groupBodyName = groupBodyNames.get(group);
+
+      // If both this video and the group are associated with the same body, group them
+      if (targetBodyName && groupBodyName === targetBodyName) {
         foundGroup = group;
         break;
+      }
+
+      // For non-body-matched videos, use original coordinate tolerance
+      if (!targetBodyName && !groupBodyName) {
+        const raDiff = Math.abs(group.ra - video.ra);
+        const decDiff = Math.abs(group.dec - video.dec);
+        if (raDiff < COORDINATE_TOLERANCE && decDiff < COORDINATE_TOLERANCE) {
+          foundGroup = group;
+          break;
+        }
       }
     }
 
     if (foundGroup) {
       foundGroup.videos.push(video);
+      // Debug: log if Polaris gets added to an existing group
+      if (video.object === "Polaris") {
+        console.warn("DEBUG: Polaris added to existing group!", {
+          groupFirstVideo: foundGroup.videos[0].object,
+          groupRa: foundGroup.ra,
+          groupDec: foundGroup.dec,
+          polarisRa: video.ra,
+          polarisDec: video.dec,
+        });
+      }
     } else {
-      const position = raDecToPosition(video.ra, video.dec, SKY_RADIUS - 0.5);
-      groups.push({
+      // Compute position: use body position for matched moving videos, else use RA/Dec
+      let position: THREE.Vector3;
+      if (targetBodyName && bodyPositions && bodyPositions.has(targetBodyName)) {
+        position = bodyPositions.get(targetBodyName)!.clone();
+      } else {
+        position = raDecToPosition(video.ra, video.dec, SKY_RADIUS - 0.5);
+      }
+
+      // Debug: log Polaris group creation
+      if (video.object === "Polaris") {
+        console.log("DEBUG: Polaris new group created", {
+          ra: video.ra,
+          dec: video.dec,
+          position: position.toArray(),
+          targetBodyName,
+        });
+      }
+
+      const newGroup: VideoGroup = {
         ra: video.ra,
         dec: video.dec,
         position,
         videos: [video],
-      });
+      };
+      groups.push(newGroup);
+      if (targetBodyName) {
+        groupBodyNames.set(newGroup, targetBodyName);
+      }
     }
   }
 
@@ -298,13 +400,22 @@ export interface VideoMarkersLayer {
 
 export async function createVideoMarkersLayer(
   scene: THREE.Scene,
-  _onVideoClick: (video: VideoPlacement) => void
+  _onVideoClick: (video: VideoPlacement) => void,
+  bodyPositions?: BodyPositions
 ): Promise<VideoMarkersLayer> {
   // Load video placements
   const response = await fetch("/videos.json");
   const videos: VideoPlacement[] = await response.json();
 
   console.log(`Loaded ${videos.length} video placements`);
+
+  // Group videos by location to handle co-located videos
+  // Pass body positions so moving objects can be matched to their planets
+  const videoGroups = groupVideosByLocation(videos, bodyPositions);
+  const colocatedCount = videos.length - videoGroups.length;
+  console.log(
+    `Grouped into ${videoGroups.length} locations (${colocatedCount} co-located)`
+  );
 
   // Create group for all video markers
   const group = new THREE.Group();
@@ -321,7 +432,7 @@ export async function createVideoMarkersLayer(
   const labels = new Map<string, THREE.Sprite>();
   const videoDataMap = new Map<string, VideoPlacement>();
 
-  // Create marker material (visible ring)
+  // Create marker material (visible ring/arc)
   const markerMaterial = new THREE.MeshBasicMaterial({
     color: VIDEO_MARKER_COLOR,
     side: THREE.DoubleSide,
@@ -337,57 +448,93 @@ export async function createVideoMarkersLayer(
     opacity: 0.0, // Invisible
   });
 
-  // Create ring geometry for visual display
-  const ringGeometry = createRingGeometry(0.475, 0.625, 24);
-  // Create larger circle for hit detection
-  const hitGeometry = new THREE.CircleGeometry(1.2, 24);
-
   // Store positions for repulsion calculation
   const labelPositions = new Map<string, THREE.Vector3>();
   const markerPositions = new Map<string, THREE.Vector3>();
 
-  // Create markers for each video
-  for (const video of videos) {
-    const position = raDecToPosition(video.ra, video.dec, SKY_RADIUS - 0.5);
+  // Process each video group
+  for (const videoGroup of videoGroups) {
+    const totalInGroup = videoGroup.videos.length;
+    const position = videoGroup.position;
 
-    // Create visible ring mesh
-    const ringMesh = new THREE.Mesh(ringGeometry, markerMaterial.clone());
-    ringMesh.position.copy(position);
-    ringMesh.lookAt(0, 0, 0);
-    group.add(ringMesh);
+    for (let sliceIndex = 0; sliceIndex < totalInGroup; sliceIndex++) {
+      const video = videoGroup.videos[sliceIndex];
 
-    // Create larger invisible hit area mesh
-    const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial.clone());
-    marker.position.copy(position);
-    marker.lookAt(0, 0, 0);
+      // Create geometry based on whether this is a single video or grouped
+      let ringGeometry: THREE.BufferGeometry;
+      let hitGeometry: THREE.BufferGeometry;
 
-    marker.userData = { videoId: video.id };
-    markers.set(video.id, marker);
-    videoDataMap.set(video.id, video);
-    group.add(marker);
+      if (totalInGroup === 1) {
+        // Single video: use full ring (existing behavior)
+        ringGeometry = createRingGeometry(0.475, 0.625, 24);
+        hitGeometry = new THREE.CircleGeometry(1.2, 24);
+      } else {
+        // Multiple videos: use arc slices (pie chart style)
+        ringGeometry = createArcGeometry(0.475, 0.625, sliceIndex, totalInGroup, 24);
+        hitGeometry = createArcHitGeometry(1.2, sliceIndex, totalInGroup, 24);
+      }
 
-    // Store marker position for repulsion constraint
-    markerPositions.set(video.id, position.clone());
+      // Create visible ring/arc mesh
+      const ringMesh = new THREE.Mesh(ringGeometry, markerMaterial.clone());
+      ringMesh.position.copy(position);
+      ringMesh.lookAt(0, 0, 0);
+      group.add(ringMesh);
 
-    // Create label sprite - positioned below the ring
-    const labelText = video.object || video.title;
-    const labelSprite = createTextSprite(labelText);
+      // Debug: log Polaris marker position
+      if (video.object === "Polaris") {
+        // Force update world matrix and get world position
+        ringMesh.updateMatrixWorld(true);
+        const worldPos = new THREE.Vector3();
+        ringMesh.getWorldPosition(worldPos);
+        console.log("DEBUG: Polaris marker position", {
+          localPosition: ringMesh.position.toArray(),
+          worldPosition: worldPos.toArray(),
+          groupPosition: position.toArray(),
+          parentVisible: group.visible,
+          totalInGroup,
+          sliceIndex,
+        });
+      }
 
-    // Calculate "down" direction on the sphere's surface at this position
-    const radial = position.clone().normalize();
-    const worldUp = new THREE.Vector3(0, 1, 0);
-    const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
-    const down = new THREE.Vector3().crossVectors(radial, east).normalize();
+      // Create larger invisible hit area mesh
+      const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial.clone());
+      marker.position.copy(position);
+      marker.lookAt(0, 0, 0);
 
-    // Offset the label position downward on the sphere
-    const labelOffset = 1.5; // Units on the sky sphere
-    const labelPosition = position.clone().add(down.multiplyScalar(labelOffset));
+      marker.userData = { videoId: video.id };
+      markers.set(video.id, marker);
+      videoDataMap.set(video.id, video);
+      group.add(marker);
 
-    // Store initial label position for repulsion
-    labelPositions.set(video.id, labelPosition.clone());
+      // Store marker position for repulsion constraint
+      markerPositions.set(video.id, position.clone());
 
-    labels.set(video.id, labelSprite);
-    labelsGroup.add(labelSprite);
+      // Create label sprite
+      const labelText = video.object || video.title;
+      const labelSprite = createTextSprite(labelText);
+
+      // Calculate label position based on whether this is grouped or single
+      let labelPosition: THREE.Vector3;
+
+      if (totalInGroup === 1) {
+        // Single video: use "down" direction (existing behavior)
+        const radial = position.clone().normalize();
+        const worldUp = new THREE.Vector3(0, 1, 0);
+        const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
+        const down = new THREE.Vector3().crossVectors(radial, east).normalize();
+        const labelOffset = 1.5;
+        labelPosition = position.clone().add(down.multiplyScalar(labelOffset));
+      } else {
+        // Grouped videos: radial positioning based on arc slice
+        labelPosition = calculateGroupedLabelPosition(position, sliceIndex, totalInGroup, 2.0);
+      }
+
+      // Store initial label position for repulsion
+      labelPositions.set(video.id, labelPosition.clone());
+
+      labels.set(video.id, labelSprite);
+      labelsGroup.add(labelSprite);
+    }
   }
 
   // Apply repulsion to spread out overlapping labels
