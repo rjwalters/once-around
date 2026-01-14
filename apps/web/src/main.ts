@@ -153,7 +153,13 @@ async function main(): Promise<void> {
 
   const timeBackBtn = document.getElementById("time-back");
   const timeForwardBtn = document.getElementById("time-forward");
+  const timePlayBtn = document.getElementById("time-play");
   const timeStepUnitBtn = document.getElementById("time-step-unit");
+
+  // Play/pause state
+  let isPlaying = false;
+  let playInterval: ReturnType<typeof setInterval> | null = null;
+  const PLAY_INTERVAL_MS = 200; // Step every 200ms when playing
 
   function stepTime(direction: 1 | -1): void {
     if (!datetimeInput) return;
@@ -173,6 +179,37 @@ async function main(): Promise<void> {
     datetimeInput.dispatchEvent(new Event("change"));
   }
 
+  function startPlayback(): void {
+    if (isPlaying) return;
+    isPlaying = true;
+    if (timePlayBtn) {
+      timePlayBtn.textContent = "⏸";
+      timePlayBtn.classList.add("playing");
+    }
+    playInterval = setInterval(() => stepTime(1), PLAY_INTERVAL_MS);
+  }
+
+  function stopPlayback(): void {
+    if (!isPlaying) return;
+    isPlaying = false;
+    if (timePlayBtn) {
+      timePlayBtn.textContent = "▶";
+      timePlayBtn.classList.remove("playing");
+    }
+    if (playInterval) {
+      clearInterval(playInterval);
+      playInterval = null;
+    }
+  }
+
+  function togglePlayback(): void {
+    if (isPlaying) {
+      stopPlayback();
+    } else {
+      startPlayback();
+    }
+  }
+
   function cycleStepUnit(): void {
     currentStepIndex = (currentStepIndex + 1) % timeStepUnits.length;
     if (timeStepUnitBtn) {
@@ -182,14 +219,28 @@ async function main(): Promise<void> {
   }
 
   if (timeBackBtn) {
-    timeBackBtn.addEventListener("click", () => stepTime(-1));
+    timeBackBtn.addEventListener("click", () => {
+      stopPlayback(); // Stop playback when manually stepping
+      stepTime(-1);
+    });
   }
   if (timeForwardBtn) {
-    timeForwardBtn.addEventListener("click", () => stepTime(1));
+    timeForwardBtn.addEventListener("click", () => {
+      stopPlayback(); // Stop playback when manually stepping
+      stepTime(1);
+    });
+  }
+  if (timePlayBtn) {
+    timePlayBtn.addEventListener("click", togglePlayback);
   }
   if (timeStepUnitBtn) {
     timeStepUnitBtn.addEventListener("click", cycleStepUnit);
     timeStepUnitBtn.title = timeStepUnits[currentStepIndex].description;
+  }
+
+  // Stop playback when user manually changes the datetime input
+  if (datetimeInput) {
+    datetimeInput.addEventListener("focus", stopPlayback);
   }
 
   // Update display after restoring settings (pass saved FOV for consistent LOD)
@@ -536,12 +587,18 @@ async function main(): Promise<void> {
       case "arrowleft":
         // Step time backward
         event.preventDefault();
+        stopPlayback();
         stepTime(-1);
         break;
       case "arrowright":
         // Step time forward
         event.preventDefault();
+        stopPlayback();
         stepTime(1);
+        break;
+      case "p":
+        // Toggle play/pause
+        togglePlayback();
         break;
     }
   });

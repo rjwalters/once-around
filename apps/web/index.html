@@ -118,6 +118,20 @@
         background: #3a4a5a;
       }
 
+      .time-play-btn {
+        min-width: 36px;
+      }
+
+      .time-play-btn.playing {
+        background: #2a4a3a;
+        border-color: #4aff9e;
+        color: #4aff9e;
+      }
+
+      .time-play-btn.playing:hover {
+        background: #3a5a4a;
+      }
+
       .mag-hint {
         font-size: 10px;
         color: #666;
@@ -642,9 +656,10 @@
         <label>Date & Time (UTC)</label>
         <input type="datetime-local" id="datetime" />
         <div class="time-step-controls">
-          <button id="time-back" class="time-step-btn" title="Step backward (←)">◀</button>
+          <button id="time-back" class="time-step-btn" title="Step backward (←)">|◀</button>
+          <button id="time-play" class="time-step-btn time-play-btn" title="Play/Pause (P)">▶</button>
           <button id="time-step-unit" class="time-step-unit" title="Click to change step size">1h</button>
-          <button id="time-forward" class="time-step-btn" title="Step forward (→)">▶</button>
+          <button id="time-forward" class="time-step-btn" title="Step forward (→)">▶|</button>
         </div>
       </div>
 
@@ -759,7 +774,7 @@
       </div>
     </div>
 
-    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | Space = galactic center</div>
+    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | Space = galactic center</div>
 
     <div id="crosshair"></div>
     <div id="reference-circle" title="50 arcsec reference circle"></div>
