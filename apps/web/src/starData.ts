@@ -360,6 +360,20 @@ export const STAR_DATA: Record<number, StarInfo> = {
     dec: 55.96,
   },
 
+  // Algol - HR 936
+  936: {
+    name: "Algol",
+    designation: "Beta Persei",
+    constellation: "Perseus",
+    type: "B8V + K0IV - Eclipsing binary",
+    magnitude: 2.12,
+    distance: "93 light-years",
+    description:
+      "The 'Demon Star' - its name comes from Arabic 'al-ghūl' meaning 'the demon' or 'the ghoul'. Ancient astronomers noticed its brightness drops from magnitude 2.1 to 3.4 every 2.87 days as a dimmer companion star passes in front. This made it a symbol of ill omen across many cultures. Algol was the first eclipsing binary discovered (1669).",
+    ra: 47.04,
+    dec: 40.96,
+  },
+
   // Mirfak - HR 1017
   1017: {
     name: "Mirfak",

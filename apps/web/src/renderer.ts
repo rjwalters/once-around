@@ -213,6 +213,7 @@ const MAJOR_STARS: [number, string][] = [
   [8425, "Alnair"],       // α Gru, mag 1.74 - Grus
   [4905, "Alioth"],       // ε UMa, mag 1.77 - Ursa Major
   [1017, "Mirfak"],       // α Per, mag 1.80 - Perseus
+  [936, "Algol"],         // β Per, mag 2.12 - Perseus (the Demon Star)
   [6879, "Kaus Australis"], // ε Sgr, mag 1.85 - Sagittarius
   [6217, "Atria"],        // α TrA, mag 1.92 - Triangulum Australe
   [7790, "Peacock"],      // α Pav, mag 1.94 - Pavo
