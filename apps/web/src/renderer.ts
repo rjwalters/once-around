@@ -771,6 +771,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const div = document.createElement("div");
     div.className = "sky-label constellation-label";
     div.textContent = constellation.name;
+    div.dataset.constellation = constellation.name; // For click handler lookup
     const label = new CSS2DObject(div);
     label.visible = false; // Start hidden, shown when we have star positions
     constellationLabels.set(constellation.name, label);

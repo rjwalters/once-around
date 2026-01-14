@@ -5,6 +5,7 @@ import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
 import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement, type BodyPositions } from "./videos";
 import { STAR_DATA, type StarInfo } from "./starData";
+import { CONSTELLATION_DATA, type ConstellationInfo } from "./constellationData";
 import { loadSettings, createSettingsSaver } from "./settings";
 import type { SkyEngine } from "./wasm/sky_engine";
 
@@ -425,6 +426,70 @@ async function main(): Promise<void> {
       if (!isNaN(hr)) {
         showStarInfo(hr);
       }
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Constellation info popup
+  // ---------------------------------------------------------------------------
+  const constellationModal = document.getElementById("constellation-modal");
+  const constellationModalClose = document.getElementById("constellation-modal-close");
+  const constellationModalName = document.getElementById("constellation-modal-name");
+  const constellationModalAbbr = document.getElementById("constellation-modal-abbr");
+  const constellationModalMeaning = document.getElementById("constellation-modal-meaning");
+  const constellationModalStar = document.getElementById("constellation-modal-star");
+  const constellationModalArea = document.getElementById("constellation-modal-area");
+  const constellationModalViewing = document.getElementById("constellation-modal-viewing");
+  const constellationModalQuadrant = document.getElementById("constellation-modal-quadrant");
+  const constellationModalObjectsContainer = document.getElementById("constellation-modal-objects-container");
+  const constellationModalObjects = document.getElementById("constellation-modal-objects");
+  const constellationModalDescription = document.getElementById("constellation-modal-description");
+
+  function showConstellationInfo(name: string): void {
+    const info = CONSTELLATION_DATA[name];
+    if (!info || !constellationModal) return;
+
+    if (constellationModalName) constellationModalName.textContent = info.name;
+    if (constellationModalAbbr) constellationModalAbbr.textContent = info.abbreviation;
+    if (constellationModalMeaning) constellationModalMeaning.textContent = info.meaning;
+    if (constellationModalStar) constellationModalStar.textContent = info.brightestStar;
+    if (constellationModalArea) constellationModalArea.textContent = `${info.areaSqDeg} sq°`;
+    if (constellationModalViewing) constellationModalViewing.textContent = info.bestViewing;
+    if (constellationModalQuadrant) constellationModalQuadrant.textContent = info.quadrant;
+
+    // Show/hide notable objects section based on whether there are any
+    if (constellationModalObjectsContainer && constellationModalObjects) {
+      if (info.notableObjects.length > 0) {
+        constellationModalObjects.textContent = info.notableObjects.join(", ");
+        constellationModalObjectsContainer.style.display = "block";
+      } else {
+        constellationModalObjectsContainer.style.display = "none";
+      }
+    }
+
+    if (constellationModalDescription) constellationModalDescription.textContent = info.description;
+
+    constellationModal.classList.remove("hidden");
+  }
+
+  // Close constellation modal
+  if (constellationModal && constellationModalClose) {
+    constellationModalClose.addEventListener("click", () => {
+      constellationModal.classList.add("hidden");
+    });
+
+    constellationModal.addEventListener("click", (e) => {
+      if (e.target === constellationModal) {
+        constellationModal.classList.add("hidden");
+      }
+    });
+  }
+
+  // Handle clicks on constellation labels (using event delegation)
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains("constellation-label") && target.dataset.constellation) {
+      showConstellationInfo(target.dataset.constellation);
     }
   });
 
