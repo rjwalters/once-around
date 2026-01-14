@@ -111,12 +111,24 @@ export async function createVideoMarkersLayer(
     videoDataMap.set(video.id, video);
     group.add(marker);
 
-    // Create label
+    // Create label - offset position "downward" on the sphere so it appears below the ring
+    // This offset scales naturally with zoom since it's in 3D space
     const labelDiv = document.createElement("div");
     labelDiv.className = "video-label";
     labelDiv.textContent = video.object || video.title;
     const label = new CSS2DObject(labelDiv);
-    label.position.copy(position);
+
+    // Calculate "down" direction on the sphere's surface at this position
+    const radial = position.clone().normalize();
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
+    const down = new THREE.Vector3().crossVectors(radial, east).normalize();
+
+    // Offset the label position downward on the sphere
+    const labelOffset = 1.8; // Units on the sky sphere
+    const labelPosition = position.clone().add(down.multiplyScalar(labelOffset));
+    label.position.copy(labelPosition);
+
     labels.set(video.id, label);
     labelsGroup.add(label);
   }
