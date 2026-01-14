@@ -79,28 +79,28 @@ function starIdHash(id: number): number {
   return (h >>> 0) / 4294967295; // Convert to 0-1 range
 }
 
-// Major stars - HIP (Hipparcos) number → name
+// Major stars - HR (Harvard Revised / BSC) number → name
 const MAJOR_STARS: [number, string][] = [
-  [32349, "Sirius"],      // α CMa, mag -1.46
-  [30438, "Canopus"],     // α Car, mag -0.72
-  [69673, "Arcturus"],    // α Boo, mag -0.05
-  [91262, "Vega"],        // α Lyr, mag 0.03
-  [24608, "Capella"],     // α Aur, mag 0.08
-  [24436, "Rigel"],       // β Ori, mag 0.13
-  [37279, "Procyon"],     // α CMi, mag 0.34
-  [27989, "Betelgeuse"],  // α Ori, mag 0.42
-  [97649, "Altair"],      // α Aql, mag 0.76
-  [21421, "Aldebaran"],   // α Tau, mag 0.85
-  [65474, "Spica"],       // α Vir, mag 0.97
-  [80763, "Antares"],     // α Sco, mag 1.06
-  [37826, "Pollux"],      // β Gem, mag 1.14
-  [113368, "Fomalhaut"],  // α PsA, mag 1.16
-  [102098, "Deneb"],      // α Cyg, mag 1.25
-  [49669, "Regulus"],     // α Leo, mag 1.36
-  [36850, "Castor"],      // α Gem, mag 1.58
-  [65378, "Mizar"],       // ζ UMa, mag 2.23
-  [11767, "Polaris"],     // α UMi, mag 1.98
-  [86032, "Rasalhague"],  // α Oph, mag 2.08
+  [2491, "Sirius"],       // α CMa, mag -1.46
+  [2326, "Canopus"],      // α Car, mag -0.72
+  [5340, "Arcturus"],     // α Boo, mag -0.05
+  [7001, "Vega"],         // α Lyr, mag 0.03
+  [1708, "Capella"],      // α Aur, mag 0.08
+  [1713, "Rigel"],        // β Ori, mag 0.13
+  [2943, "Procyon"],      // α CMi, mag 0.34
+  [2061, "Betelgeuse"],   // α Ori, mag 0.42
+  [7557, "Altair"],       // α Aql, mag 0.76
+  [1457, "Aldebaran"],    // α Tau, mag 0.85
+  [5056, "Spica"],        // α Vir, mag 0.97
+  [6134, "Antares"],      // α Sco, mag 1.06
+  [2990, "Pollux"],       // β Gem, mag 1.14
+  [8728, "Fomalhaut"],    // α PsA, mag 1.16
+  [7924, "Deneb"],        // α Cyg, mag 1.25
+  [3982, "Regulus"],      // α Leo, mag 1.36
+  [2891, "Castor"],       // α Gem, mag 1.58
+  [5267, "Mizar"],        // ζ UMa, mag 2.23
+  [424, "Polaris"],       // α UMi, mag 1.98
+  [6527, "Rasalhague"],   // α Oph, mag 2.08
 ];
 
 // -----------------------------------------------------------------------------
