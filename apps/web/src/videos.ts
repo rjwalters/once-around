@@ -407,11 +407,13 @@ export async function createVideoMarkersLayer(
   const videoDataMap = new Map<string, VideoPlacement>();
 
   // Create marker material (visible ring/arc)
+  // depthWrite: false ensures rings don't occlude stars behind them
   const markerMaterial = new THREE.MeshBasicMaterial({
     color: VIDEO_MARKER_COLOR,
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.8,
+    depthWrite: false,
   });
 
   // Create invisible hit area material (larger clickable area)
@@ -420,6 +422,7 @@ export async function createVideoMarkersLayer(
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.0, // Invisible
+    depthWrite: false,
   });
 
   // Store positions for repulsion calculation
