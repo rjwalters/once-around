@@ -215,6 +215,7 @@ const MAJOR_STARS: [number, string][] = [
   // Second magnitude
   [8425, "Alnair"],       // α Gru, mag 1.74 - Grus
   [4905, "Alioth"],       // ε UMa, mag 1.77 - Ursa Major
+  [4301, "Dubhe"],        // α UMa, mag 1.79 - Ursa Major (pointer star)
   [1017, "Mirfak"],       // α Per, mag 1.80 - Perseus
   [936, "Algol"],         // β Per, mag 2.12 - Perseus (the Demon Star)
   [6879, "Kaus Australis"], // ε Sgr, mag 1.85 - Sagittarius
@@ -230,6 +231,7 @@ const MAJOR_STARS: [number, string][] = [
   [5793, "Alphecca"],     // α CrB, mag 2.23 - Corona Borealis
   [15, "Alpheratz"],      // α And, mag 2.07 - Andromeda
   [6705, "Eltanin"],      // γ Dra, mag 2.23 - Draco
+  [4295, "Merak"],        // β UMa, mag 2.37 - Ursa Major (pointer star)
   [8308, "Enif"],         // ε Peg, mag 2.38 - Pegasus
   // Third magnitude (notable constellation stars)
   [99, "Ankaa"],          // α Phe, mag 2.40 - Phoenix
