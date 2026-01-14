@@ -376,6 +376,7 @@ export interface VideoMarkersLayer {
   setVisible(visible: boolean): void;
   setLabelsVisible(visible: boolean): void;
   getVideoAtPosition(raycaster: THREE.Raycaster): VideoPlacement | null;
+  updateMovingPositions(bodyPositions: BodyPositions): void;
 }
 
 export async function createVideoMarkersLayer(
@@ -405,6 +406,10 @@ export async function createVideoMarkersLayer(
   const markers = new Map<string, THREE.Mesh>();
   const labels = new Map<string, THREE.Sprite>();
   const videoDataMap = new Map<string, VideoPlacement>();
+
+  // Track moving videos and their associated meshes for position updates
+  // Maps body name -> array of {videoId, ringMesh, hitMesh}
+  const movingVideoMeshes = new Map<string, Array<{ videoId: string; ringMesh: THREE.Mesh; hitMesh: THREE.Mesh }>>();
 
   // Create marker material (visible ring/arc)
   // depthWrite: false ensures rings don't occlude stars behind them
@@ -466,6 +471,17 @@ export async function createVideoMarkersLayer(
       markers.set(video.id, marker);
       videoDataMap.set(video.id, video);
       group.add(marker);
+
+      // Track moving video meshes for position updates
+      if (video.moving) {
+        const bodyName = matchVideoToBody(video.object);
+        if (bodyName) {
+          if (!movingVideoMeshes.has(bodyName)) {
+            movingVideoMeshes.set(bodyName, []);
+          }
+          movingVideoMeshes.get(bodyName)!.push({ videoId: video.id, ringMesh, hitMesh: marker });
+        }
+      }
 
       // Store marker position for repulsion constraint
       markerPositions.set(video.id, position.clone());
@@ -546,6 +562,61 @@ export async function createVideoMarkersLayer(
     return null;
   }
 
+  // Build video ID to flag line index map
+  const videoFlagLineIndex = new Map<string, number>();
+  for (let i = 0; i < videos.length; i++) {
+    videoFlagLineIndex.set(videos[i].id, i);
+  }
+
+  // Update positions of moving video markers when body positions change
+  function updateMovingPositions(newBodyPositions: BodyPositions): void {
+    const flagPosAttr = flagLinesGeometry.getAttribute("position") as THREE.BufferAttribute;
+
+    for (const [bodyName, videoMeshList] of movingVideoMeshes) {
+      const bodyPos = newBodyPositions.get(bodyName);
+      if (!bodyPos) continue;
+
+      for (const { videoId, ringMesh, hitMesh } of videoMeshList) {
+        // Update mesh positions
+        ringMesh.position.copy(bodyPos);
+        ringMesh.lookAt(0, 0, 0);
+        hitMesh.position.copy(bodyPos);
+        hitMesh.lookAt(0, 0, 0);
+
+        // Update stored marker position
+        markerPositions.set(videoId, bodyPos.clone());
+
+        // Update label position relative to new marker position
+        const label = labels.get(videoId);
+        if (label) {
+          // Calculate label offset (down from marker)
+          const radial = bodyPos.clone().normalize();
+          const worldUp = new THREE.Vector3(0, 1, 0);
+          const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
+          const down = new THREE.Vector3().crossVectors(radial, east).normalize();
+          const labelOffset = 1.5;
+          const newLabelPos = bodyPos.clone().add(down.multiplyScalar(labelOffset));
+          label.position.copy(newLabelPos);
+          labelPositions.set(videoId, newLabelPos);
+
+          // Update flag line (marker to label)
+          const flagIndex = videoFlagLineIndex.get(videoId);
+          if (flagIndex !== undefined) {
+            const baseIdx = flagIndex * 6; // 2 points * 3 coords per video
+            flagPosAttr.array[baseIdx] = bodyPos.x;
+            flagPosAttr.array[baseIdx + 1] = bodyPos.y;
+            flagPosAttr.array[baseIdx + 2] = bodyPos.z;
+            flagPosAttr.array[baseIdx + 3] = newLabelPos.x;
+            flagPosAttr.array[baseIdx + 4] = newLabelPos.y;
+            flagPosAttr.array[baseIdx + 5] = newLabelPos.z;
+          }
+        }
+      }
+    }
+
+    flagPosAttr.needsUpdate = true;
+  }
+
   return {
     group,
     markers,
@@ -557,6 +628,7 @@ export async function createVideoMarkersLayer(
       labelsGroup.visible = visible;
     },
     getVideoAtPosition,
+    updateMovingPositions,
   };
 }
 

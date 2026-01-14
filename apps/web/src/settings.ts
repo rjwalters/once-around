@@ -8,7 +8,7 @@ const DEBOUNCE_MS = 500;
 
 // Increment this when coordinate system or camera orientation changes
 // to invalidate old saved camera quaternions
-const SETTINGS_VERSION = 2;
+const SETTINGS_VERSION = 3;
 
 export interface Settings {
   // Settings schema version (for migration)

@@ -14,10 +14,12 @@ import { DSO_DATA, DSO_COLORS, getVisibleDSOs, type DSOType } from "./dsoData";
  * Convert from Rust/WASM coordinate system (Z-up) to Three.js coordinate system (Y-up).
  *
  * Rust coords:  X → RA=0, Dec=0 | Y → RA=90°, Dec=0 | Z → north celestial pole
- * Three.js:     X → RA=0, Dec=0 | Y → north pole    | Z → RA=90°
+ * Three.js:    -X → RA=0, Dec=0 | Y → north pole    | -Z → RA=90°
  *
- * The conversion swaps Y↔Z to change from Z-up to Y-up coordinate system.
- * This matches the getRaDec() function which uses atan2(z, x) for RA and asin(y) for Dec.
+ * The conversion swaps Y↔Z to change from Z-up to Y-up, and negates X and Z
+ * to fix the east-west orientation. This ensures RA increases eastward
+ * (counterclockwise when viewed from above the north pole), matching the
+ * real sky as seen by an observer.
  *
  * @param rustX - X coordinate from WASM buffer
  * @param rustY - Y coordinate from WASM buffer
@@ -27,9 +29,9 @@ import { DSO_DATA, DSO_COLORS, getVisibleDSOs, type DSOType } from "./dsoData";
  */
 function rustToThreeJS(rustX: number, rustY: number, rustZ: number, scale: number = 1): THREE.Vector3 {
   return new THREE.Vector3(
-    rustX * scale,       // X stays the same (RA=0, Dec=0)
+    -rustX * scale,      // Negate X to fix east-west (RA increases eastward)
     rustZ * scale,       // Rust Z → Three.js Y (north pole up)
-    rustY * scale        // Rust Y → Three.js Z (RA=90°)
+    -rustY * scale       // Negate Y (→Z) to maintain right-handedness
   );
 }
 
@@ -377,12 +379,13 @@ void main() {
 `;
 
 // Convert RA/Dec to 3D position on sky sphere
+// Matches rustToThreeJS: negate X and Z to fix east-west orientation
 function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3 {
   const raRad = (ra * Math.PI) / 180;
   const decRad = (dec * Math.PI) / 180;
-  const x = radius * Math.cos(decRad) * Math.cos(raRad);
+  const x = -radius * Math.cos(decRad) * Math.cos(raRad);
   const y = radius * Math.sin(decRad);
-  const z = radius * Math.cos(decRad) * Math.sin(raRad);
+  const z = -radius * Math.cos(decRad) * Math.sin(raRad);
   return new THREE.Vector3(x, y, z);
 }
 

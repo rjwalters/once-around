@@ -45,8 +45,8 @@ function positionToRaDec(pos: THREE.Vector3): { ra: number; dec: number } {
   // Dec is the angle from the equatorial plane (Y component)
   const dec = Math.asin(normalized.y) * (180 / Math.PI);
 
-  // RA is the angle in the XZ plane from the X axis
-  let ra = Math.atan2(normalized.z, normalized.x) * (180 / Math.PI);
+  // RA is the angle in the XZ plane from the -X axis (negated coords for east-west fix)
+  let ra = Math.atan2(-normalized.z, -normalized.x) * (180 / Math.PI);
   if (ra < 0) ra += 360;
 
   return { ra, dec };
@@ -399,6 +399,9 @@ async function main(): Promise<void> {
   // Track current date for orbit computation (updated in onTimeChange)
   let currentDate = settings.datetime ? new Date(settings.datetime) : new Date();
 
+  // Reference to video markers layer (set later after creation)
+  let videoMarkersRef: { updateMovingPositions: (bodyPositions: BodyPositions) => void } | null = null;
+
   // Setup UI
   setupUI(engine, {
     onTimeChange: (date: Date) => {
@@ -410,6 +413,10 @@ async function main(): Promise<void> {
       // Recompute orbits if they are visible
       if (orbitsCheckbox?.checked) {
         void renderer.computeOrbits(engine, currentDate);
+      }
+      // Update moving video markers (planets)
+      if (videoMarkersRef) {
+        videoMarkersRef.updateMovingPositions(getBodyPositions(engine));
       }
       settingsSaver.save({ datetime: date.toISOString() });
       // Update URL with new time
@@ -468,6 +475,9 @@ async function main(): Promise<void> {
     },
     bodyPositions
   );
+
+  // Set reference for time change updates
+  videoMarkersRef = videoMarkers;
 
   // Videos checkbox
   const videosCheckbox = document.getElementById("videos") as HTMLInputElement | null;
