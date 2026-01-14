@@ -126,9 +126,11 @@ export function createCelestialControls(
     const dPhi = pixelToAngle(dy);
     const dTheta = pixelToAngle(dx) / Math.max(0.1, Math.sin(phi));
 
-    // Apply deltas (negative because dragging right should rotate view left)
+    // Apply deltas:
+    // - Dragging right should rotate view left (negative dTheta)
+    // - Dragging down should rotate view up (negative dPhi, since phi=0 is up)
     theta = dragStartTheta - dTheta;
-    phi = dragStartPhi + dPhi;
+    phi = dragStartPhi - dPhi;
 
     // Clamp phi to avoid poles
     phi = Math.max(0.01, Math.min(Math.PI - 0.01, phi));
