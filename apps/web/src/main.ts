@@ -143,6 +143,8 @@ async function main(): Promise<void> {
     // Check for video marker intersection
     const video = videoMarkers.getVideoAtPosition(raycaster);
     if (video) {
+      // Center camera on the video's celestial coordinates
+      controls.lookAtRaDec(video.ra, video.dec);
       videoPopup.show(video);
     }
   });
