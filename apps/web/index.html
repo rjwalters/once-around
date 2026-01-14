@@ -73,6 +73,51 @@
         border-radius: 4px;
       }
 
+      .time-step-controls {
+        display: flex;
+        gap: 4px;
+        margin-top: 6px;
+      }
+
+      .time-step-btn {
+        flex: 1;
+        padding: 6px 12px;
+        background: #333;
+        border: 1px solid #555;
+        color: #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.15s;
+      }
+
+      .time-step-btn:hover {
+        background: #444;
+        border-color: #666;
+        color: #fff;
+      }
+
+      .time-step-btn:active {
+        background: #555;
+      }
+
+      .time-step-unit {
+        padding: 6px 10px;
+        background: #2a3a4a;
+        border: 1px solid #4a9eff;
+        color: #4a9eff;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        min-width: 36px;
+        transition: all 0.15s;
+      }
+
+      .time-step-unit:hover {
+        background: #3a4a5a;
+      }
+
       .mag-hint {
         font-size: 10px;
         color: #666;
@@ -593,11 +638,14 @@
     <div id="app"></div>
 
     <div id="controls">
-      <h2>Sky Controls</h2>
-
       <div class="control-group">
         <label>Date & Time (UTC)</label>
         <input type="datetime-local" id="datetime" />
+        <div class="time-step-controls">
+          <button id="time-back" class="time-step-btn" title="Step backward (←)">◀</button>
+          <button id="time-step-unit" class="time-step-unit" title="Click to change step size">1h</button>
+          <button id="time-forward" class="time-step-btn" title="Step forward (→)">▶</button>
+        </div>
       </div>
 
       <div class="control-group">
@@ -711,7 +759,7 @@
       </div>
     </div>
 
-    <div id="info">Drag to look around | Scroll to zoom | Space = galactic center</div>
+    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | Space = galactic center</div>
 
     <div id="crosshair"></div>
     <div id="reference-circle" title="50 arcsec reference circle"></div>

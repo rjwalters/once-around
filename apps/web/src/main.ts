@@ -141,6 +141,57 @@ async function main(): Promise<void> {
     engine.recompute();
   }
 
+  // ---------------------------------------------------------------------------
+  // Time step controls
+  // ---------------------------------------------------------------------------
+  const timeStepUnits = [
+    { label: "1h", ms: 60 * 60 * 1000, description: "1 hour - watch Jupiter's moons move" },
+    { label: "1d", ms: 24 * 60 * 60 * 1000, description: "1 day - watch planets move against stars" },
+    { label: "1w", ms: 7 * 24 * 60 * 60 * 1000, description: "1 week - watch outer planets and retrograde" },
+  ];
+  let currentStepIndex = 0;
+
+  const timeBackBtn = document.getElementById("time-back");
+  const timeForwardBtn = document.getElementById("time-forward");
+  const timeStepUnitBtn = document.getElementById("time-step-unit");
+
+  function stepTime(direction: 1 | -1): void {
+    if (!datetimeInput) return;
+    const currentStep = timeStepUnits[currentStepIndex];
+    const currentTime = datetimeInput.value ? new Date(datetimeInput.value) : new Date();
+    const newTime = new Date(currentTime.getTime() + direction * currentStep.ms);
+
+    // Update the datetime input
+    const year = newTime.getFullYear();
+    const month = String(newTime.getMonth() + 1).padStart(2, "0");
+    const day = String(newTime.getDate()).padStart(2, "0");
+    const hours = String(newTime.getHours()).padStart(2, "0");
+    const minutes = String(newTime.getMinutes()).padStart(2, "0");
+    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    // Trigger the change event to update the engine
+    datetimeInput.dispatchEvent(new Event("change"));
+  }
+
+  function cycleStepUnit(): void {
+    currentStepIndex = (currentStepIndex + 1) % timeStepUnits.length;
+    if (timeStepUnitBtn) {
+      timeStepUnitBtn.textContent = timeStepUnits[currentStepIndex].label;
+      timeStepUnitBtn.title = timeStepUnits[currentStepIndex].description;
+    }
+  }
+
+  if (timeBackBtn) {
+    timeBackBtn.addEventListener("click", () => stepTime(-1));
+  }
+  if (timeForwardBtn) {
+    timeForwardBtn.addEventListener("click", () => stepTime(1));
+  }
+  if (timeStepUnitBtn) {
+    timeStepUnitBtn.addEventListener("click", cycleStepUnit);
+    timeStepUnitBtn.title = timeStepUnits[currentStepIndex].description;
+  }
+
   // Update display after restoring settings (pass saved FOV for consistent LOD)
   renderer.updateFromEngine(engine, settings.fov);
   renderer.setMilkyWayVisibility(settings.magnitude);
@@ -481,6 +532,16 @@ async function main(): Promise<void> {
         // Spacebar: animate to galactic center (RA ~266.4°, Dec ~-29°)
         event.preventDefault();
         controls.animateToRaDec(266.4, -29, 1500);
+        break;
+      case "arrowleft":
+        // Step time backward
+        event.preventDefault();
+        stepTime(-1);
+        break;
+      case "arrowright":
+        // Step time forward
+        event.preventDefault();
+        stepTime(1);
         break;
     }
   });
