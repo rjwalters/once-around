@@ -1,7 +1,3 @@
-=== Final Placement Statistics ===
-Total videos: 306
-Placeable: 107
-Skipped: 199
 [
   {
     "id": "qzFKgsPpI3A",
@@ -967,7 +963,3 @@ Skipped: 199
     "url": "https://www.youtube.com/watch?v=udTPZx6tAyo"
   }
 ]
-
-Saved:
-  data/final_placements.json (all 306 videos)
-  data/final_placements.csv (107 placeable videos)
