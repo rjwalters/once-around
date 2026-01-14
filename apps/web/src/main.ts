@@ -784,6 +784,7 @@ async function main(): Promise<void> {
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "America/Los_Angeles",
     });
     buildInfo.textContent = `Build: ${buildDate} (${__GIT_COMMIT__})`;
   }
