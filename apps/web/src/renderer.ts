@@ -1111,7 +1111,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     starPositionMap = new Map();
 
     if (totalStars === 0) {
-      starsGeometry.setDrawRange(0, 0);
+      starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
+      starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
       renderedStarCount = 0;
       return;
     }
@@ -1145,8 +1146,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const faintTarget = Math.max(0, targetStars - brightCount);
     const faintProbability = faintCount > 0 ? Math.min(1.0, faintTarget / faintCount) : 1.0;
 
-    // Second pass: fill pre-allocated buffers with LOD sampling
-    let starIndex = 0;
+    // Second pass: build arrays with LOD sampling
+    const scaledPositions: number[] = [];
+    const colors: number[] = [];
 
     for (let i = 0; i < totalStars; i++) {
       const vmag = meta[i * 4];
