@@ -133,16 +133,6 @@ function groupVideosByLocation(
 
     if (foundGroup) {
       foundGroup.videos.push(video);
-      // Debug: log if Polaris gets added to an existing group
-      if (video.object === "Polaris") {
-        console.warn("DEBUG: Polaris added to existing group!", {
-          groupFirstVideo: foundGroup.videos[0].object,
-          groupRa: foundGroup.ra,
-          groupDec: foundGroup.dec,
-          polarisRa: video.ra,
-          polarisDec: video.dec,
-        });
-      }
     } else {
       // Compute position: use body position for matched moving videos, else use RA/Dec
       let position: THREE.Vector3;
@@ -150,16 +140,6 @@ function groupVideosByLocation(
         position = bodyPositions.get(targetBodyName)!.clone();
       } else {
         position = raDecToPosition(video.ra, video.dec, SKY_RADIUS - 0.5);
-      }
-
-      // Debug: log Polaris group creation
-      if (video.object === "Polaris") {
-        console.log("DEBUG: Polaris new group created", {
-          ra: video.ra,
-          dec: video.dec,
-          position: position.toArray(),
-          targetBodyName,
-        });
       }
 
       const newGroup: VideoGroup = {
@@ -407,15 +387,9 @@ export async function createVideoMarkersLayer(
   const response = await fetch("/videos.json");
   const videos: VideoPlacement[] = await response.json();
 
-  console.log(`Loaded ${videos.length} video placements`);
-
   // Group videos by location to handle co-located videos
   // Pass body positions so moving objects can be matched to their planets
   const videoGroups = groupVideosByLocation(videos, bodyPositions);
-  const colocatedCount = videos.length - videoGroups.length;
-  console.log(
-    `Grouped into ${videoGroups.length} locations (${colocatedCount} co-located)`
-  );
 
   // Create group for all video markers
   const group = new THREE.Group();
@@ -479,22 +453,6 @@ export async function createVideoMarkersLayer(
       ringMesh.position.copy(position);
       ringMesh.lookAt(0, 0, 0);
       group.add(ringMesh);
-
-      // Debug: log Polaris marker position
-      if (video.object === "Polaris") {
-        // Force update world matrix and get world position
-        ringMesh.updateMatrixWorld(true);
-        const worldPos = new THREE.Vector3();
-        ringMesh.getWorldPosition(worldPos);
-        console.log("DEBUG: Polaris marker position", {
-          localPosition: ringMesh.position.toArray(),
-          worldPosition: worldPos.toArray(),
-          groupPosition: position.toArray(),
-          parentVisible: group.visible,
-          totalInGroup,
-          sliceIndex,
-        });
-      }
 
       // Create larger invisible hit area mesh
       const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial.clone());

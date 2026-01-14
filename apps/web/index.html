@@ -549,6 +549,32 @@
         top: -10px;
       }
 
+      #reference-circle {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 49;
+        border: 1px dashed rgba(255, 200, 100, 0.6);
+        border-radius: 50%;
+        /* Size will be set dynamically based on FOV */
+        width: 50px;
+        height: 50px;
+        display: none; /* Hidden by default, shown when FOV < 5° */
+      }
+
+      #reference-circle::after {
+        content: '50"';
+        position: absolute;
+        bottom: -18px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 10px;
+        color: rgba(255, 200, 100, 0.8);
+        white-space: nowrap;
+      }
+
       #debug {
         position: fixed;
         bottom: 20px;
@@ -688,6 +714,7 @@
     <div id="info">Drag to look around | Scroll to zoom | Space = galactic center</div>
 
     <div id="crosshair"></div>
+    <div id="reference-circle" title="50 arcsec reference circle"></div>
 
     <div id="coordinates">
       <span class="label">RA</span><span id="coord-ra" class="value">0h 0m</span>

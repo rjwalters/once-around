@@ -80,7 +80,8 @@ export function createCelestialControls(
   let dragStartY = 0;
 
   // FOV zoom settings
-  const minFov = 10;
+  // minFov of 0.5° simulates a high-power telescope eyepiece (~100x magnification)
+  const minFov = 0.5;
   const maxFov = 100;
   const zoomSpeed = 0.05;
 
@@ -392,11 +393,12 @@ export function createCelestialControls(
     // X axis points to RA=0, Dec=0
     // Y axis points to Dec=+90 (north celestial pole)
     // Z axis points to RA=90°, Dec=0
+    // This matches getRaDec() which uses atan2(z, x) for RA
     const cosDec = Math.cos(decRad);
     const targetDir = new THREE.Vector3(
       cosDec * Math.cos(raRad),
       Math.sin(decRad),
-      -cosDec * Math.sin(raRad)
+      cosDec * Math.sin(raRad)
     );
 
     // Our default view direction is +X

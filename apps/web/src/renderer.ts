@@ -272,6 +272,7 @@ const SKY_RADIUS = 50;
 const MILKY_WAY_RADIUS = 49; // Slightly behind stars
 const LABEL_OFFSET = 1.8; // Distance to offset labels from objects
 
+
 // -----------------------------------------------------------------------------
 // Milky Way procedural shader
 // -----------------------------------------------------------------------------
@@ -665,7 +666,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     const material = new THREE.LineBasicMaterial({
       color: color,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.7,
+      depthTest: false,  // Render on top of sky sphere
     });
     const line = new THREE.Line(geometry, material);
     orbitLines.push(line);
@@ -1020,9 +1022,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     // Update Moon mesh position
     moonMesh.position.copy(moonPos);
 
-    // Scale Moon based on true angular diameter
+    // Scale Moon based on angular diameter (enhanced for visibility)
     const moonAngDiam = angularDiameters[1];
-    const moonDisplayScale = (moonAngDiam * SKY_RADIUS) / 2;
+    const moonDisplayScale = (moonAngDiam * SKY_RADIUS ) / 2;
     moonMesh.scale.setScalar(moonDisplayScale);
 
     // Update Moon shader uniform - sun direction FROM MOON TO SUN for phase lighting
@@ -1040,9 +1042,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       // Update position
       planetMeshes[i].position.copy(planetPos);
 
-      // Scale based on true angular diameter
+      // Scale based on angular diameter (enhanced for visibility)
       const angDiam = angularDiameters[bodyIdx];
-      const displayScale = (angDiam * SKY_RADIUS) / 2;
+      const displayScale = (angDiam * SKY_RADIUS ) / 2;
       planetMeshes[i].scale.setScalar(displayScale);
 
       // Update phase shader uniform - sun direction FROM PLANET TO SUN
@@ -1094,8 +1096,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       const mesh = planetaryMoonMeshes[i];
       mesh.position.copy(moonPos);
 
-      // Scale based on true angular diameter
-      const displayScale = (angDiam * SKY_RADIUS) / 2;
+      // Scale based on angular diameter (enhanced for visibility)
+      const displayScale = (angDiam * SKY_RADIUS ) / 2;
       mesh.scale.setScalar(displayScale);
       mesh.visible = true;
 
@@ -1221,6 +1223,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
         "position",
         new THREE.BufferAttribute(new Float32Array(positions), 3)
       );
+      geometry.computeBoundingSphere();
     }
 
     // Restore the original time

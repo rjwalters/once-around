@@ -87,10 +87,27 @@ async function main(): Promise<void> {
   }
   updateRenderedStars();
 
-  // Update star LOD when FOV changes (zooming)
+  // Debounced star LOD update for zooming (updateFromEngine is expensive)
+  let fovUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
+  let pendingFov: number | null = null;
+
+  function debouncedFovUpdate(fov: number): void {
+    pendingFov = fov;
+    if (fovUpdateTimeout === null) {
+      fovUpdateTimeout = setTimeout(() => {
+        if (pendingFov !== null) {
+          renderer.updateFromEngine(engine, pendingFov);
+          updateRenderedStars();
+        }
+        fovUpdateTimeout = null;
+        pendingFov = null;
+      }, 150); // Wait 150ms after last zoom before updating stars
+    }
+  }
+
+  // Update star LOD when FOV changes (zooming) - debounced for performance
   controls.onFovChange = (fov: number) => {
-    renderer.updateFromEngine(engine, fov);
-    updateRenderedStars();
+    debouncedFovUpdate(fov);
   };
 
   // Get UI elements for settings restoration
@@ -141,7 +158,7 @@ async function main(): Promise<void> {
       updateRenderedStars();
       // Recompute orbits if they are visible
       if (orbitsCheckbox?.checked) {
-        renderer.computeOrbits(engine, currentDate);
+        void renderer.computeOrbits(engine, currentDate);
       }
       settingsSaver.save({ datetime: date.toISOString() });
     },
@@ -192,7 +209,6 @@ async function main(): Promise<void> {
   const videoMarkers = await createVideoMarkersLayer(
     renderer.scene,
     (video: VideoPlacement) => {
-      console.log("Video clicked:", video.title);
       videoPopup.show(video);
     },
     bodyPositions
@@ -222,14 +238,14 @@ async function main(): Promise<void> {
 
     // Compute initial orbits if visible
     if (settings.orbitsVisible) {
-      renderer.computeOrbits(engine, currentDate);
+      void renderer.computeOrbits(engine, currentDate);
     }
 
     orbitsCheckbox.addEventListener("change", () => {
       renderer.setOrbitsVisible(orbitsCheckbox.checked);
       // Compute orbits when turning on (they may not have been computed yet)
       if (orbitsCheckbox.checked) {
-        renderer.computeOrbits(engine, currentDate);
+        void renderer.computeOrbits(engine, currentDate);
       }
       // Clear any focused orbit when toggling
       focusedOrbitBody = null;
@@ -338,7 +354,7 @@ async function main(): Promise<void> {
             if (orbitsCheckbox) {
               orbitsCheckbox.checked = true;
               renderer.setOrbitsVisible(true);
-              renderer.computeOrbits(engine, currentDate);
+              void renderer.computeOrbits(engine, currentDate);
               focusedOrbitBody = bodyIndex;
               renderer.focusOrbit(bodyIndex);
               settingsSaver.save({ orbitsVisible: true });
@@ -454,7 +470,7 @@ async function main(): Promise<void> {
           renderer.setOrbitsVisible(orbitsCheckbox.checked);
           // Compute orbits when turning on
           if (orbitsCheckbox.checked) {
-            renderer.computeOrbits(engine, currentDate);
+            void renderer.computeOrbits(engine, currentDate);
           }
           // Clear any focused orbit when toggling
           focusedOrbitBody = null;
