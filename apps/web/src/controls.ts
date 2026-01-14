@@ -13,6 +13,7 @@ import * as THREE from "three";
 export interface CelestialControls {
   update(): void;
   dispose(): void;
+  lookAtRaDec(ra: number, dec: number): void;
   onFovChange?: (fov: number) => void;
 }
 
@@ -328,6 +329,27 @@ export function createCelestialControls(
 
   function update(): void {}
 
+  /**
+   * Center the camera on a celestial object given its RA/Dec coordinates.
+   * @param ra Right Ascension in degrees (0-360)
+   * @param dec Declination in degrees (-90 to +90)
+   */
+  function lookAtRaDec(ra: number, dec: number): void {
+    const raRad = (ra * Math.PI) / 180;
+    const decRad = (dec * Math.PI) / 180;
+
+    // Convert RA/Dec to theta/phi
+    // theta: azimuth angle (RA increases eastward, but our theta goes opposite direction)
+    // phi: polar angle from +Y (dec=90° → phi=0, dec=0° → phi=π/2, dec=-90° → phi=π)
+    theta = (((-raRad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
+    phi = Math.PI / 2 - decRad;
+
+    // Clamp phi to valid range
+    phi = Math.max(0.001, Math.min(Math.PI - 0.001, phi));
+
+    updateCameraDirection();
+  }
+
   function dispose(): void {
     domElement.removeEventListener("mousedown", onMouseDown);
     domElement.removeEventListener("mousemove", onMouseMove);
@@ -343,6 +365,7 @@ export function createCelestialControls(
   const controlsApi: CelestialControls = {
     update,
     dispose,
+    lookAtRaDec,
     onFovChange: undefined,
   };
 
