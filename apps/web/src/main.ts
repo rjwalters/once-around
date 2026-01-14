@@ -104,32 +104,47 @@ function readUrlState(): UrlState {
 
 /**
  * Update URL parameters without creating history entries.
+ * Debounced to avoid "too many calls to History API" errors.
  */
+let urlUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
+let pendingUrlState: UrlState | null = null;
+
 function updateUrlState(state: UrlState): void {
-  const params = new URLSearchParams(window.location.search);
+  // Store the latest state
+  pendingUrlState = { ...pendingUrlState, ...state };
 
-  // Update or remove each parameter
-  if (state.ra !== undefined) {
-    params.set('ra', state.ra.toFixed(2));
-  }
-  if (state.dec !== undefined) {
-    params.set('dec', state.dec.toFixed(2));
-  }
-  if (state.fov !== undefined) {
-    params.set('fov', state.fov.toFixed(1));
-  }
-  if (state.t !== undefined) {
-    params.set('t', state.t);
-  }
-  if (state.mag !== undefined) {
-    params.set('mag', state.mag.toFixed(1));
+  // Debounce: only update URL after 500ms of inactivity
+  if (urlUpdateTimeout) {
+    clearTimeout(urlUpdateTimeout);
   }
 
-  // Preserve debug param if present
-  const debug = new URLSearchParams(window.location.search).get('debug');
+  urlUpdateTimeout = setTimeout(() => {
+    if (!pendingUrlState) return;
 
-  const newUrl = `${window.location.pathname}?${params.toString()}${debug !== null ? '' : ''}`;
-  window.history.replaceState(null, '', newUrl);
+    const params = new URLSearchParams(window.location.search);
+
+    // Update or remove each parameter
+    if (pendingUrlState.ra !== undefined) {
+      params.set('ra', pendingUrlState.ra.toFixed(2));
+    }
+    if (pendingUrlState.dec !== undefined) {
+      params.set('dec', pendingUrlState.dec.toFixed(2));
+    }
+    if (pendingUrlState.fov !== undefined) {
+      params.set('fov', pendingUrlState.fov.toFixed(1));
+    }
+    if (pendingUrlState.t !== undefined) {
+      params.set('t', pendingUrlState.t);
+    }
+    if (pendingUrlState.mag !== undefined) {
+      params.set('mag', pendingUrlState.mag.toFixed(1));
+    }
+
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState(null, '', newUrl);
+
+    pendingUrlState = null;
+  }, 500);
 }
 
 async function main(): Promise<void> {
