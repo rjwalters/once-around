@@ -23,11 +23,12 @@ function getBodyPositions(engine: SkyEngine): BodyPositions {
   const radius = SKY_RADIUS - 0.5;
 
   for (let i = 0; i < BODY_NAMES.length; i++) {
-    const x = bodyPositions[i * 3];
-    const y = bodyPositions[i * 3 + 1];
-    const z = bodyPositions[i * 3 + 2];
-    // Normalize and scale to sky sphere radius
-    const pos = new THREE.Vector3(x, y, z).normalize().multiplyScalar(radius);
+    // Rust coords: X → RA=0, Y → RA=90°, Z → north pole
+    const rustX = bodyPositions[i * 3];
+    const rustY = bodyPositions[i * 3 + 1];
+    const rustZ = bodyPositions[i * 3 + 2];
+    // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
+    const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
     positions.set(BODY_NAMES[i], pos);
   }
 
@@ -660,7 +661,21 @@ async function main(): Promise<void> {
 
   // Navigate to a search result
   function navigateToResult(result: SearchResult): void {
-    controls.animateToRaDec(result.ra, result.dec, 1000);
+    let ra = result.ra;
+    let dec = result.dec;
+
+    // For planets, get current position (they move with time)
+    if (result.type === 'planet') {
+      const currentBodyPositions = getBodyPositions(engine);
+      const pos = currentBodyPositions.get(result.name);
+      if (pos) {
+        const coords = positionToRaDec(pos);
+        ra = coords.ra;
+        dec = coords.dec;
+      }
+    }
+
+    controls.animateToRaDec(ra, dec, 1000);
     hideSearchResults();
     if (searchInput) {
       searchInput.value = '';
