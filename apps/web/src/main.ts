@@ -51,6 +51,87 @@ function positionToRaDec(pos: THREE.Vector3): { ra: number; dec: number } {
   return { ra, dec };
 }
 
+/**
+ * URL parameter state for shareable links.
+ */
+interface UrlState {
+  ra?: number;
+  dec?: number;
+  fov?: number;
+  t?: string; // ISO 8601 datetime
+  mag?: number;
+}
+
+/**
+ * Read state from URL parameters.
+ */
+function readUrlState(): UrlState {
+  const params = new URLSearchParams(window.location.search);
+  const state: UrlState = {};
+
+  const ra = params.get('ra');
+  if (ra !== null) {
+    const val = parseFloat(ra);
+    if (!isNaN(val) && val >= 0 && val < 360) state.ra = val;
+  }
+
+  const dec = params.get('dec');
+  if (dec !== null) {
+    const val = parseFloat(dec);
+    if (!isNaN(val) && val >= -90 && val <= 90) state.dec = val;
+  }
+
+  const fov = params.get('fov');
+  if (fov !== null) {
+    const val = parseFloat(fov);
+    if (!isNaN(val) && val >= 0.5 && val <= 100) state.fov = val;
+  }
+
+  const t = params.get('t');
+  if (t !== null) {
+    const date = new Date(t);
+    if (!isNaN(date.getTime())) state.t = t;
+  }
+
+  const mag = params.get('mag');
+  if (mag !== null) {
+    const val = parseFloat(mag);
+    if (!isNaN(val) && val >= -1 && val <= 12) state.mag = val;
+  }
+
+  return state;
+}
+
+/**
+ * Update URL parameters without creating history entries.
+ */
+function updateUrlState(state: UrlState): void {
+  const params = new URLSearchParams(window.location.search);
+
+  // Update or remove each parameter
+  if (state.ra !== undefined) {
+    params.set('ra', state.ra.toFixed(2));
+  }
+  if (state.dec !== undefined) {
+    params.set('dec', state.dec.toFixed(2));
+  }
+  if (state.fov !== undefined) {
+    params.set('fov', state.fov.toFixed(1));
+  }
+  if (state.t !== undefined) {
+    params.set('t', state.t);
+  }
+  if (state.mag !== undefined) {
+    params.set('mag', state.mag.toFixed(1));
+  }
+
+  // Preserve debug param if present
+  const debug = new URLSearchParams(window.location.search).get('debug');
+
+  const newUrl = `${window.location.pathname}?${params.toString()}${debug !== null ? '' : ''}`;
+  window.history.replaceState(null, '', newUrl);
+}
+
 async function main(): Promise<void> {
   console.log("Initializing Once Around...");
 
@@ -80,20 +161,50 @@ async function main(): Promise<void> {
     renderer.renderer.domElement
   );
 
-  // Restore camera state from settings
-  controls.setCameraState({
-    quaternion: settings.cameraQuaternion,
-    fov: settings.fov,
-  });
+  // Read URL state (takes precedence over localStorage)
+  const urlState = readUrlState();
+  const hasUrlState = urlState.ra !== undefined || urlState.dec !== undefined;
 
-  // Initial render from engine (pass saved FOV for consistent LOD)
-  renderer.updateFromEngine(engine, settings.fov);
+  // Restore camera state from settings or URL
+  if (hasUrlState && urlState.ra !== undefined && urlState.dec !== undefined) {
+    // URL has position - set FOV first, then look at RA/Dec
+    const fov = urlState.fov ?? settings.fov;
+    controls.setCameraState({
+      quaternion: settings.cameraQuaternion, // Start with saved quaternion (will be overwritten)
+      fov,
+    });
+    controls.lookAtRaDec(urlState.ra, urlState.dec);
+  } else {
+    // Use saved settings
+    controls.setCameraState({
+      quaternion: settings.cameraQuaternion,
+      fov: urlState.fov ?? settings.fov,
+    });
+  }
 
-  // Save camera changes (debounced)
+  // Initial render from engine (pass FOV for consistent LOD)
+  const initialFov = urlState.fov ?? settings.fov;
+  renderer.updateFromEngine(engine, initialFov);
+
+  // Track current RA/Dec for URL updates
+  let currentRaDec = { ra: 0, dec: 0 };
+
+  // Save camera changes (debounced) and update URL
   controls.onCameraChange = () => {
     const state = controls.getCameraState();
     settingsSaver.save({
       cameraQuaternion: state.quaternion,
+      fov: state.fov,
+    });
+
+    // Compute current RA/Dec from camera direction
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quaternion);
+    currentRaDec = positionToRaDec(direction);
+
+    // Update URL with current view state
+    updateUrlState({
+      ra: currentRaDec.ra,
+      dec: currentRaDec.dec,
       fov: state.fov,
     });
   };
@@ -134,10 +245,11 @@ async function main(): Promise<void> {
   const datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
   const magnitudeInput = document.getElementById("magnitude") as HTMLInputElement | null;
 
-  // Restore datetime from settings
-  if (datetimeInput && settings.datetime) {
+  // Restore datetime from URL or settings (URL takes precedence)
+  const initialDateStr = urlState.t ?? settings.datetime;
+  if (datetimeInput && initialDateStr) {
     try {
-      const savedDate = new Date(settings.datetime);
+      const savedDate = new Date(initialDateStr);
       if (!isNaN(savedDate.getTime())) {
         // Convert to local datetime string for input
         const year = savedDate.getFullYear();
@@ -154,10 +266,11 @@ async function main(): Promise<void> {
     }
   }
 
-  // Restore magnitude from settings
+  // Restore magnitude from URL or settings (URL takes precedence)
+  const initialMag = urlState.mag ?? settings.magnitude;
   if (magnitudeInput) {
-    magnitudeInput.value = String(settings.magnitude);
-    engine.set_mag_limit(settings.magnitude);
+    magnitudeInput.value = String(initialMag);
+    engine.set_mag_limit(initialMag);
     engine.recompute();
   }
 
@@ -283,6 +396,8 @@ async function main(): Promise<void> {
         void renderer.computeOrbits(engine, currentDate);
       }
       settingsSaver.save({ datetime: date.toISOString() });
+      // Update URL with new time
+      updateUrlState({ t: date.toISOString() });
     },
     onMagnitudeChange: (mag: number) => {
       engine.set_mag_limit(mag);
@@ -291,6 +406,8 @@ async function main(): Promise<void> {
       renderer.setMilkyWayVisibility(mag);
       updateRenderedStars();
       settingsSaver.save({ magnitude: mag });
+      // Update URL with new magnitude
+      updateUrlState({ mag });
     },
   });
 
