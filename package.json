@@ -8,7 +8,8 @@
     "build": "pnpm --filter once-around-web build",
     "build:wasm": "pnpm --filter once-around-web build:wasm",
     "build:all": "pnpm --filter once-around-web build:all",
-    "deploy": "pnpm --filter once-around-web deploy",
+    "deploy:preview": "pnpm --filter once-around-web deploy:preview",
+    "deploy:prod": "pnpm --filter once-around-web deploy:prod",
     "deploy:all": "pnpm --filter once-around-web deploy:all",
     "preview": "pnpm --filter once-around-web preview",
     "test": "echo \"Error: no test specified\" && exit 1"
