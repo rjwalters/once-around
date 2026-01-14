@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 
 // Video placement data structure
 export interface VideoPlacement {
@@ -36,10 +35,53 @@ function createRingGeometry(innerRadius: number, outerRadius: number, segments: 
   return geometry;
 }
 
+// Create a text sprite using canvas
+function createTextSprite(text: string, color: string = "#b366ff"): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d")!;
+
+  // Set canvas size (power of 2 for better texture handling)
+  canvas.width = 512;
+  canvas.height = 64;
+
+  // Configure text style
+  context.font = "bold 32px -apple-system, BlinkMacSystemFont, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+
+  // Draw text shadow for better visibility
+  context.fillStyle = "rgba(0, 0, 0, 0.8)";
+  context.fillText(text, canvas.width / 2 + 2, canvas.height / 2 + 2);
+
+  // Draw text
+  context.fillStyle = color;
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  // Create texture and sprite
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+
+  const sprite = new THREE.Sprite(material);
+
+  // Scale sprite to reasonable size (width based on text length, height proportional)
+  const aspectRatio = canvas.width / canvas.height;
+  const spriteHeight = 1.2;
+  sprite.scale.set(spriteHeight * aspectRatio, spriteHeight, 1);
+
+  return sprite;
+}
+
 export interface VideoMarkersLayer {
   group: THREE.Group;
   markers: Map<string, THREE.Mesh>;
-  labels: Map<string, CSS2DObject>;
+  labels: Map<string, THREE.Sprite>;
   setVisible(visible: boolean): void;
   setLabelsVisible(visible: boolean): void;
   getVideoAtPosition(raycaster: THREE.Raycaster): VideoPlacement | null;
@@ -47,7 +89,7 @@ export interface VideoMarkersLayer {
 
 export async function createVideoMarkersLayer(
   scene: THREE.Scene,
-  onVideoClick: (video: VideoPlacement) => void
+  _onVideoClick: (video: VideoPlacement) => void
 ): Promise<VideoMarkersLayer> {
   // Load video placements
   const response = await fetch("/videos.json");
@@ -67,7 +109,7 @@ export async function createVideoMarkersLayer(
 
   // Store markers and labels for raycasting
   const markers = new Map<string, THREE.Mesh>();
-  const labels = new Map<string, CSS2DObject>();
+  const labels = new Map<string, THREE.Sprite>();
   const videoDataMap = new Map<string, VideoPlacement>();
 
   // Create marker material (visible ring)
@@ -86,7 +128,7 @@ export async function createVideoMarkersLayer(
     opacity: 0.0, // Invisible
   });
 
-  // Create ring geometry for visual display (inner 0.475, outer 0.625 = thickness 0.15)
+  // Create ring geometry for visual display
   const ringGeometry = createRingGeometry(0.475, 0.625, 24);
   // Create larger circle for hit detection
   const hitGeometry = new THREE.CircleGeometry(1.2, 24);
@@ -111,12 +153,9 @@ export async function createVideoMarkersLayer(
     videoDataMap.set(video.id, video);
     group.add(marker);
 
-    // Create label - offset position "downward" on the sphere so it appears below the ring
-    // This offset scales naturally with zoom since it's in 3D space
-    const labelDiv = document.createElement("div");
-    labelDiv.className = "video-label";
-    labelDiv.textContent = video.object || video.title;
-    const label = new CSS2DObject(labelDiv);
+    // Create label sprite - positioned below the ring
+    const labelText = video.object || video.title;
+    const labelSprite = createTextSprite(labelText);
 
     // Calculate "down" direction on the sphere's surface at this position
     const radial = position.clone().normalize();
@@ -125,12 +164,12 @@ export async function createVideoMarkersLayer(
     const down = new THREE.Vector3().crossVectors(radial, east).normalize();
 
     // Offset the label position downward on the sphere
-    const labelOffset = 1.8; // Units on the sky sphere
+    const labelOffset = 1.5; // Units on the sky sphere
     const labelPosition = position.clone().add(down.multiplyScalar(labelOffset));
-    label.position.copy(labelPosition);
+    labelSprite.position.copy(labelPosition);
 
-    labels.set(video.id, label);
-    labelsGroup.add(label);
+    labels.set(video.id, labelSprite);
+    labelsGroup.add(labelSprite);
   }
 
   // Setup click handling
