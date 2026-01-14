@@ -11,6 +11,10 @@ import { loadSettings, createSettingsSaver } from "./settings";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import type { SkyEngine } from "./wasm/sky_engine";
 
+// Build-time constants injected by Vite
+declare const __BUILD_TIME__: string;
+declare const __GIT_COMMIT__: string;
+
 // Body names in the order they appear in the position buffer
 const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
 const SKY_RADIUS = 50;
@@ -769,6 +773,19 @@ async function main(): Promise<void> {
         aboutModal.classList.add("hidden");
       }
     });
+  }
+
+  // Populate build info
+  const buildInfo = document.getElementById("build-info");
+  if (buildInfo) {
+    const buildDate = new Date(__BUILD_TIME__).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    buildInfo.textContent = `Build: ${buildDate} (${__GIT_COMMIT__})`;
   }
 
   // ---------------------------------------------------------------------------

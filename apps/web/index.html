@@ -446,6 +446,12 @@
         text-align: center;
       }
 
+      .build-info {
+        color: #555;
+        font-family: monospace;
+        font-size: 10px;
+      }
+
       /* Star info modal */
       .star-modal {
         position: fixed;
@@ -1236,7 +1242,8 @@
         </div>
 
         <div class="about-footer">
-          Built with Three.js and Rust/WebAssembly
+          Built with Three.js and Rust/WebAssembly<br>
+          <span id="build-info" class="build-info"></span>
         </div>
       </div>
     </div>
