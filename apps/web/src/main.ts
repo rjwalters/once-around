@@ -428,8 +428,11 @@ async function main(): Promise<void> {
       stopPlayback(); // Stop any time playback
 
       // Get current date from datetime input or use now
+      // Add 1 minute buffer to avoid re-selecting the same eclipse
+      // (datetime-local input truncates seconds, so we need this offset)
       const currentTime = datetimeInput?.value ? new Date(datetimeInput.value) : new Date();
-      const nextEclipse = getNextTotalSolarEclipse(currentTime);
+      const searchTime = new Date(currentTime.getTime() + 60 * 1000); // +1 minute
+      const nextEclipse = getNextTotalSolarEclipse(searchTime);
 
       if (nextEclipse) {
         const eclipseDate = new Date(nextEclipse.datetime);
