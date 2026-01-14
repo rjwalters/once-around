@@ -455,13 +455,19 @@
 
     <div id="info">Drag to look around | Scroll to zoom | L=labels C=constellations V=videos Space=galactic center</div>
 
-    <div id="debug">
+    <!-- Debug panel: add ?debug to URL to show -->
+    <div id="debug" style="display: none;">
       <div>View: θ=<span id="dbg-theta">0</span>° φ=<span id="dbg-phi">0</span>°</div>
       <div>Mouse down: (<span id="dbg-start-x">-</span>, <span id="dbg-start-y">-</span>)</div>
       <div>Mouse delta: (<span id="dbg-dx">-</span>, <span id="dbg-dy">-</span>)</div>
       <div>Angular Δ: θ=<span id="dbg-dtheta">-</span>° φ=<span id="dbg-dphi">-</span>°</div>
       <div>FOV: <span id="dbg-fov">60</span>°</div>
     </div>
+    <script>
+      if (window.location.search.includes('debug')) {
+        document.getElementById('debug').style.display = 'block';
+      }
+    </script>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
