@@ -279,6 +279,13 @@ async function main(): Promise<void> {
   // Tour System
   // ============================================================================
 
+  // Location manager holder - set later when locationManager is created
+  // This allows tour callbacks to reference the location manager
+  let locationManagerRef: {
+    getLocation: () => { latitude: number; longitude: number; name?: string };
+    setLocation: (location: { latitude: number; longitude: number; name?: string }) => void;
+  } | null = null;
+
   // Helper to update time and trigger all necessary updates
   function setTimeForTour(date: Date): void {
     applyTimeToEngine(engine, date);
@@ -357,6 +364,17 @@ async function main(): Promise<void> {
       }
 
       return positionToRaDec(pos);
+    },
+    setLocation: (latitude: number, longitude: number, name?: string) => {
+      if (locationManagerRef) {
+        locationManagerRef.setLocation({ latitude, longitude, name });
+      }
+    },
+    getLocation: () => {
+      if (locationManagerRef) {
+        return locationManagerRef.getLocation();
+      }
+      return { latitude: settings.observerLatitude, longitude: settings.observerLongitude };
     },
     onStateChange: (state: TourPlaybackState) => {
       updateTourUI(state);
@@ -1046,6 +1064,9 @@ async function main(): Promise<void> {
       },
     }
   );
+
+  // Wire up location manager for tour system
+  locationManagerRef = locationManager;
 
   function updateLocationDisplay(location: ObserverLocation): void {
     if (locationNameEl) {

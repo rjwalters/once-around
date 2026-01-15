@@ -11,29 +11,35 @@ import type { TourDefinition } from './tour';
  *
  * Watch the April 8, 2024 total solar eclipse from partial phase through totality.
  * Greatest eclipse occurs at 18:17:16 UTC with 4m28s of totality.
+ * Viewed from Dallas, Texas (32.78°N, 96.80°W) on the path of totality.
  *
  * Sun position on April 8: RA ~17°, Dec ~7°
  */
 export const ECLIPSE_2024_TOUR: TourDefinition = {
   id: 'eclipse-2024',
   name: '2024 Total Solar Eclipse',
-  description: 'Watch the April 8, 2024 eclipse from partial phase through totality',
+  description: 'Watch the April 8, 2024 eclipse from Dallas, Texas',
   keyframes: [
     {
       // Start: 45 minutes before totality, wide view
-      ra: 17.5,
-      dec: 7.2,
+      // Position computed dynamically - tracks the Sun
+      // Sets observer to Dallas, Texas on the path of totality
+      target: 'sun',
       fov: 40,
       datetime: '2024-04-08T17:32:16Z',
       holdDuration: 3000,
       transitionDuration: 1000,
       timeMode: 'instant',
-      caption: 'April 8, 2024 - The Great North American Eclipse begins...',
+      location: {
+        latitude: 32.78,
+        longitude: -96.80,
+        name: 'Dallas, Texas',
+      },
+      caption: 'April 8, 2024 - The Great North American Eclipse begins... (Viewing from Dallas, TX)',
     },
     {
       // 30 minutes before: partial eclipse underway, zoom in a bit
-      ra: 17.5,
-      dec: 7.2,
+      target: 'sun',
       fov: 15,
       datetime: '2024-04-08T17:47:16Z',
       holdDuration: 3000,
@@ -43,8 +49,7 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
     },
     {
       // 15 minutes before: more coverage
-      ra: 17.5,
-      dec: 7.2,
+      target: 'sun',
       fov: 8,
       datetime: '2024-04-08T18:02:16Z',
       holdDuration: 2500,
@@ -54,8 +59,7 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
     },
     {
       // 5 minutes before: zoomed in, approaching totality
-      ra: 17.5,
-      dec: 7.2,
+      target: 'sun',
       fov: 4,
       datetime: '2024-04-08T18:12:16Z',
       holdDuration: 2000,
@@ -65,8 +69,7 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
     },
     {
       // Maximum eclipse (totality)
-      ra: 17.5,
-      dec: 7.2,
+      target: 'sun',
       fov: 3,
       datetime: '2024-04-08T18:17:16Z',
       holdDuration: 5000,
@@ -76,8 +79,7 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
     },
     {
       // 2 minutes after totality peak
-      ra: 17.5,
-      dec: 7.2,
+      target: 'sun',
       fov: 3,
       datetime: '2024-04-08T18:19:30Z',
       holdDuration: 3000,
@@ -87,8 +89,7 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
     },
     {
       // 10 minutes after: Moon moving away
-      ra: 17.5,
-      dec: 7.2,
+      target: 'sun',
       fov: 8,
       datetime: '2024-04-08T18:27:16Z',
       holdDuration: 2500,
@@ -98,8 +99,7 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
     },
     {
       // Final view: wide shot, 30 minutes after
-      ra: 17.5,
-      dec: 7.2,
+      target: 'sun',
       fov: 30,
       datetime: '2024-04-08T18:47:16Z',
       holdDuration: 3000,
@@ -117,7 +117,8 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
  * (one complete Io orbit).
  *
  * Uses a date in mid-2024 when Jupiter is well-positioned.
- * Jupiter position June 15, 2024: RA ~65° (4h 20m), Dec ~21° (in Taurus)
+ * Jupiter position June 15, 2024: RA ~67.5° (4h 30m), Dec ~21.5° (in Taurus)
+ * Verified against JPL Horizons ephemeris.
  */
 export const JUPITER_MOONS_TOUR: TourDefinition = {
   id: 'jupiter-moons',
@@ -125,20 +126,19 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
   description: 'Watch the dance of Io, Europa, Ganymede, and Callisto',
   keyframes: [
     {
-      // Start: Jupiter in view
-      ra: 65,
-      dec: 21,
+      // Start: Jupiter in view, snap immediately to position
+      // Position computed dynamically from engine at keyframe datetime
+      target: 'jupiter',
       fov: 20,
       datetime: '2024-06-15T00:00:00Z',
       holdDuration: 3000,
-      transitionDuration: 1000,
+      transitionDuration: 0, // Instant snap to Jupiter
       timeMode: 'instant',
       caption: 'Jupiter and its four Galilean moons',
     },
     {
       // Zoom in to see moons clearly
-      ra: 65,
-      dec: 21,
+      target: 'jupiter',
       fov: 1.5,
       datetime: '2024-06-15T00:00:00Z',
       holdDuration: 3000,
@@ -148,8 +148,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     },
     {
       // +6 hours: Io has moved noticeably
-      ra: 65,
-      dec: 21,
+      target: 'jupiter',
       fov: 1.5,
       datetime: '2024-06-15T06:00:00Z',
       holdDuration: 2500,
@@ -159,8 +158,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     },
     {
       // +12 hours
-      ra: 65,
-      dec: 21,
+      target: 'jupiter',
       fov: 1.5,
       datetime: '2024-06-15T12:00:00Z',
       holdDuration: 2500,
@@ -170,8 +168,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     },
     {
       // +18 hours
-      ra: 65,
-      dec: 21,
+      target: 'jupiter',
       fov: 1.5,
       datetime: '2024-06-15T18:00:00Z',
       holdDuration: 2500,
@@ -181,8 +178,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     },
     {
       // +24 hours
-      ra: 65,
-      dec: 21,
+      target: 'jupiter',
       fov: 1.5,
       datetime: '2024-06-16T00:00:00Z',
       holdDuration: 2500,
@@ -192,8 +188,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     },
     {
       // +36 hours
-      ra: 65,
-      dec: 21,
+      target: 'jupiter',
       fov: 1.5,
       datetime: '2024-06-16T12:00:00Z',
       holdDuration: 2500,
@@ -203,8 +198,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     },
     {
       // +42 hours: Io completes one orbit
-      ra: 65,
-      dec: 21,
+      target: 'jupiter',
       fov: 1.5,
       datetime: '2024-06-16T18:00:00Z',
       holdDuration: 4000,

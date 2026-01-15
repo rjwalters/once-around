@@ -10,14 +10,46 @@
 // ============================================================================
 
 /**
+ * Target body names that can be used in keyframes.
+ * These are resolved to RA/Dec at runtime based on the keyframe datetime.
+ */
+export type TargetBody =
+  | 'sun'
+  | 'moon'
+  | 'mercury'
+  | 'venus'
+  | 'mars'
+  | 'jupiter'
+  | 'saturn'
+  | 'uranus'
+  | 'neptune';
+
+/**
+ * Observer location for a keyframe.
+ */
+export interface TourLocation {
+  /** Latitude in degrees (-90 to +90) */
+  latitude: number;
+
+  /** Longitude in degrees (-180 to +180) */
+  longitude: number;
+
+  /** Optional location name for display */
+  name?: string;
+}
+
+/**
  * A single keyframe in a tour sequence.
  */
 export interface TourKeyframe {
-  /** Right Ascension in degrees (0-360) */
-  ra: number;
+  /** Right Ascension in degrees (0-360). Required if target is not specified. */
+  ra?: number;
 
-  /** Declination in degrees (-90 to +90) */
-  dec: number;
+  /** Declination in degrees (-90 to +90). Required if target is not specified. */
+  dec?: number;
+
+  /** Target body to point at. If specified, ra/dec are computed from the body's position at datetime. */
+  target?: TargetBody;
 
   /** Field of view in degrees (0.5-100) */
   fov: number;
@@ -33,6 +65,9 @@ export interface TourKeyframe {
 
   /** How time progresses during transition: 'instant' jumps, 'animate' interpolates */
   timeMode: 'instant' | 'animate';
+
+  /** Optional observer location. If specified, moves observer to this location. */
+  location?: TourLocation;
 
   /** Optional caption/annotation for this keyframe */
   caption?: string;
@@ -85,6 +120,14 @@ export interface TourPlaybackState {
 }
 
 /**
+ * Resolved position for a celestial body.
+ */
+export interface BodyPosition {
+  ra: number; // degrees
+  dec: number; // degrees
+}
+
+/**
  * Callbacks provided to the tour engine for integration.
  */
 export interface TourCallbacks {
@@ -99,6 +142,15 @@ export interface TourCallbacks {
 
   /** Set simulation time and trigger updates */
   setTime: (date: Date) => void;
+
+  /** Set observer location (lat/lon) */
+  setLocation?: (latitude: number, longitude: number, name?: string) => void;
+
+  /** Get current observer location */
+  getLocation?: () => TourLocation;
+
+  /** Resolve a body's position at a given datetime. Required if using target-based keyframes. */
+  resolveBodyPosition?: (target: TargetBody, datetime: Date) => BodyPosition;
 
   /** Called when playback state changes */
   onStateChange?: (state: TourPlaybackState) => void;
@@ -150,6 +202,34 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+/**
+ * Resolve a keyframe's RA/Dec position.
+ * If the keyframe has a target body, compute the position from the engine.
+ * Otherwise, use the explicit ra/dec values.
+ */
+function resolveKeyframePosition(
+  keyframe: TourKeyframe,
+  resolveBodyPosition?: (target: TargetBody, datetime: Date) => BodyPosition
+): { ra: number; dec: number } {
+  if (keyframe.target) {
+    if (!resolveBodyPosition) {
+      console.error(
+        `Tour keyframe has target '${keyframe.target}' but no resolveBodyPosition callback provided`
+      );
+      return { ra: keyframe.ra ?? 0, dec: keyframe.dec ?? 0 };
+    }
+    const datetime = new Date(keyframe.datetime);
+    return resolveBodyPosition(keyframe.target, datetime);
+  }
+
+  if (keyframe.ra === undefined || keyframe.dec === undefined) {
+    console.error('Tour keyframe must have either target or ra/dec specified');
+    return { ra: 0, dec: 0 };
+  }
+
+  return { ra: keyframe.ra, dec: keyframe.dec };
+}
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -171,12 +251,17 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
   let phase: 'hold' | 'transition' = 'transition';
   let segmentStartTime = 0;
 
-  // Interpolation state (for FOV and time)
+  // Interpolation state (for FOV, time, and location)
   let startFov = 60;
   let targetFov = 60;
   let startTime: Date = new Date();
   let targetTime: Date = new Date();
   let currentTimeMode: 'instant' | 'animate' = 'instant';
+
+  // Location interpolation state
+  let startLocation: TourLocation | null = null;
+  let targetLocation: TourLocation | null = null;
+  let hasLocationChange = false;
 
   // Track if we've started the camera animation for current transition
   let cameraAnimationStarted = false;
@@ -259,8 +344,27 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     targetTime = new Date(firstKeyframe.datetime);
     currentTimeMode = firstKeyframe.timeMode;
 
+    // Set up location interpolation
+    if (firstKeyframe.location && callbacks.setLocation) {
+      startLocation = callbacks.getLocation?.() ?? null;
+      targetLocation = firstKeyframe.location;
+      hasLocationChange = true;
+      // For first keyframe, set location immediately (no smooth transition from unknown start)
+      callbacks.setLocation(
+        targetLocation.latitude,
+        targetLocation.longitude,
+        targetLocation.name
+      );
+    } else {
+      hasLocationChange = false;
+      targetLocation = null;
+    }
+
+    // Resolve position (either from target body or explicit ra/dec)
+    const { ra, dec } = resolveKeyframePosition(firstKeyframe, callbacks.resolveBodyPosition);
+
     // Start camera animation
-    callbacks.animateToRaDec(firstKeyframe.ra, firstKeyframe.dec, firstKeyframe.transitionDuration);
+    callbacks.animateToRaDec(ra, dec, firstKeyframe.transitionDuration);
     cameraAnimationStarted = true;
 
     // If instant time mode, set time immediately
@@ -333,8 +437,22 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     targetTime = new Date(keyframe.datetime);
     currentTimeMode = keyframe.timeMode;
 
+    // Set up location interpolation
+    if (keyframe.location && callbacks.setLocation) {
+      startLocation = prevKeyframe?.location ?? callbacks.getLocation?.() ?? null;
+      targetLocation = keyframe.location;
+      hasLocationChange = true;
+    } else {
+      hasLocationChange = false;
+      startLocation = null;
+      targetLocation = null;
+    }
+
+    // Resolve position (either from target body or explicit ra/dec)
+    const { ra, dec } = resolveKeyframePosition(keyframe, callbacks.resolveBodyPosition);
+
     // Start camera animation
-    callbacks.animateToRaDec(keyframe.ra, keyframe.dec, keyframe.transitionDuration);
+    callbacks.animateToRaDec(ra, dec, keyframe.transitionDuration);
     cameraAnimationStarted = true;
 
     // If instant time mode, set time immediately
@@ -373,6 +491,14 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
         if (currentTimeMode === 'animate') {
           callbacks.setTime(targetTime);
         }
+        // Set location immediately for instant transitions
+        if (hasLocationChange && targetLocation && callbacks.setLocation) {
+          callbacks.setLocation(
+            targetLocation.latitude,
+            targetLocation.longitude,
+            targetLocation.name
+          );
+        }
         phase = 'hold';
         segmentStartTime = performance.now();
         notifyStateChange();
@@ -390,6 +516,23 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
       if (currentTimeMode === 'animate') {
         const newTime = lerpTime(startTime, targetTime, eased);
         callbacks.setTime(newTime);
+      }
+
+      // Interpolate location if changing
+      if (hasLocationChange && targetLocation && callbacks.setLocation) {
+        if (startLocation) {
+          // Smooth interpolation between locations
+          const newLat = lerp(startLocation.latitude, targetLocation.latitude, eased);
+          const newLon = lerp(startLocation.longitude, targetLocation.longitude, eased);
+          callbacks.setLocation(newLat, newLon, targetLocation.name);
+        } else {
+          // No start location, just set target
+          callbacks.setLocation(
+            targetLocation.latitude,
+            targetLocation.longitude,
+            targetLocation.name
+          );
+        }
       }
 
       // Check if transition complete
