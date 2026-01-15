@@ -333,6 +333,159 @@ pub fn compute_aberration(sun_lon: f64, obj_lon: f64, obj_lat: f64, jde: f64) ->
     }
 }
 
+/// Earth's equatorial radius in kilometers.
+const EARTH_RADIUS_KM: f64 = 6378.137;
+
+/// Compute Greenwich Mean Sidereal Time (GMST) for a given Julian Date (UT1).
+///
+/// Returns GMST in radians, normalized to [0, 2π).
+///
+/// Based on the IAU 2006 precession model. The formula gives GMST in degrees,
+/// which is then converted to radians.
+///
+/// # Arguments
+/// * `jd_ut1` - Julian Date in UT1 time scale
+///
+/// Reference: Meeus, Astronomical Algorithms, Chapter 12
+pub fn compute_gmst(jd_ut1: f64) -> f64 {
+    // Julian centuries from J2000.0
+    let t = (jd_ut1 - 2451545.0) / 36525.0;
+    let t2 = t * t;
+    let t3 = t2 * t;
+
+    // GMST at 0h UT in degrees (Meeus eq. 12.4)
+    // θ₀ = 280.46061837 + 360.98564736629 * (JD - 2451545.0)
+    //      + 0.000387933 * T² - T³/38710000
+    let gmst_deg = 280.46061837
+        + 360.98564736629 * (jd_ut1 - 2451545.0)
+        + 0.000387933 * t2
+        - t3 / 38710000.0;
+
+    // Normalize to [0, 360)
+    let gmst_deg = gmst_deg.rem_euclid(360.0);
+
+    // Convert to radians
+    gmst_deg * PI / 180.0
+}
+
+/// Compute Local Sidereal Time (LST) from GMST and observer longitude.
+///
+/// # Arguments
+/// * `gmst` - Greenwich Mean Sidereal Time in radians
+/// * `longitude_rad` - Observer's longitude in radians (positive = East)
+///
+/// # Returns
+/// LST in radians, normalized to [0, 2π)
+pub fn compute_lst(gmst: f64, longitude_rad: f64) -> f64 {
+    (gmst + longitude_rad).rem_euclid(2.0 * PI)
+}
+
+/// Topocentric correction values for parallax.
+pub struct TopocentricCorrection {
+    /// Correction to Right Ascension in radians
+    pub delta_ra: f64,
+    /// Correction to Declination in radians
+    pub delta_dec: f64,
+}
+
+/// Compute topocentric parallax correction for the Moon.
+///
+/// This corrects the geocentric (Earth-center) position to the topocentric
+/// (observer on Earth's surface) position. The Moon's horizontal parallax
+/// is about 57 arcminutes (~1°), making this correction essential for
+/// eclipse accuracy.
+///
+/// Based on Meeus, Astronomical Algorithms, Chapter 40.
+///
+/// # Arguments
+/// * `ra_rad` - Geocentric Right Ascension in radians
+/// * `dec_rad` - Geocentric Declination in radians
+/// * `distance_km` - Distance to the Moon in kilometers
+/// * `observer_lat_rad` - Observer's geodetic latitude in radians
+/// * `observer_lon_rad` - Observer's longitude in radians (positive = East)
+/// * `gmst` - Greenwich Mean Sidereal Time in radians
+///
+/// # Returns
+/// Corrections to apply to RA and Dec to get topocentric position
+pub fn compute_topocentric_correction(
+    ra_rad: f64,
+    dec_rad: f64,
+    distance_km: f64,
+    observer_lat_rad: f64,
+    observer_lon_rad: f64,
+    gmst: f64,
+) -> TopocentricCorrection {
+    // Compute the equatorial horizontal parallax
+    // π = arcsin(Earth_radius / distance)
+    let parallax = (EARTH_RADIUS_KM / distance_km).asin();
+
+    // Local Sidereal Time
+    let lst = compute_lst(gmst, observer_lon_rad);
+
+    // Hour angle: H = LST - RA
+    let hour_angle = lst - ra_rad;
+
+    // For a spherical Earth approximation (good enough for ~1" accuracy):
+    // ρ sin φ' ≈ sin φ  (geocentric latitude correction is small)
+    // ρ cos φ' ≈ cos φ
+    let sin_lat = observer_lat_rad.sin();
+    let cos_lat = observer_lat_rad.cos();
+
+    let sin_dec = dec_rad.sin();
+    let cos_dec = dec_rad.cos();
+    let sin_h = hour_angle.sin();
+    let cos_h = hour_angle.cos();
+
+    // Correction to RA (Meeus eq. 40.2)
+    // Δα = -π × cos(φ) × sin(H) / cos(δ)
+    let delta_ra = if cos_dec.abs() > 1e-10 {
+        -parallax * cos_lat * sin_h / cos_dec
+    } else {
+        0.0
+    };
+
+    // Correction to Dec (Meeus eq. 40.2)
+    // Δδ = -π × (sin(φ) × cos(δ) - cos(φ) × cos(H) × sin(δ))
+    let delta_dec = -parallax * (sin_lat * cos_dec - cos_lat * cos_h * sin_dec);
+
+    TopocentricCorrection { delta_ra, delta_dec }
+}
+
+/// Apply topocentric correction to get corrected RA/Dec.
+///
+/// # Arguments
+/// * `ra_rad` - Geocentric Right Ascension in radians
+/// * `dec_rad` - Geocentric Declination in radians
+/// * `distance_km` - Distance to the Moon in kilometers
+/// * `observer_lat_rad` - Observer's geodetic latitude in radians
+/// * `observer_lon_rad` - Observer's longitude in radians (positive = East)
+/// * `gmst` - Greenwich Mean Sidereal Time in radians
+///
+/// # Returns
+/// (topocentric_ra, topocentric_dec) in radians
+pub fn apply_topocentric_correction(
+    ra_rad: f64,
+    dec_rad: f64,
+    distance_km: f64,
+    observer_lat_rad: f64,
+    observer_lon_rad: f64,
+    gmst: f64,
+) -> (f64, f64) {
+    let correction = compute_topocentric_correction(
+        ra_rad,
+        dec_rad,
+        distance_km,
+        observer_lat_rad,
+        observer_lon_rad,
+        gmst,
+    );
+
+    let topo_ra = (ra_rad + correction.delta_ra).rem_euclid(2.0 * PI);
+    let topo_dec = dec_rad + correction.delta_dec;
+
+    (topo_ra, topo_dec)
+}
+
 /// Compute simplified aberration correction for the Sun.
 ///
 /// For the Sun, the aberration correction is particularly simple because

@@ -1,10 +1,12 @@
 use sky_engine_core::{
     catalog::StarCatalog,
+    coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, ra_dec_to_cartesian},
     minor_bodies::{compute_all_minor_body_positions, MinorBody},
     planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
     planets::{compute_all_body_positions_full, compute_moon_position_full, CelestialBody},
     time::SkyTime,
 };
+use std::f64::consts::PI;
 use wasm_bindgen::prelude::*;
 
 /// The main sky engine exposed to JavaScript.
@@ -14,6 +16,10 @@ pub struct SkyEngine {
     catalog: StarCatalog,
     time: SkyTime,
     mag_limit: f32,
+
+    // Observer location for topocentric corrections
+    observer_lat_rad: f64, // Latitude in radians (positive = North)
+    observer_lon_rad: f64, // Longitude in radians (positive = East)
 
     // Output buffers (owned by Rust, read by JS)
     stars_pos: Vec<f32>,  // x,y,z,x,y,z,... unit vectors (magnitude-filtered)
@@ -46,10 +52,16 @@ impl SkyEngine {
 
         let star_count = catalog.len();
 
+        // Default observer location: San Francisco (37.7749° N, 122.4194° W)
+        let default_lat_deg = 37.7749;
+        let default_lon_deg = -122.4194;
+
         let mut engine = SkyEngine {
             catalog,
             time: SkyTime::now(),
             mag_limit: 6.5, // Default: dark sky (naked eye limit)
+            observer_lat_rad: default_lat_deg * PI / 180.0,
+            observer_lon_rad: default_lon_deg * PI / 180.0,
             stars_pos: vec![0.0; star_count * 3],
             stars_meta: vec![0.0; star_count * 4], // vmag, bv, id, padding
             bodies_pos: vec![0.0; 9 * 3], // Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune
@@ -89,6 +101,27 @@ impl SkyEngine {
     /// Get the current magnitude limit.
     pub fn mag_limit(&self) -> f32 {
         self.mag_limit
+    }
+
+    /// Set the observer's location on Earth's surface.
+    /// This enables topocentric corrections for the Moon (parallax up to ~1°).
+    ///
+    /// # Arguments
+    /// * `lat_deg` - Latitude in degrees (-90 to +90, positive = North)
+    /// * `lon_deg` - Longitude in degrees (-180 to +180, positive = East)
+    pub fn set_observer_location(&mut self, lat_deg: f64, lon_deg: f64) {
+        self.observer_lat_rad = lat_deg * PI / 180.0;
+        self.observer_lon_rad = lon_deg * PI / 180.0;
+    }
+
+    /// Get the observer's latitude in degrees.
+    pub fn observer_lat(&self) -> f64 {
+        self.observer_lat_rad * 180.0 / PI
+    }
+
+    /// Get the observer's longitude in degrees.
+    pub fn observer_lon(&self) -> f64 {
+        self.observer_lon_rad * 180.0 / PI
     }
 
     /// Get total stars in catalog.
@@ -165,8 +198,36 @@ impl SkyEngine {
 
     fn recompute_bodies(&mut self) {
         let positions = compute_all_body_positions_full(&self.time);
+
+        // Compute GMST for topocentric corrections
+        let jd_ut1 = self.time.julian_date_utc(); // Close enough to UT1 for our purposes
+        let gmst = compute_gmst(jd_ut1);
+
         for (i, body_pos) in positions.iter().enumerate() {
-            let (x, y, z) = body_pos.direction.to_f32();
+            let direction = if i == 1 {
+                // Moon (index 1): Apply topocentric parallax correction
+                // This can shift the Moon's position by up to ~1° depending on observer location
+                let (ra, dec) = cartesian_to_ra_dec(&body_pos.direction);
+
+                // Get Moon distance from the full computation
+                let moon_pos = compute_moon_position_full(&self.time);
+
+                let (topo_ra, topo_dec) = apply_topocentric_correction(
+                    ra,
+                    dec,
+                    moon_pos.distance_km,
+                    self.observer_lat_rad,
+                    self.observer_lon_rad,
+                    gmst,
+                );
+
+                ra_dec_to_cartesian(topo_ra, topo_dec)
+            } else {
+                // Other bodies: use geocentric position (parallax is negligible)
+                body_pos.direction
+            };
+
+            let (x, y, z) = direction.to_f32();
             let idx = i * 3;
             self.bodies_pos[idx] = x;
             self.bodies_pos[idx + 1] = y;

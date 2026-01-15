@@ -741,6 +741,46 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const milkyWaySphere = new THREE.Mesh(milkyWayGeometry, milkyWayMaterial);
   scene.add(milkyWaySphere);
 
+  // ---------------------------------------------------------------------------
+  // Ground Plane / Earth for topocentric mode
+  // Shows horizon and Earth below when observer location is set
+  // ---------------------------------------------------------------------------
+  const GROUND_PLANE_RADIUS = SKY_RADIUS * 1.1; // Slightly beyond sky sphere
+
+  const groundPlaneGroup = new THREE.Group();
+  groundPlaneGroup.visible = false; // Start hidden
+  scene.add(groundPlaneGroup);
+
+  // Dark earth-colored disc
+  const groundGeometry = new THREE.CircleGeometry(GROUND_PLANE_RADIUS, 64);
+  const groundMaterial = new THREE.MeshBasicMaterial({
+    color: 0x1a2a1a, // Dark earth green
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95,
+    depthTest: false, // Render as overlay
+  });
+  const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+  groundPlaneGroup.add(groundMesh);
+
+  // Horizon ring for visual emphasis
+  const horizonRingGeometry = new THREE.RingGeometry(
+    GROUND_PLANE_RADIUS - 0.5,
+    GROUND_PLANE_RADIUS,
+    64
+  );
+  const horizonRingMaterial = new THREE.MeshBasicMaterial({
+    color: 0x4a6a4a, // Slightly brighter ring
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.8,
+  });
+  const horizonRing = new THREE.Mesh(horizonRingGeometry, horizonRingMaterial);
+  groundPlaneGroup.add(horizonRing);
+
+  // Track current observer latitude for ground plane orientation
+  let currentObserverLatitude = 0;
+
   const camera = new THREE.PerspectiveCamera(
     60,
     container.clientWidth / container.clientHeight,

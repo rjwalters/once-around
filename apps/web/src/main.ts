@@ -222,6 +222,9 @@ async function main(): Promise<void> {
   const settings = loadSettings();
   const settingsSaver = createSettingsSaver();
 
+  // Set initial observer location for topocentric Moon corrections
+  engine.set_observer_location(settings.observerLatitude, settings.observerLongitude);
+
   // Create Three.js renderer
   const renderer = createRenderer(container);
 
@@ -956,6 +959,8 @@ async function main(): Promise<void> {
       onLocationChange: (location: ObserverLocation) => {
         // Update UI
         updateLocationDisplay(location);
+        // Update engine's observer location (for topocentric Moon correction)
+        engine.set_observer_location(location.latitude, location.longitude);
         // Save to settings
         settingsSaver.save({
           observerLatitude: location.latitude,
