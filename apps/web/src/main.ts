@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createEngine, getBodiesPositionBuffer } from "./engine";
+import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
@@ -18,15 +18,19 @@ declare const __GIT_COMMIT__: string;
 
 // Body names in the order they appear in the position buffer
 const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
+// Minor body names in the order they appear in the minor bodies buffer
+const MINOR_BODY_NAMES = ["Pluto"];
 const SKY_RADIUS = 50;
 
 // Build a map of body names to their current 3D positions
 function getBodyPositions(engine: SkyEngine): BodyPositions {
   const bodyPositions = getBodiesPositionBuffer(engine);
+  const minorBodies = getMinorBodiesBuffer(engine);
   const positions: BodyPositions = new Map();
   // Use SKY_RADIUS - 0.5 to match video marker positioning
   const radius = SKY_RADIUS - 0.5;
 
+  // Add major bodies (Sun, Moon, planets)
   for (let i = 0; i < BODY_NAMES.length; i++) {
     // Rust coords: X → RA=0, Y → RA=90°, Z → north pole
     const rustX = bodyPositions[i * 3];
@@ -35,6 +39,17 @@ function getBodyPositions(engine: SkyEngine): BodyPositions {
     // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
     const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
     positions.set(BODY_NAMES[i], pos);
+  }
+
+  // Add minor bodies (Pluto, dwarf planets)
+  // Minor bodies buffer: 4 floats per body (x, y, z, angular_diameter)
+  for (let i = 0; i < MINOR_BODY_NAMES.length; i++) {
+    const rustX = minorBodies[i * 4];
+    const rustY = minorBodies[i * 4 + 1];
+    const rustZ = minorBodies[i * 4 + 2];
+    // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
+    const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
+    positions.set(MINOR_BODY_NAMES[i], pos);
   }
 
   return positions;

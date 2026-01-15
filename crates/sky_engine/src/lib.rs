@@ -1,5 +1,6 @@
 use sky_engine_core::{
     catalog::StarCatalog,
+    minor_bodies::{compute_all_minor_body_positions, MinorBody},
     planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
     planets::{compute_all_body_positions_full, compute_moon_position_full, CelestialBody},
     time::SkyTime,
@@ -20,6 +21,7 @@ pub struct SkyEngine {
     bodies_pos: Vec<f32>, // 9 celestial bodies * 3 coords = 27 floats (Sun, Moon, 7 planets)
     bodies_angular_diameters: Vec<f32>, // 9 angular diameters in radians
     planetary_moons_pos: Vec<f32>, // 10 moons * 4 floats (x, y, z, angular_diam) = 40
+    minor_bodies_pos: Vec<f32>, // N minor bodies * 4 floats (x, y, z, angular_diam)
 
     // All star positions for constellation line drawing (not magnitude-filtered)
     all_stars_pos: Vec<f32>,  // x,y,z for ALL stars in catalog
@@ -53,6 +55,7 @@ impl SkyEngine {
             bodies_pos: vec![0.0; 9 * 3], // Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune
             bodies_angular_diameters: vec![0.0; 9], // Angular diameters for each body
             planetary_moons_pos: vec![0.0; 10 * 4], // 4 Jupiter moons + 6 Saturn moons
+            minor_bodies_pos: vec![0.0; MinorBody::ALL.len() * 4], // Pluto (dwarf planets)
             all_stars_pos: vec![0.0; star_count * 3],
             all_stars_meta: vec![0.0; star_count * 4],
             visible_count: 0,
@@ -104,6 +107,7 @@ impl SkyEngine {
         self.recompute_stars();
         self.recompute_bodies();
         self.recompute_planetary_moons();
+        self.recompute_minor_bodies();
     }
 
     /// Add more stars to the catalog from binary data.
@@ -180,6 +184,18 @@ impl SkyEngine {
             self.planetary_moons_pos[idx + 1] = y;
             self.planetary_moons_pos[idx + 2] = z;
             self.planetary_moons_pos[idx + 3] = moon_pos.angular_diameter_rad as f32;
+        }
+    }
+
+    fn recompute_minor_bodies(&mut self) {
+        let positions = compute_all_minor_body_positions(&self.time);
+        for (i, body_pos) in positions.iter().enumerate() {
+            let (x, y, z) = body_pos.direction.to_f32();
+            let idx = i * 4;
+            self.minor_bodies_pos[idx] = x;
+            self.minor_bodies_pos[idx + 1] = y;
+            self.minor_bodies_pos[idx + 2] = z;
+            self.minor_bodies_pos[idx + 3] = body_pos.angular_diameter_rad as f32;
         }
     }
 
@@ -293,6 +309,31 @@ impl SkyEngine {
     /// 4-9: Saturn's moons (Mimas, Enceladus, Tethys, Dione, Rhea, Titan)
     pub fn planetary_moon_name(&self, index: usize) -> Option<String> {
         PlanetaryMoon::ALL.get(index).map(|m| m.name().to_string())
+    }
+
+    // --- Minor bodies buffer accessors (dwarf planets, asteroids, etc.) ---
+
+    /// Get pointer to minor bodies position buffer.
+    /// N bodies * 4 floats (x, y, z, angular_diameter).
+    /// Currently: Pluto (index 0)
+    pub fn minor_bodies_pos_ptr(&self) -> *const f32 {
+        self.minor_bodies_pos.as_ptr()
+    }
+
+    /// Get length of minor bodies position buffer.
+    pub fn minor_bodies_pos_len(&self) -> usize {
+        self.minor_bodies_pos.len()
+    }
+
+    /// Get the total number of minor bodies.
+    pub fn minor_bodies_count(&self) -> usize {
+        MinorBody::ALL.len()
+    }
+
+    /// Get minor body name by index.
+    /// Currently: 0 = Pluto
+    pub fn minor_body_name(&self, index: usize) -> Option<String> {
+        MinorBody::ALL.get(index).map(|b| b.name().to_string())
     }
 
     // --- All stars buffer accessors (for constellation drawing, not magnitude-filtered) ---

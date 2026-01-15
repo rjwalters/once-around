@@ -196,3 +196,15 @@ export function getAllStarsMetaBuffer(engine: SkyEngine): Float32Array {
   const len = engine.all_stars_meta_len();
   return new Float32Array(memory.buffer, ptr, len);
 }
+
+/**
+ * Create a Float32Array view into the minor bodies position buffer.
+ * N bodies * 4 floats (x, y, z, angular_diameter).
+ * Currently: Pluto (index 0)
+ */
+export function getMinorBodiesBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.minor_bodies_pos_ptr();
+  const len = engine.minor_bodies_pos_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}

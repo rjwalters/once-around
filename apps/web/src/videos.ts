@@ -38,6 +38,7 @@ function matchVideoToBody(objectName: string): string | null {
     saturn: "Saturn",
     uranus: "Uranus",
     neptune: "Neptune",
+    pluto: "Pluto",
   };
 
   for (const [key, bodyName] of Object.entries(exactMatches)) {
@@ -55,7 +56,7 @@ function matchVideoToBody(objectName: string): string | null {
     if (planet === "jupiter") return "Jupiter";
     if (planet === "saturn") return "Saturn";
     if (planet === "uranus") return "Uranus";
-    // Pluto not in our body list
+    if (planet === "pluto") return "Pluto";
   }
 
   // Special cases for specific moons

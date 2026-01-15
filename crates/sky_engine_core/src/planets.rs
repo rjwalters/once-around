@@ -117,7 +117,7 @@ impl CelestialBody {
 
 /// Compute heliocentric position of a planet using VSOP87A.
 /// Returns (x, y, z) in AU, ecliptic coordinates.
-fn heliocentric_position(planet: Planet, jde: f64) -> (f64, f64, f64) {
+pub fn heliocentric_position(planet: Planet, jde: f64) -> (f64, f64, f64) {
     let coords = match planet {
         Planet::Mercury => vsop87a::mercury(jde),
         Planet::Venus => vsop87a::venus(jde),
