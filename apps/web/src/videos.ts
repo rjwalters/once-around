@@ -30,6 +30,7 @@ function matchVideoToBody(objectName: string): string | null {
   const lowerName = objectName.toLowerCase();
 
   // Exact matches (case-insensitive)
+  // Planets
   const exactMatches: Record<string, string> = {
     mercury: "Mercury",
     venus: "Venus",
@@ -38,7 +39,17 @@ function matchVideoToBody(objectName: string): string | null {
     saturn: "Saturn",
     uranus: "Uranus",
     neptune: "Neptune",
+    // Dwarf planets and TNOs
     pluto: "Pluto",
+    ceres: "Ceres",
+    eris: "Eris",
+    makemake: "Makemake",
+    haumea: "Haumea",
+    sedna: "Sedna",
+    quaoar: "Quaoar",
+    gonggong: "Gonggong",
+    orcus: "Orcus",
+    varuna: "Varuna",
   };
 
   for (const [key, bodyName] of Object.entries(exactMatches)) {
@@ -57,13 +68,20 @@ function matchVideoToBody(objectName: string): string | null {
     if (planet === "saturn") return "Saturn";
     if (planet === "uranus") return "Uranus";
     if (planet === "pluto") return "Pluto";
+    if (planet === "haumea") return "Haumea";
+    if (planet === "eris") return "Eris"; // Dysnomia
+    if (planet === "quaoar") return "Quaoar"; // Weywot
+    if (planet === "orcus") return "Orcus"; // Vanth
+    if (planet === "gonggong") return "Gonggong"; // Xiangliu
   }
 
   // Special cases for specific moons
   if (lowerName === "triton") return "Neptune"; // Triton is Neptune's moon
   if (lowerName === "janus and epimetheus") return "Saturn"; // Saturn's moons
   if (lowerName === "the ice giants") return "Uranus"; // Pick Uranus for ice giants
-  if (lowerName === "ceres") return "Mars"; // Ceres is in asteroid belt, closest to Mars
+  if (lowerName === "dysnomia") return "Eris"; // Eris's moon
+  if (lowerName === "charon") return "Pluto"; // Pluto's large moon
+  if (lowerName === "vanth") return "Orcus"; // Orcus's moon
 
   return null;
 }

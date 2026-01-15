@@ -30,19 +30,6 @@ Use `history.replaceState()` to update URL as user navigates without creating hi
 
 ## Medium Priority
 
-### Dwarf Planet & TNO Ephemeris
-Add orbital elements for dwarf planets and trans-Neptunian objects to enable video positioning:
-
-**High value targets** (have Once Around videos):
-- Pluto (+ moons video)
-- Ceres
-- Eris
-- Makemake
-- Haumea
-- Quaoar, Gonggong, Orcus, Varuna, Sedna
-
-Implementation: Simple Kepler orbits using JPL orbital elements. Would enable ~12-15 videos.
-
 ### Additional Planet Moons
 Expand planetary moon support beyond current Jupiter (4) and Saturn (6) moons:
 
@@ -102,6 +89,8 @@ Add `manifest.json` and service worker for:
 - [x] Saturn moon orbital plane fix (27° tilt now properly rendered)
 - [x] Jupiter moon orbital plane fix (3° tilt)
 - [x] Saturn moons: Mimas, Enceladus, Tethys, Dione, Rhea, Titan
+- [x] Dwarf planets: Pluto, Ceres, Eris, Makemake, Haumea
+- [x] TNOs: Sedna, Quaoar, Gonggong, Orcus, Varuna
 
 ## Not Planned
 

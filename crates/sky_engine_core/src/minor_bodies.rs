@@ -62,7 +62,7 @@ impl OrbitalElements {
 }
 
 // =============================================================================
-// Dwarf Planets - Orbital elements from JPL Horizons
+// Dwarf Planets - Orbital elements from JPL Horizons / Small-Body Database
 // =============================================================================
 
 /// Pluto - dwarf planet, former 9th planet
@@ -79,15 +79,161 @@ pub const PLUTO: OrbitalElements = OrbitalElements::from_degrees(
     1188.3,             // Mean radius (km)
 );
 
+/// Ceres - largest object in asteroid belt, dwarf planet
+/// Orbital elements: JPL Small-Body Database
+pub const CERES: OrbitalElements = OrbitalElements::from_degrees(
+    "Ceres",
+    2.7691,             // Semi-major axis (AU)
+    0.0760,             // Eccentricity
+    10.594,             // Inclination (degrees)
+    80.305,             // Longitude of ascending node (degrees)
+    73.597,             // Argument of perihelion (degrees)
+    341.0,              // Mean anomaly at J2000 (degrees) - estimated
+    4.60,               // Orbital period (years)
+    473.0,              // Mean radius (km)
+);
+
+/// Eris - most massive known dwarf planet
+/// Orbital elements: JPL Small-Body Database
+pub const ERIS: OrbitalElements = OrbitalElements::from_degrees(
+    "Eris",
+    67.864,             // Semi-major axis (AU)
+    0.43605,            // Eccentricity
+    44.04,              // Inclination (degrees)
+    35.95,              // Longitude of ascending node (degrees)
+    151.64,             // Argument of perihelion (degrees)
+    205.0,              // Mean anomaly at J2000 (degrees) - estimated from 2257 perihelion
+    559.0,              // Orbital period (years)
+    1163.0,             // Mean radius (km)
+);
+
+/// Makemake - Kuiper belt dwarf planet
+/// Orbital elements: JPL Small-Body Database
+pub const MAKEMAKE: OrbitalElements = OrbitalElements::from_degrees(
+    "Makemake",
+    45.43,              // Semi-major axis (AU)
+    0.161,              // Eccentricity
+    28.98,              // Inclination (degrees)
+    79.62,              // Longitude of ascending node (degrees)
+    294.84,             // Argument of perihelion (degrees)
+    151.0,              // Mean anomaly at J2000 (degrees) - estimated
+    306.2,              // Orbital period (years)
+    715.0,              // Mean radius (km)
+);
+
+/// Haumea - elongated dwarf planet with ring
+/// Orbital elements: JPL Small-Body Database
+pub const HAUMEA: OrbitalElements = OrbitalElements::from_degrees(
+    "Haumea",
+    43.18,              // Semi-major axis (AU)
+    0.195,              // Eccentricity
+    28.21,              // Inclination (degrees)
+    122.16,             // Longitude of ascending node (degrees)
+    238.78,             // Argument of perihelion (degrees)
+    219.0,              // Mean anomaly at J2000 (degrees) - estimated from 2133 perihelion
+    284.0,              // Orbital period (years)
+    780.0,              // Mean radius (km) - average of ellipsoid
+);
+
+/// Sedna - extreme trans-Neptunian object
+/// Orbital elements: JPL Small-Body Database
+pub const SEDNA: OrbitalElements = OrbitalElements::from_degrees(
+    "Sedna",
+    541.6,              // Semi-major axis (AU)
+    0.859,              // Eccentricity
+    11.93,              // Inclination (degrees)
+    144.3,              // Longitude of ascending node (degrees)
+    310.84,             // Argument of perihelion (degrees)
+    358.0,              // Mean anomaly at J2000 (degrees)
+    11400.0,            // Orbital period (years)
+    497.5,              // Mean radius (km)
+);
+
+/// Quaoar - classical Kuiper belt object
+/// Orbital elements: JPL Small-Body Database
+pub const QUAOAR: OrbitalElements = OrbitalElements::from_degrees(
+    "Quaoar",
+    43.69,              // Semi-major axis (AU)
+    0.041,              // Eccentricity
+    7.99,               // Inclination (degrees)
+    188.8,              // Longitude of ascending node (degrees)
+    147.5,              // Argument of perihelion (degrees)
+    283.0,              // Mean anomaly at J2000 (degrees) - estimated from 2075 perihelion
+    288.8,              // Orbital period (years)
+    545.0,              // Mean radius (km)
+);
+
+/// Gonggong - scattered disc dwarf planet (225088)
+/// Orbital elements: JPL Small-Body Database
+pub const GONGGONG: OrbitalElements = OrbitalElements::from_degrees(
+    "Gonggong",
+    67.37,              // Semi-major axis (AU)
+    0.50,               // Eccentricity
+    30.7,               // Inclination (degrees)
+    336.8,              // Longitude of ascending node (degrees)
+    207.2,              // Argument of perihelion (degrees)
+    106.0,              // Mean anomaly at J2000 (degrees) - estimated from 1857 perihelion
+    550.0,              // Orbital period (years)
+    615.0,              // Mean radius (km)
+);
+
+/// Orcus - plutino (2:3 Neptune resonance)
+/// Orbital elements: JPL Small-Body Database
+pub const ORCUS: OrbitalElements = OrbitalElements::from_degrees(
+    "Orcus",
+    39.46,              // Semi-major axis (AU)
+    0.218,              // Eccentricity
+    20.55,              // Inclination (degrees)
+    268.6,              // Longitude of ascending node (degrees)
+    73.0,               // Argument of perihelion (degrees)
+    167.0,              // Mean anomaly at J2000 (degrees)
+    247.9,              // Orbital period (years)
+    458.0,              // Mean radius (km)
+);
+
+/// Varuna - large classical Kuiper belt object
+/// Orbital elements: JPL Small-Body Database
+pub const VARUNA: OrbitalElements = OrbitalElements::from_degrees(
+    "Varuna",
+    43.13,              // Semi-major axis (AU)
+    0.057,              // Eccentricity
+    17.16,              // Inclination (degrees)
+    97.26,              // Longitude of ascending node (degrees)
+    268.8,              // Argument of perihelion (degrees)
+    88.0,               // Mean anomaly at J2000 (degrees) - estimated from 1928 perihelion
+    282.0,              // Orbital period (years)
+    334.0,              // Mean radius (km)
+);
+
 /// Minor body identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MinorBody {
     Pluto = 0,
+    Ceres = 1,
+    Eris = 2,
+    Makemake = 3,
+    Haumea = 4,
+    Sedna = 5,
+    Quaoar = 6,
+    Gonggong = 7,
+    Orcus = 8,
+    Varuna = 9,
 }
 
 impl MinorBody {
-    pub const ALL: [MinorBody; 1] = [MinorBody::Pluto];
+    pub const ALL: [MinorBody; 10] = [
+        MinorBody::Pluto,
+        MinorBody::Ceres,
+        MinorBody::Eris,
+        MinorBody::Makemake,
+        MinorBody::Haumea,
+        MinorBody::Sedna,
+        MinorBody::Quaoar,
+        MinorBody::Gonggong,
+        MinorBody::Orcus,
+        MinorBody::Varuna,
+    ];
 
     pub fn name(&self) -> &'static str {
         self.elements().name
@@ -96,6 +242,15 @@ impl MinorBody {
     pub fn elements(&self) -> &'static OrbitalElements {
         match self {
             MinorBody::Pluto => &PLUTO,
+            MinorBody::Ceres => &CERES,
+            MinorBody::Eris => &ERIS,
+            MinorBody::Makemake => &MAKEMAKE,
+            MinorBody::Haumea => &HAUMEA,
+            MinorBody::Sedna => &SEDNA,
+            MinorBody::Quaoar => &QUAOAR,
+            MinorBody::Gonggong => &GONGGONG,
+            MinorBody::Orcus => &ORCUS,
+            MinorBody::Varuna => &VARUNA,
         }
     }
 }
@@ -309,5 +464,65 @@ mod tests {
         // For eccentric orbit, E should be between M and M + e*sin(M) roughly
         let e_eccentric = solve_kepler(1.0, 0.25);
         assert!(e_eccentric > 1.0 && e_eccentric < 1.3, "Eccentric orbit: E should be reasonable");
+    }
+
+    #[test]
+    fn test_all_minor_bodies_reasonable() {
+        let time = SkyTime::from_utc(2024, 1, 1, 0, 0, 0.0);
+
+        for body in MinorBody::ALL.iter() {
+            let pos = compute_minor_body_position(*body, &time);
+
+            // Direction should be a unit vector
+            let len = (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2)).sqrt();
+            assert!(
+                (len - 1.0).abs() < 0.001,
+                "{} direction should be unit vector, got len={}",
+                body.name(), len
+            );
+
+            // Distance should be positive and reasonable (> 1 AU, < 1000 AU from Earth)
+            let distance_au = pos.distance_km / AU_TO_KM;
+            assert!(
+                distance_au > 1.0 && distance_au < 1000.0,
+                "{} distance should be 1-1000 AU from Earth, got {} AU",
+                body.name(), distance_au
+            );
+
+            // Heliocentric distance should be consistent with semi-major axis
+            let helio_au = pos.helio_distance_km / AU_TO_KM;
+            let elem = body.elements();
+            let min_r = elem.semi_major_axis_au * (1.0 - elem.eccentricity) * 0.9;
+            let max_r = elem.semi_major_axis_au * (1.0 + elem.eccentricity) * 1.1;
+            assert!(
+                helio_au > min_r && helio_au < max_r,
+                "{} heliocentric distance {} AU outside expected range {}-{} AU",
+                body.name(), helio_au, min_r, max_r
+            );
+
+            eprintln!("{}: Earth dist={:.2} AU, Sun dist={:.2} AU", body.name(), distance_au, helio_au);
+        }
+    }
+
+    #[test]
+    fn test_ceres_inner_solar_system() {
+        let time = SkyTime::from_utc(2024, 1, 1, 0, 0, 0.0);
+        let pos = compute_minor_body_position(MinorBody::Ceres, &time);
+
+        // Ceres should be 1.5-4 AU from Earth (asteroid belt)
+        let distance_au = pos.distance_km / AU_TO_KM;
+        assert!(
+            distance_au > 1.0 && distance_au < 5.0,
+            "Ceres should be 1-5 AU from Earth, got {} AU",
+            distance_au
+        );
+
+        // Heliocentric distance ~2.5-3 AU
+        let helio_au = pos.helio_distance_km / AU_TO_KM;
+        assert!(
+            helio_au > 2.5 && helio_au < 3.0,
+            "Ceres heliocentric distance should be 2.5-3 AU, got {} AU",
+            helio_au
+        );
     }
 }

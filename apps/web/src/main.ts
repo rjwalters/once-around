@@ -19,7 +19,10 @@ declare const __GIT_COMMIT__: string;
 // Body names in the order they appear in the position buffer
 const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
 // Minor body names in the order they appear in the minor bodies buffer
-const MINOR_BODY_NAMES = ["Pluto"];
+const MINOR_BODY_NAMES = [
+  "Pluto", "Ceres", "Eris", "Makemake", "Haumea",
+  "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna"
+];
 const SKY_RADIUS = 50;
 
 // Build a map of body names to their current 3D positions
