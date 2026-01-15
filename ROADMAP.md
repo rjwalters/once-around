@@ -30,6 +30,37 @@ Use `history.replaceState()` to update URL as user navigates without creating hi
 
 ## Medium Priority
 
+### Dwarf Planet & TNO Ephemeris
+Add orbital elements for dwarf planets and trans-Neptunian objects to enable video positioning:
+
+**High value targets** (have Once Around videos):
+- Pluto (+ moons video)
+- Ceres
+- Eris
+- Makemake
+- Haumea
+- Quaoar, Gonggong, Orcus, Varuna, Sedna
+
+Implementation: Simple Kepler orbits using JPL orbital elements. Would enable ~12-15 videos.
+
+### Additional Planet Moons
+Expand planetary moon support beyond current Jupiter (4) and Saturn (6) moons:
+
+- **Uranus**: Miranda, Ariel, Umbriel, Titania, Oberon
+- **Neptune**: Triton (bright, easy target)
+- **Mars**: Phobos, Deimos (enables "Moons of Mars" video)
+- **Saturn**: Janus & Epimetheus (famous co-orbital pair), Iapetus
+
+### Major Asteroid Ephemeris
+Add orbital elements for bright asteroids:
+- Vesta, Pallas, Hygiea (main belt)
+- Apophis, Bennu (NEOs with videos)
+
+### Video Curation Expansion
+Review uncurated videos (192 of 306) for mappable objects:
+- Some map to specific locations (e.g., supernova remnants)
+- Some are topical and cannot be placed (Magnetars, Cosmic Rays, etc.)
+
 ### Keyboard Shortcut Help
 Press `?` to show overlay with all keyboard shortcuts:
 - `C` — Toggle constellations
@@ -53,15 +84,27 @@ Add location picker (or manual lat/lon input) to show:
 - Which objects are currently above/below horizon
 - Optional: altitude/azimuth coordinates in addition to RA/Dec
 
+### Topocentric Moon Position
+Add observer location to compute topocentric (rather than geocentric) Moon position.
+Would improve eclipse alignment from ~0.5° to near-perfect for a given location.
+Requires: observer lat/lon, local sidereal time calculation, parallax correction.
+
 ### PWA Support
 Add `manifest.json` and service worker for:
 - Offline use while stargazing
 - "Add to home screen" on mobile
 - Faster repeat loads via caching
 
+## Completed
+
+- [x] Nutation corrections (Δψ, Δε) for improved apparent positions
+- [x] Annual aberration correction for Sun and Moon (~20 arcseconds)
+- [x] Saturn moon orbital plane fix (27° tilt now properly rendered)
+- [x] Jupiter moon orbital plane fix (3° tilt)
+- [x] Saturn moons: Mimas, Enceladus, Tethys, Dione, Rhea, Titan
+
 ## Not Planned
 
 - Extended object catalogs (Messier, NGC) — videos are the content
-- Higher precision ephemeris — current accuracy is sufficient
 - User accounts / cloud sync — unnecessary complexity
 - Atmospheric simulation — academic rather than practical
