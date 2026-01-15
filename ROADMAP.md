@@ -2,32 +2,6 @@
 
 Feature ideas for future development.
 
-## High Priority
-
-### Search / Go-to Functionality
-Add a search box that centers the view on named objects. Should search across:
-- Planet names (Mars, Jupiter, Saturn, etc.)
-- Major star names (Sirius, Betelgeuse, Vega, etc.)
-- Constellation names (Orion, Ursa Major, etc.)
-- Video object names (Crab Nebula, Andromeda Galaxy, etc.)
-
-Autocomplete dropdown as user types. Press Enter or click result to animate camera to that position.
-
-### URL Deep Linking
-Encode view state in URL parameters for sharing specific sky views:
-```
-?ra=5.5&dec=-5.4&fov=10&t=2024-01-15T20:00
-```
-
-Parameters to support:
-- `ra` / `dec` — Camera pointing direction
-- `fov` — Field of view in degrees
-- `t` — Date/time (ISO 8601)
-- `mag` — Limiting magnitude
-- `video` — Video ID to auto-open on load
-
-Use `history.replaceState()` to update URL as user navigates without creating history entries.
-
 ## Medium Priority
 
 ### Video Curation Expansion
@@ -36,18 +10,10 @@ Review uncurated videos (192 of 306) for mappable objects:
 - Some are topical and cannot be placed (Magnetars, Cosmic Rays, etc.)
 
 ### Keyboard Shortcut Help
-Press `?` to show overlay with all keyboard shortcuts:
-- `C` — Toggle constellations
-- `L` — Toggle labels
-- `V` — Toggle videos
-- `O` — Toggle orbits
-- `P` — Play/pause time
-- `Space` — Go to galactic center
-- `←/→` — Step time backward/forward
-- `↑/↓` — Rotate view
+Press `?` to show overlay with all keyboard shortcuts.
 
 ### Night Vision Mode
-Red-only color scheme for outdoor observing. Toggle with `N` key or UI button.
+Red-only color scheme for outdoor observing. Toggle with UI button.
 Could be implemented with CSS filter or a proper theme system.
 
 ## Low Priority
@@ -71,6 +37,9 @@ Add `manifest.json` and service worker for:
 
 ## Completed
 
+- [x] Search / Go-to functionality with fuzzy matching and autocomplete
+- [x] URL deep linking (ra, dec, fov, t, mag parameters)
+- [x] Keyboard shortcuts (L/C/V/O/D/E/N/P, arrows, space, /)
 - [x] Nutation corrections (Δψ, Δε) for improved apparent positions
 - [x] Annual aberration correction for Sun and Moon (~20 arcseconds)
 - [x] Saturn moon orbital plane fix (27° tilt now properly rendered)
