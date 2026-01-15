@@ -1126,6 +1126,151 @@
         padding: 6px 10px;
         border-radius: 4px;
       }
+
+      /* Tour UI */
+      .tour-section {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #333;
+      }
+
+      .tour-section-label {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .tour-buttons {
+        display: flex;
+        gap: 6px;
+      }
+
+      .tour-btn {
+        flex: 1;
+        padding: 8px 6px;
+        background: linear-gradient(135deg, #2a2a4a 0%, #3a2a4a 100%);
+        border: 1px solid #554477;
+        color: #aaaaff;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        transition: all 0.15s;
+        font-size: 10px;
+      }
+
+      .tour-btn:hover {
+        background: linear-gradient(135deg, #3a3a5a 0%, #4a3a5a 100%);
+        border-color: #7755aa;
+        color: #ccccff;
+      }
+
+      .tour-btn .tour-icon {
+        font-size: 18px;
+      }
+
+      /* Tour playback bar */
+      .tour-playback {
+        position: fixed;
+        bottom: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(20, 20, 40, 0.95);
+        border: 1px solid #4455aa;
+        border-radius: 10px;
+        padding: 12px 16px;
+        min-width: 360px;
+        max-width: 90%;
+        z-index: 200;
+        box-shadow: 0 4px 20px rgba(68, 85, 170, 0.3);
+        transition: opacity 0.3s, transform 0.3s;
+      }
+
+      .tour-playback.hidden {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+        pointer-events: none;
+      }
+
+      .tour-playback-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .tour-playback-name {
+        color: #aaaaff;
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .tour-playback-controls {
+        display: flex;
+        gap: 4px;
+      }
+
+      .tour-control-btn {
+        width: 28px;
+        height: 28px;
+        background: #333;
+        border: 1px solid #555;
+        color: #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+      }
+
+      .tour-control-btn:hover {
+        background: #444;
+        border-color: #666;
+        color: #fff;
+      }
+
+      .tour-control-btn.stop-btn {
+        color: #ff8888;
+      }
+
+      .tour-control-btn.stop-btn:hover {
+        background: #4a3333;
+        border-color: #885555;
+      }
+
+      .tour-progress-bar {
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+
+      .tour-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #4a9eff 0%, #aa66ff 100%);
+        border-radius: 2px;
+        transition: width 0.1s linear;
+        width: 0%;
+      }
+
+      .tour-caption {
+        color: #aaa;
+        font-size: 12px;
+        font-style: italic;
+        text-align: center;
+        min-height: 18px;
+      }
+
+      .tour-caption.hidden {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -1197,6 +1342,20 @@
       <div id="stats">
         Visible: <span id="star-count">0</span> / <span id="total-stars">0</span><br />
         Rendered: <span id="rendered-stars">0</span>
+      </div>
+
+      <div class="tour-section">
+        <div class="tour-section-label">Guided Tours</div>
+        <div class="tour-buttons">
+          <button class="tour-btn" data-tour="eclipse-2024" title="Watch the 2024 total solar eclipse">
+            <span class="tour-icon">☀</span>
+            <span>2024 Eclipse</span>
+          </button>
+          <button class="tour-btn" data-tour="jupiter-moons" title="Watch Jupiter's Galilean moons">
+            <span class="tour-icon">♃</span>
+            <span>Jupiter Moons</span>
+          </button>
+        </div>
       </div>
 
       <button class="about-button" id="about-btn">About This Project</button>
@@ -1361,6 +1520,23 @@
       <div class="eclipse-banner-separation">
         Sun-Moon: <span id="eclipse-banner-sep">--</span>°
       </div>
+    </div>
+
+    <!-- Tour Playback Bar -->
+    <div id="tour-playback" class="tour-playback hidden">
+      <div class="tour-playback-header">
+        <span id="tour-playback-name" class="tour-playback-name">Tour Name</span>
+        <div class="tour-playback-controls">
+          <button id="tour-prev" class="tour-control-btn" title="Previous">⏮</button>
+          <button id="tour-play-pause" class="tour-control-btn" title="Play/Pause">⏸</button>
+          <button id="tour-next" class="tour-control-btn" title="Next">⏭</button>
+          <button id="tour-stop" class="tour-control-btn stop-btn" title="Stop (Esc)">✕</button>
+        </div>
+      </div>
+      <div class="tour-progress-bar">
+        <div id="tour-progress" class="tour-progress-fill"></div>
+      </div>
+      <div id="tour-caption" class="tour-caption"></div>
     </div>
 
     <div id="crosshair"></div>

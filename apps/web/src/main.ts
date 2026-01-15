@@ -10,6 +10,8 @@ import { DSO_DATA, type DSOType } from "./dsoData";
 import { loadSettings, createSettingsSaver } from "./settings";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import { getNextTotalSolarEclipse, getSunMoonSeparation, type TotalSolarEclipse } from "./eclipseData";
+import { createTourEngine, type TourPlaybackState } from "./tour";
+import { getTourById } from "./tourData";
 import type { SkyEngine } from "./wasm/sky_engine";
 
 // Build-time constants injected by Vite
@@ -246,6 +248,98 @@ async function main(): Promise<void> {
 
   // Track current RA/Dec for URL updates
   let currentRaDec = { ra: 0, dec: 0 };
+
+  // ============================================================================
+  // Tour System
+  // ============================================================================
+
+  // Helper to update time and trigger all necessary updates
+  function setTimeForTour(date: Date): void {
+    applyTimeToEngine(engine, date);
+    engine.recompute();
+    renderer.updateFromEngine(engine);
+
+    // Update datetime input display
+    const datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
+    if (datetimeInput) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    // Update eclipse rendering
+    const bodyPos = getBodyPositions(engine);
+    const sunMoonSep = calculateSunMoonSeparation(bodyPos);
+    if (sunMoonSep !== null) {
+      renderer.updateEclipse(sunMoonSep);
+    }
+  }
+
+  // Create tour engine
+  const tourEngine = createTourEngine({
+    animateToRaDec: (ra, dec, durationMs) => {
+      controls.animateToRaDec(ra, dec, durationMs);
+    },
+    setFov: (fov) => {
+      renderer.camera.fov = fov;
+      renderer.camera.updateProjectionMatrix();
+      // Update star LOD for new FOV
+      const magInput = document.getElementById("magnitude") as HTMLInputElement | null;
+      const mag = magInput ? parseFloat(magInput.value) : 6.5;
+      renderer.updateDSOs(fov, mag);
+    },
+    getFov: () => renderer.camera.fov,
+    setTime: setTimeForTour,
+    onStateChange: (state: TourPlaybackState) => {
+      updateTourUI(state);
+    },
+    onTourComplete: () => {
+      console.log("Tour complete");
+    },
+    onCaptionChange: (caption: string | null) => {
+      const captionEl = document.getElementById("tour-caption");
+      if (captionEl) {
+        captionEl.textContent = caption ?? "";
+        captionEl.classList.toggle("hidden", !caption);
+      }
+    },
+  });
+
+  // Update tour UI based on state
+  function updateTourUI(state: TourPlaybackState): void {
+    const playbackEl = document.getElementById("tour-playback");
+    const progressEl = document.getElementById("tour-progress");
+    const nameEl = document.getElementById("tour-playback-name");
+    const playPauseBtn = document.getElementById("tour-play-pause");
+
+    if (playbackEl) {
+      playbackEl.classList.toggle("hidden", state.status === "idle");
+    }
+    if (progressEl) {
+      progressEl.style.width = `${state.overallProgress * 100}%`;
+    }
+    if (nameEl && state.currentTour) {
+      nameEl.textContent = state.currentTour.name;
+    }
+    if (playPauseBtn) {
+      playPauseBtn.textContent = state.status === "playing" ? "⏸" : "▶";
+    }
+  }
+
+  // Handle user interruption of tour
+  function handleTourInterrupt(): void {
+    if (tourEngine.isActive()) {
+      tourEngine.pause();
+    }
+  }
+
+  // Add listeners for user interactions that should pause tour
+  renderer.renderer.domElement.addEventListener("mousedown", handleTourInterrupt);
+  renderer.renderer.domElement.addEventListener("wheel", handleTourInterrupt);
+  renderer.renderer.domElement.addEventListener("touchstart", handleTourInterrupt);
 
   // Save camera changes (debounced) and update URL
   controls.onCameraChange = () => {
@@ -1391,6 +1485,59 @@ async function main(): Promise<void> {
     settingsSaver.flush();
   });
 
+  // ============================================================================
+  // Tour UI Event Handlers
+  // ============================================================================
+
+  // Tour selection buttons
+  document.querySelectorAll("[data-tour]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tourId = (btn as HTMLElement).dataset.tour;
+      if (tourId) {
+        const tour = getTourById(tourId);
+        if (tour) {
+          // Stop any existing time playback
+          stopPlayback();
+          tourEngine.play(tour);
+        }
+      }
+    });
+  });
+
+  // Tour playback controls
+  const tourPlayPauseBtn = document.getElementById("tour-play-pause");
+  const tourStopBtn = document.getElementById("tour-stop");
+  const tourPrevBtn = document.getElementById("tour-prev");
+  const tourNextBtn = document.getElementById("tour-next");
+
+  tourPlayPauseBtn?.addEventListener("click", () => {
+    const state = tourEngine.getState();
+    if (state.status === "playing") {
+      tourEngine.pause();
+    } else if (state.status === "paused") {
+      tourEngine.resume();
+    }
+  });
+
+  tourStopBtn?.addEventListener("click", () => {
+    tourEngine.stop();
+  });
+
+  tourPrevBtn?.addEventListener("click", () => {
+    tourEngine.previous();
+  });
+
+  tourNextBtn?.addEventListener("click", () => {
+    tourEngine.next();
+  });
+
+  // Add keyboard shortcut: Escape to stop tour
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && tourEngine.isActive()) {
+      tourEngine.stop();
+    }
+  });
+
   // Coordinate display elements
   const coordRaEl = document.getElementById("coord-ra");
   const coordDecEl = document.getElementById("coord-dec");
@@ -1502,6 +1649,7 @@ async function main(): Promise<void> {
   function animate(): void {
     requestAnimationFrame(animate);
     controls.update();
+    tourEngine.update();
     renderer.render();
   }
 
