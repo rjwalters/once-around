@@ -19,7 +19,7 @@ pub struct SkyEngine {
     stars_meta: Vec<f32>, // vmag, bv_color, id (as f32), padding (magnitude-filtered)
     bodies_pos: Vec<f32>, // 9 celestial bodies * 3 coords = 27 floats (Sun, Moon, 7 planets)
     bodies_angular_diameters: Vec<f32>, // 9 angular diameters in radians
-    planetary_moons_pos: Vec<f32>, // 5 moons * 4 floats (x, y, z, angular_diam) = 20
+    planetary_moons_pos: Vec<f32>, // 10 moons * 4 floats (x, y, z, angular_diam) = 40
 
     // All star positions for constellation line drawing (not magnitude-filtered)
     all_stars_pos: Vec<f32>,  // x,y,z for ALL stars in catalog
@@ -52,7 +52,7 @@ impl SkyEngine {
             stars_meta: vec![0.0; star_count * 4], // vmag, bv, id, padding
             bodies_pos: vec![0.0; 9 * 3], // Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune
             bodies_angular_diameters: vec![0.0; 9], // Angular diameters for each body
-            planetary_moons_pos: vec![0.0; 5 * 4], // Io, Europa, Ganymede, Callisto, Titan
+            planetary_moons_pos: vec![0.0; 10 * 4], // 4 Jupiter moons + 6 Saturn moons
             all_stars_pos: vec![0.0; star_count * 3],
             all_stars_meta: vec![0.0; star_count * 4],
             visible_count: 0,
@@ -271,19 +271,26 @@ impl SkyEngine {
     // --- Planetary moons buffer accessors ---
 
     /// Get pointer to planetary moons position buffer.
-    /// 5 moons * 4 floats (x, y, z, angular_diameter) = 20 floats.
-    /// Order: Io, Europa, Ganymede, Callisto, Titan
+    /// 10 moons * 4 floats (x, y, z, angular_diameter) = 40 floats.
+    /// Order: Io, Europa, Ganymede, Callisto, Mimas, Enceladus, Tethys, Dione, Rhea, Titan
     pub fn planetary_moons_pos_ptr(&self) -> *const f32 {
         self.planetary_moons_pos.as_ptr()
     }
 
     /// Get length of planetary moons position buffer.
-    /// Always 20 (5 moons * 4 floats).
+    /// Always 40 (10 moons * 4 floats).
     pub fn planetary_moons_pos_len(&self) -> usize {
         self.planetary_moons_pos.len()
     }
 
-    /// Get planetary moon name by index (0-4).
+    /// Get the total number of planetary moons.
+    pub fn planetary_moons_count(&self) -> usize {
+        10
+    }
+
+    /// Get planetary moon name by index (0-9).
+    /// 0-3: Jupiter's moons (Io, Europa, Ganymede, Callisto)
+    /// 4-9: Saturn's moons (Mimas, Enceladus, Tethys, Dione, Rhea, Titan)
     pub fn planetary_moon_name(&self, index: usize) -> Option<String> {
         PlanetaryMoon::ALL.get(index).map(|m| m.name().to_string())
     }

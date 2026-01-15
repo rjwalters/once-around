@@ -1,4 +1,7 @@
-use crate::coords::{ecliptic_to_equatorial, true_obliquity, CartesianCoord, OBLIQUITY_J2000};
+use crate::coords::{
+    compute_aberration, compute_nutation, compute_sun_aberration, ecliptic_to_equatorial,
+    true_obliquity, CartesianCoord,
+};
 use crate::time::SkyTime;
 use std::f64::consts::PI;
 use vsop87::vsop87a;
@@ -135,6 +138,7 @@ pub fn compute_planet_position(planet: Planet, time: &SkyTime) -> CartesianCoord
 }
 
 /// Compute the full position data for a planet (direction, distance, angular diameter).
+/// Returns apparent position including nutation corrections for improved accuracy.
 pub fn compute_planet_position_full(planet: Planet, time: &SkyTime) -> PlanetPosition {
     let jde = time.julian_date_tdb();
 
@@ -155,8 +159,15 @@ pub fn compute_planet_position_full(planet: Planet, time: &SkyTime) -> PlanetPos
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Convert to equatorial coordinates
-    let direction = ecliptic_to_equatorial(lon, lat, OBLIQUITY_J2000).normalize();
+    // Get nutation values
+    let nutation = compute_nutation(jde);
+
+    // Apply nutation in longitude to get apparent ecliptic longitude
+    let apparent_lon = lon + nutation.delta_psi;
+
+    // Convert to equatorial coordinates using true obliquity (includes nutation)
+    let obliquity = true_obliquity(jde);
+    let direction = ecliptic_to_equatorial(apparent_lon, lat, obliquity).normalize();
 
     // Angular diameter: 2 * atan(radius / distance)
     let radius_km = planet_radius_km(planet);
@@ -181,6 +192,7 @@ pub fn compute_sun_position(time: &SkyTime) -> CartesianCoord {
 }
 
 /// Compute the full position data for the Sun (direction, distance, angular diameter).
+/// Returns apparent position including nutation corrections for improved accuracy.
 pub fn compute_sun_position_full(time: &SkyTime) -> SunPosition {
     let jde = time.julian_date_tdb();
 
@@ -200,8 +212,19 @@ pub fn compute_sun_position_full(time: &SkyTime) -> SunPosition {
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Convert to equatorial coordinates
-    let direction = ecliptic_to_equatorial(lon, lat, OBLIQUITY_J2000).normalize();
+    // Get nutation values
+    let nutation = compute_nutation(jde);
+
+    // Apply nutation in longitude to get apparent ecliptic longitude
+    let apparent_lon = lon + nutation.delta_psi;
+
+    // Apply aberration correction (~20.5 arcseconds)
+    let aberration = compute_sun_aberration(jde);
+    let apparent_lon = apparent_lon + aberration;
+
+    // Convert to equatorial coordinates using true obliquity (includes nutation)
+    let obliquity = true_obliquity(jde);
+    let direction = ecliptic_to_equatorial(apparent_lon, lat, obliquity).normalize();
 
     // Angular diameter: 2 * atan(radius / distance)
     let angular_diameter_rad = 2.0 * (SUN_RADIUS_KM / distance_km).atan();
@@ -500,9 +523,25 @@ pub fn compute_moon_position_full(time: &SkyTime) -> MoonPosition {
 
     let distance_km = 385000.56 + sum_r / 1000.0;
 
-    // Ecliptic longitude and latitude
+    // Ecliptic longitude and latitude (mean position from ephemeris)
     let lon = l_prime_r + sum_l / 1000000.0 * PI / 180.0;
     let lat = sum_b / 1000000.0 * PI / 180.0;
+
+    // Get nutation values
+    let nutation = compute_nutation(jde);
+
+    // Apply nutation in longitude to get apparent ecliptic longitude
+    let apparent_lon = lon + nutation.delta_psi;
+
+    // Compute Sun's ecliptic longitude for aberration calculation
+    let earth_pos = heliocentric_position(Planet::Earth, jde);
+    let sun_lon = (-earth_pos.1).atan2(-earth_pos.0);
+
+    // Apply aberration correction (shifts Moon position due to Earth's orbital motion)
+    // The effect is about 20" but mostly cancels with Sun's aberration for eclipse calculations
+    let aberration = compute_aberration(sun_lon, apparent_lon, lat, jde);
+    let apparent_lon = apparent_lon + aberration.delta_longitude;
+    let apparent_lat = lat + aberration.delta_latitude;
 
     // Angular diameter: 2 * atan(radius / distance)
     let angular_diameter_rad = 2.0 * (MOON_RADIUS_KM / distance_km).atan();
@@ -510,7 +549,7 @@ pub fn compute_moon_position_full(time: &SkyTime) -> MoonPosition {
     // Convert to equatorial coordinates using true obliquity (includes nutation)
     // This gives apparent position rather than mean position
     let obliquity = true_obliquity(jde);
-    let direction = ecliptic_to_equatorial(lon, lat, obliquity).normalize();
+    let direction = ecliptic_to_equatorial(apparent_lon, apparent_lat, obliquity).normalize();
 
     MoonPosition {
         direction,
@@ -650,6 +689,7 @@ pub fn compute_all_body_positions_full(time: &SkyTime) -> [CelestialBodyPosition
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::coords::cartesian_to_ra_dec;
     use std::f64::consts::PI;
 
     #[test]
@@ -680,6 +720,140 @@ mod tests {
         assert!(
             dec.abs() < 30.0 * PI / 180.0,
             "Venus declination should be reasonable"
+        );
+    }
+
+    #[test]
+    fn test_sun_position_is_unit_vector() {
+        let time = SkyTime::from_utc(2024, 4, 8, 18, 0, 0.0);
+        let sun = compute_sun_position(&time);
+        let len = (sun.x * sun.x + sun.y * sun.y + sun.z * sun.z).sqrt();
+        assert!(
+            (len - 1.0).abs() < 0.001,
+            "Sun position should be unit vector"
+        );
+    }
+
+    #[test]
+    fn test_moon_position_is_unit_vector() {
+        let time = SkyTime::from_utc(2024, 4, 8, 18, 0, 0.0);
+        let moon = compute_moon_position(&time);
+        let len = (moon.x * moon.x + moon.y * moon.y + moon.z * moon.z).sqrt();
+        assert!(
+            (len - 1.0).abs() < 0.001,
+            "Moon position should be unit vector"
+        );
+    }
+
+    #[test]
+    fn test_sun_moon_distance_realistic() {
+        let time = SkyTime::from_utc(2024, 4, 8, 18, 0, 0.0);
+        let sun = compute_sun_position_full(&time);
+        let moon = compute_moon_position_full(&time);
+
+        // Sun should be about 150 million km away (1 AU)
+        assert!(
+            sun.distance_km > 147_000_000.0 && sun.distance_km < 152_500_000.0,
+            "Sun distance should be ~150M km, got {}",
+            sun.distance_km
+        );
+
+        // Moon should be about 385,000 km away
+        assert!(
+            moon.distance_km > 356_000.0 && moon.distance_km < 407_000.0,
+            "Moon distance should be ~385k km, got {}",
+            moon.distance_km
+        );
+    }
+
+    #[test]
+    fn test_angular_diameters_realistic() {
+        let time = SkyTime::from_utc(2024, 4, 8, 18, 0, 0.0);
+        let sun = compute_sun_position_full(&time);
+        let moon = compute_moon_position_full(&time);
+
+        // Sun angular diameter: ~0.53 degrees = ~0.0093 radians
+        let sun_deg = sun.angular_diameter_rad * 180.0 / PI;
+        assert!(
+            sun_deg > 0.52 && sun_deg < 0.55,
+            "Sun angular diameter should be ~0.53°, got {}°",
+            sun_deg
+        );
+
+        // Moon angular diameter: ~0.52 degrees = ~0.0091 radians (varies with distance)
+        let moon_deg = moon.angular_diameter_rad * 180.0 / PI;
+        assert!(
+            moon_deg > 0.49 && moon_deg < 0.57,
+            "Moon angular diameter should be ~0.52°, got {}°",
+            moon_deg
+        );
+    }
+
+    #[test]
+    fn test_sun_moon_geocentric_during_eclipse() {
+        // April 8, 2024 total solar eclipse
+        // Note: We compute GEOCENTRIC positions. The eclipse occurs where TOPOCENTRIC
+        // positions align, so geocentric separation will be non-zero (due to lunar parallax).
+        let time = SkyTime::from_utc(2024, 4, 8, 18, 17, 16.0);
+        let sun = compute_sun_position(&time);
+        let moon = compute_moon_position(&time);
+
+        // Compute angular separation
+        let dot = sun.x * moon.x + sun.y * moon.y + sun.z * moon.z;
+        let separation_rad = dot.clamp(-1.0, 1.0).acos();
+        let separation_deg = separation_rad * 180.0 / PI;
+
+        // Geocentric separation should be less than Moon's horizontal parallax (~1°)
+        // Typical values are 0.3-0.5° during eclipse times
+        assert!(
+            separation_deg < 1.0,
+            "Geocentric Sun-Moon separation should be < 1° (within parallax range), got {}°",
+            separation_deg
+        );
+    }
+
+    #[test]
+    fn test_moon_horizontal_parallax() {
+        // Verify Moon's horizontal parallax is computed correctly
+        // This explains why geocentric positions don't perfectly align during eclipses
+        let time = SkyTime::from_utc(2024, 4, 8, 18, 17, 16.0);
+        let moon = compute_moon_position_full(&time);
+
+        // Horizontal parallax = arcsin(Earth_radius / Moon_distance)
+        let earth_radius_km = 6378.137;
+        let parallax_rad = (earth_radius_km / moon.distance_km).asin();
+        let parallax_arcmin = parallax_rad * 180.0 * 60.0 / PI;
+
+        // Moon's horizontal parallax ranges from ~54' (apogee) to ~61' (perigee)
+        assert!(
+            parallax_arcmin > 54.0 && parallax_arcmin < 62.0,
+            "Moon horizontal parallax should be 54-62 arcmin, got {:.1}'",
+            parallax_arcmin
+        );
+    }
+
+    #[test]
+    fn test_sun_position_ra_dec_reasonable() {
+        // Test Sun position at vernal equinox (March 20, 2024)
+        // Sun should be near RA = 0h, Dec = 0°
+        let time = SkyTime::from_utc(2024, 3, 20, 3, 0, 0.0);
+        let sun = compute_sun_position(&time);
+        let (ra, dec) = cartesian_to_ra_dec(&sun);
+
+        // At vernal equinox, RA should be near 0 or 2π
+        let ra_hours = ra * 12.0 / PI;
+        assert!(
+            ra_hours < 1.0 || ra_hours > 23.0,
+            "Sun RA at vernal equinox should be near 0h, got {}h",
+            ra_hours
+        );
+
+        // Dec should be near 0
+        let dec_deg = dec * 180.0 / PI;
+        assert!(
+            dec_deg.abs() < 2.0,
+            "Sun Dec at vernal equinox should be near 0°, got {}°",
+            dec_deg
         );
     }
 }

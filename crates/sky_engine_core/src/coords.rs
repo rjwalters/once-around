@@ -262,6 +262,105 @@ pub fn true_obliquity(jde: f64) -> f64 {
     eps0 + nutation.delta_epsilon
 }
 
+/// Aberration correction in ecliptic coordinates.
+pub struct AberrationCorrection {
+    /// Correction to ecliptic longitude in radians
+    pub delta_longitude: f64,
+    /// Correction to ecliptic latitude in radians
+    pub delta_latitude: f64,
+}
+
+/// Constant of aberration (κ) in radians.
+/// κ = 20.49552 arcseconds = v/c where v is Earth's mean orbital velocity
+const ABERRATION_CONSTANT: f64 = 20.49552 * PI / (180.0 * 3600.0);
+
+/// Compute annual aberration correction for a celestial body.
+///
+/// Annual aberration is the apparent shift in position due to Earth's orbital motion
+/// combined with the finite speed of light. For the Sun, this amounts to about 20.5
+/// arcseconds in longitude.
+///
+/// Based on Meeus, Astronomical Algorithms, Chapter 23.
+///
+/// # Arguments
+/// * `sun_lon` - Sun's apparent ecliptic longitude in radians
+/// * `obj_lon` - Object's ecliptic longitude in radians
+/// * `obj_lat` - Object's ecliptic latitude in radians
+/// * `jde` - Julian Date (Ephemeris)
+///
+/// # Returns
+/// Aberration corrections to apply to the object's position
+pub fn compute_aberration(sun_lon: f64, obj_lon: f64, obj_lat: f64, jde: f64) -> AberrationCorrection {
+    // Julian centuries from J2000.0
+    let t = (jde - 2451545.0) / 36525.0;
+
+    // Earth's orbital eccentricity (Meeus, eq. 25.4)
+    let e = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
+
+    // Longitude of perihelion of Earth's orbit (Meeus, eq. 25.4)
+    let pi_rad = (102.93735 + 1.71946 * t + 0.00046 * t * t) * PI / 180.0;
+
+    let cos_sun_lon = sun_lon.cos();
+    let sin_sun_lon = sun_lon.sin();
+    let cos_obj_lon = obj_lon.cos();
+    let sin_obj_lon = obj_lon.sin();
+    let cos_lat = obj_lat.cos();
+    let sin_lat = obj_lat.sin();
+    let cos_pi = pi_rad.cos();
+    let sin_pi = pi_rad.sin();
+
+    // Aberration in longitude (Meeus, eq. 23.2)
+    // Δλ = -κ * (cos(λ☉ - λ) + e * cos(π - λ)) / cos(β)
+    let delta_lon = if cos_lat.abs() > 1e-10 {
+        -ABERRATION_CONSTANT
+            * ((cos_sun_lon * cos_obj_lon + sin_sun_lon * sin_obj_lon)
+                + e * (cos_pi * cos_obj_lon + sin_pi * sin_obj_lon))
+            / cos_lat
+    } else {
+        0.0
+    };
+
+    // Aberration in latitude (Meeus, eq. 23.2)
+    // Δβ = -κ * sin(β) * (sin(λ☉ - λ) + e * sin(π - λ))
+    let delta_lat = -ABERRATION_CONSTANT
+        * sin_lat
+        * ((sin_sun_lon * cos_obj_lon - cos_sun_lon * sin_obj_lon)
+            + e * (sin_pi * cos_obj_lon - cos_pi * sin_obj_lon));
+
+    AberrationCorrection {
+        delta_longitude: delta_lon,
+        delta_latitude: delta_lat,
+    }
+}
+
+/// Compute simplified aberration correction for the Sun.
+///
+/// For the Sun, the aberration correction is particularly simple because
+/// Earth's velocity is nearly perpendicular to the Sun-Earth line.
+/// The correction is approximately -20.5 arcseconds in longitude.
+///
+/// This uses a slightly more accurate formula that accounts for eccentricity.
+/// Based on Meeus, Astronomical Algorithms, Chapter 25.
+///
+/// # Arguments
+/// * `jde` - Julian Date (Ephemeris)
+///
+/// # Returns
+/// Aberration correction to Sun's longitude in radians (always negative)
+pub fn compute_sun_aberration(jde: f64) -> f64 {
+    // Julian centuries from J2000.0
+    let t = (jde - 2451545.0) / 36525.0;
+
+    // Earth's orbital eccentricity
+    let e = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
+
+    // The Sun's aberration is approximately -κ(1 + e*cos(v))
+    // where v is Earth's true anomaly. For simplicity, we use the mean value
+    // which is very close since e is small (~0.017).
+    // The variation due to eccentricity is only about ±0.34 arcseconds.
+    -ABERRATION_CONSTANT * (1.0 + e)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +452,57 @@ mod tests {
             diff_arcsec < 20.0,
             "Nutation in obliquity should be < 20\", got {}\"",
             diff_arcsec
+        );
+    }
+
+    #[test]
+    fn test_sun_aberration_constant() {
+        // Sun aberration should be approximately -20.5 arcseconds
+        let jde = 2451545.0; // J2000.0
+        let aberration = compute_sun_aberration(jde);
+        let aberration_arcsec = aberration * 180.0 * 3600.0 / PI;
+
+        // Should be between -20 and -21 arcseconds
+        assert!(
+            aberration_arcsec > -21.0 && aberration_arcsec < -20.0,
+            "Sun aberration should be ~-20.5\", got {}\"",
+            aberration_arcsec
+        );
+    }
+
+    #[test]
+    fn test_aberration_magnitude() {
+        // Test that aberration correction is in the expected range for a typical body
+        let jde = 2451545.0; // J2000.0
+        let sun_lon = 0.0; // Sun at vernal equinox
+        let obj_lon = PI / 2.0; // Object 90° from Sun
+        let obj_lat = 0.0; // On the ecliptic
+
+        let correction = compute_aberration(sun_lon, obj_lon, obj_lat, jde);
+        let delta_lon_arcsec = correction.delta_longitude * 180.0 * 3600.0 / PI;
+
+        // For an object 90° from the Sun, aberration should be approximately -20.5"
+        assert!(
+            delta_lon_arcsec.abs() < 25.0,
+            "Aberration should be reasonable, got {}\"",
+            delta_lon_arcsec
+        );
+    }
+
+    #[test]
+    fn test_aberration_varies_with_position() {
+        // Aberration depends on angular distance from Sun
+        let jde = 2451545.0;
+        let sun_lon = 0.0;
+
+        // Object in same direction as Sun (0°) vs opposite (180°)
+        let corr_same = compute_aberration(sun_lon, 0.0, 0.0, jde);
+        let corr_opp = compute_aberration(sun_lon, PI, 0.0, jde);
+
+        // These should have different magnitudes
+        assert!(
+            (corr_same.delta_longitude - corr_opp.delta_longitude).abs() > 0.0001,
+            "Aberration should vary with angular position"
         );
     }
 }
