@@ -327,6 +327,7 @@ async function main(): Promise<void> {
   ];
   let currentStepIndex = 0;
 
+  const timeNowBtn = document.getElementById("time-now");
   const timeBackBtn = document.getElementById("time-back");
   const timeForwardBtn = document.getElementById("time-forward");
   const timePlayBtn = document.getElementById("time-play");
@@ -349,6 +350,29 @@ async function main(): Promise<void> {
     const day = String(newTime.getDate()).padStart(2, "0");
     const hours = String(newTime.getHours()).padStart(2, "0");
     const minutes = String(newTime.getMinutes()).padStart(2, "0");
+    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+    // Trigger the change event to update the engine
+    datetimeInput.dispatchEvent(new Event("change"));
+  }
+
+  function jumpToNow(): void {
+    if (!datetimeInput) return;
+    stopPlayback();
+
+    // Hide eclipse banner and disable alignment when jumping to now
+    const eclipseBanner = document.getElementById("eclipse-banner");
+    if (eclipseBanner) {
+      eclipseBanner.classList.add("hidden");
+    }
+    renderer.setEclipseAlignment(false);
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
     datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
 
     // Trigger the change event to update the engine
@@ -394,6 +418,9 @@ async function main(): Promise<void> {
     }
   }
 
+  if (timeNowBtn) {
+    timeNowBtn.addEventListener("click", jumpToNow);
+  }
   if (timeBackBtn) {
     timeBackBtn.addEventListener("click", () => {
       stopPlayback(); // Stop playback when manually stepping
@@ -445,36 +472,47 @@ async function main(): Promise<void> {
           const hours = String(eclipseDate.getHours()).padStart(2, "0");
           const minutes = String(eclipseDate.getMinutes()).padStart(2, "0");
           datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-          // Trigger the change event to update the engine
-          datetimeInput.dispatchEvent(new Event("change"));
         }
 
-        // Wait a frame for positions to update, then focus on the Sun
-        requestAnimationFrame(() => {
-          const bodyPos = getBodyPositions(engine);
-          const sunPos = bodyPos.get("Sun");
-          const moonPos = bodyPos.get("Moon");
-          if (sunPos) {
-            const sunRaDec = positionToRaDec(sunPos);
-            controls.animateToRaDec(sunRaDec.ra, sunRaDec.dec, 1000);
-
-            // Update eclipse banner with separation
-            if (moonPos) {
-              const separation = calculateSunMoonSeparation(bodyPos);
-              const sepEl = document.getElementById("eclipse-banner-sep");
-              if (sepEl && separation !== null) {
-                sepEl.textContent = separation.toFixed(2);
-              }
-            }
-          }
-        });
+        // Update the engine directly (don't rely on change event timing)
+        applyTimeToEngine(engine, eclipseDate);
+        engine.recompute();
 
         // Enable eclipse alignment mode (snaps Moon to Sun)
         renderer.setEclipseAlignment(true);
 
-        // Trigger a re-render to apply alignment
+        // Update renderer with new positions
         renderer.updateFromEngine(engine);
+
+        // Get updated body positions and animate to sun
+        const bodyPos = getBodyPositions(engine);
+
+        // Update eclipse rendering (shows corona)
+        const sunMoonSep = calculateSunMoonSeparation(bodyPos);
+        if (sunMoonSep !== null) {
+          renderer.updateEclipse(sunMoonSep);
+        }
+        const sunPos = bodyPos.get("Sun");
+        const moonPos = bodyPos.get("Moon");
+
+        // Update video markers with new body positions
+        if (videoMarkersRef) {
+          videoMarkersRef.updateMovingPositions(bodyPos);
+        }
+
+        if (sunPos) {
+          const sunRaDec = positionToRaDec(sunPos);
+          controls.animateToRaDec(sunRaDec.ra, sunRaDec.dec, 1000);
+
+          // Update eclipse banner with separation
+          if (moonPos) {
+            const separation = calculateSunMoonSeparation(bodyPos);
+            const sepEl = document.getElementById("eclipse-banner-sep");
+            if (sepEl && separation !== null) {
+              sepEl.textContent = separation.toFixed(2);
+            }
+          }
+        }
 
         // Show eclipse info banner
         const eclipseBanner = document.getElementById("eclipse-banner");
@@ -529,21 +567,18 @@ async function main(): Promise<void> {
       if (videoMarkersRef) {
         videoMarkersRef.updateMovingPositions(bodyPos);
       }
-      // Update eclipse rendering and banner
+      // Disable eclipse alignment when user changes time
+      // (alignment is only meant to be active right after clicking "Next Eclipse")
+      renderer.setEclipseAlignment(false);
+      const eclipseBanner = document.getElementById("eclipse-banner");
+      if (eclipseBanner) {
+        eclipseBanner.classList.add("hidden");
+      }
+
+      // Update eclipse rendering (corona visibility based on actual separation)
       const sunMoonSep = calculateSunMoonSeparation(bodyPos);
       if (sunMoonSep !== null) {
         renderer.updateEclipse(sunMoonSep);
-        // Update banner separation if visible, or hide if too far
-        const eclipseBanner = document.getElementById("eclipse-banner");
-        const sepEl = document.getElementById("eclipse-banner-sep");
-        if (eclipseBanner && !eclipseBanner.classList.contains("hidden")) {
-          if (sepEl) sepEl.textContent = sunMoonSep.toFixed(2);
-          // Hide banner and disable alignment if Sun-Moon separation is too large
-          if (sunMoonSep > 5) {
-            eclipseBanner.classList.add("hidden");
-            renderer.setEclipseAlignment(false);
-          }
-        }
       }
       settingsSaver.save({ datetime: date.toISOString() });
       // Update URL with new time
@@ -1296,6 +1331,10 @@ async function main(): Promise<void> {
         if (nextEclipseBtn) {
           nextEclipseBtn.click();
         }
+        break;
+      case "n":
+        // Jump to now
+        jumpToNow();
         break;
       case " ":
         // Spacebar: animate to galactic center (RA ~266.4°, Dec ~-29°)

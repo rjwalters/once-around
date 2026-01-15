@@ -123,6 +123,15 @@
         min-width: 36px;
       }
 
+      .time-now-btn {
+        color: #7eb8ff;
+      }
+
+      .time-now-btn:hover {
+        color: #aad4ff;
+        border-color: #7eb8ff;
+      }
+
       .time-play-btn.playing {
         background: #2a4a3a;
         border-color: #4aff9e;
@@ -1127,6 +1136,7 @@
         <label>Date & Time (UTC)</label>
         <input type="datetime-local" id="datetime" />
         <div class="time-step-controls">
+          <button id="time-now" class="time-step-btn time-now-btn" title="Jump to current time (N)">⊙</button>
           <button id="time-back" class="time-step-btn" title="Step backward (←)">|◀</button>
           <button id="time-play" class="time-step-btn time-play-btn" title="Play/Pause (P)">▶</button>
           <button id="time-step-unit" class="time-step-unit" title="Click to change step size">1h</button>

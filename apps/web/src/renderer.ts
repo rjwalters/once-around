@@ -304,11 +304,18 @@ void main() {
 const moonFragmentShader = `
 uniform vec3 sunDirection;
 uniform vec3 moonColor;
+uniform float eclipseMode;
 
 varying vec3 vNormal;
 varying vec3 vPosition;
 
 void main() {
+  // During eclipse, render as pure black silhouette
+  if (eclipseMode > 0.5) {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
   // Compute illumination from sun direction
   // sunDirection points FROM body (Moon/planet) TO Sun
   float illumination = dot(vNormal, sunDirection);
@@ -458,8 +465,10 @@ void main() {
   float angle = atan(centered.y, centered.x);
 
   // Inner cutoff (where the Moon is covering the Sun)
-  // Corona starts at ~1.0 solar radii (the edge of the Sun)
-  float innerRadius = 0.15;
+  // Corona plane is scaled to 8x Sun size (4x radius in each direction)
+  // Inner radius of 0.25 corresponds to 1 solar/lunar radius
+  // This is where the Moon's edge is during totality
+  float innerRadius = 0.25;
   float outerRadius = 1.0;
 
   // Mask out the center and beyond the corona
@@ -882,6 +891,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     uniforms: {
       sunDirection: { value: new THREE.Vector3(1, 0, 0) },
       moonColor: { value: new THREE.Vector3(0.9, 0.9, 0.85) },
+      eclipseMode: { value: 0.0 },
     },
   });
   const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
@@ -1542,10 +1552,20 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     // Moon position (index 1)
     let moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
 
-    // During eclipse alignment mode, snap Moon to Sun position
+    // During eclipse alignment mode, position Moon in front of Sun
     // This compensates for Moon ephemeris error (~1°) during known eclipses
     if (eclipseAlignmentEnabled) {
-      moonPos = sunPos.clone();
+      // Position Moon at Sun location but slightly closer to camera
+      // This ensures Moon renders in front of Sun and corona
+      const sunDir = sunPos.clone().normalize();
+      const offset = sunDir.clone().multiplyScalar(0.5);
+      moonPos = sunPos.clone().sub(offset);
+
+      // Enable eclipse mode to render Moon as pure black silhouette
+      moonMaterial.uniforms.eclipseMode.value = 1.0;
+    } else {
+      // Normal rendering mode
+      moonMaterial.uniforms.eclipseMode.value = 0.0;
     }
 
     // Update Moon mesh position
@@ -1557,8 +1577,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     moonMesh.scale.setScalar(moonDisplayScale);
 
     // Update Moon shader uniform - sun direction FROM MOON TO SUN for phase lighting
-    const sunDirFromMoon = new THREE.Vector3().subVectors(sunPos, moonPos).normalize();
-    moonMaterial.uniforms.sunDirection.value.copy(sunDirFromMoon);
+    // (only when not in eclipse alignment mode, which handles it above)
+    if (!eclipseAlignmentEnabled) {
+      const sunDirFromMoon = new THREE.Vector3().subVectors(sunPos, moonPos).normalize();
+      moonMaterial.uniforms.sunDirection.value.copy(sunDirFromMoon);
+    }
     const moonLabelPos = calculateLabelOffset(moonPos, LABEL_OFFSET);
     bodyLabels[1].position.copy(moonLabelPos);
     setFlagLine(1, moonPos, moonLabelPos);
@@ -1869,15 +1892,19 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
    * @param sunMoonSeparationDeg Angular separation in degrees
    */
   function updateEclipse(sunMoonSeparationDeg: number): void {
+    // When eclipse alignment is enabled, use 0 separation to ensure corona shows
+    // (the Moon ephemeris error is compensated visually, so show full corona)
+    const effectiveSeparation = eclipseAlignmentEnabled ? 0 : sunMoonSeparationDeg;
+
     // Calculate corona intensity based on separation
     let intensity = 0;
 
-    if (sunMoonSeparationDeg < ECLIPSE_FULL_VISIBILITY_THRESHOLD) {
+    if (effectiveSeparation < ECLIPSE_FULL_VISIBILITY_THRESHOLD) {
       // Full totality - maximum corona
       intensity = 1.0;
-    } else if (sunMoonSeparationDeg < ECLIPSE_FADE_START_THRESHOLD) {
+    } else if (effectiveSeparation < ECLIPSE_FADE_START_THRESHOLD) {
       // Partial - fade corona in/out
-      intensity = 1.0 - (sunMoonSeparationDeg - ECLIPSE_FULL_VISIBILITY_THRESHOLD) /
+      intensity = 1.0 - (effectiveSeparation - ECLIPSE_FULL_VISIBILITY_THRESHOLD) /
         (ECLIPSE_FADE_START_THRESHOLD - ECLIPSE_FULL_VISIBILITY_THRESHOLD);
       intensity = Math.max(0, Math.min(1, intensity));
     }
