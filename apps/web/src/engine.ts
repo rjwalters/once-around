@@ -164,8 +164,10 @@ export function getBodiesAngularDiametersBuffer(engine: SkyEngine): Float32Array
 
 /**
  * Create a Float32Array view into the planetary moons position buffer.
- * 5 moons * 4 floats (x, y, z, angular_diameter) = 20 floats.
- * Order: Io, Europa, Ganymede, Callisto, Titan
+ * 18 moons * 4 floats (x, y, z, angular_diameter) = 72 floats.
+ * Order: Jupiter (Io, Europa, Ganymede, Callisto), Saturn (Mimas, Enceladus,
+ * Tethys, Dione, Rhea, Titan), Uranus (Miranda, Ariel, Umbriel, Titania, Oberon),
+ * Neptune (Triton), Mars (Phobos, Deimos)
  */
 export function getPlanetaryMoonsBuffer(engine: SkyEngine): Float32Array {
   const memory = getWasmMemory();

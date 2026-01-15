@@ -82,6 +82,16 @@ function matchVideoToBody(objectName: string): string | null {
   if (lowerName === "dysnomia") return "Eris"; // Eris's moon
   if (lowerName === "charon") return "Pluto"; // Pluto's large moon
   if (lowerName === "vanth") return "Orcus"; // Orcus's moon
+  // Mars moons
+  if (lowerName === "phobos") return "Mars";
+  if (lowerName === "deimos") return "Mars";
+  if (lowerName === "phobos and deimos") return "Mars";
+  // Uranus moons
+  if (lowerName === "miranda") return "Uranus";
+  if (lowerName === "ariel") return "Uranus";
+  if (lowerName === "umbriel") return "Uranus";
+  if (lowerName === "titania") return "Uranus";
+  if (lowerName === "oberon") return "Uranus";
 
   return null;
 }

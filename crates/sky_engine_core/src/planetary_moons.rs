@@ -43,11 +43,29 @@ pub const JUPITER_POLE: PlanetPole = PlanetPole::from_degrees(268.057, 64.495);
 /// This gives Saturn's equator a ~26.7° tilt from the ecliptic
 pub const SATURN_POLE: PlanetPole = PlanetPole::from_degrees(40.589, 83.537);
 
+/// Uranus's north pole (IAU 2015)
+/// RA = 257.311°, Dec = -15.175°
+/// Uranus has an extreme axial tilt of ~98° (rotates almost on its side)
+pub const URANUS_POLE: PlanetPole = PlanetPole::from_degrees(257.311, -15.175);
+
+/// Neptune's north pole (IAU 2015, epoch J2000)
+/// RA = 299.36°, Dec = 43.46°
+/// Neptune has an axial tilt of ~28.3°
+pub const NEPTUNE_POLE: PlanetPole = PlanetPole::from_degrees(299.36, 43.46);
+
+/// Mars's north pole (IAU 2015)
+/// RA = 317.68°, Dec = 52.89°
+/// Mars has an axial tilt of ~25.2°
+pub const MARS_POLE: PlanetPole = PlanetPole::from_degrees(317.68, 52.89);
+
 /// Get the pole coordinates for a planet
 fn get_planet_pole(planet: Planet) -> PlanetPole {
     match planet {
         Planet::Jupiter => JUPITER_POLE,
         Planet::Saturn => SATURN_POLE,
+        Planet::Uranus => URANUS_POLE,
+        Planet::Neptune => NEPTUNE_POLE,
+        Planet::Mars => MARS_POLE,
         // For other planets, use ecliptic pole as approximation (no tilt)
         _ => PlanetPole::from_degrees(270.0, 66.56), // Ecliptic north pole
     }
@@ -241,37 +259,155 @@ pub const TITAN: MoonOrbitalElements = MoonOrbitalElements {
     mean_longitude_j2000_deg: 15.0,
 };
 
+/// Uranus's major moons (discovered by Herschel and Lassell)
+/// Ordered by distance from Uranus
+pub const URANUS_MOONS: [MoonOrbitalElements; 5] = [
+    // Miranda - smallest and innermost of the major moons
+    MoonOrbitalElements {
+        name: "Miranda",
+        parent: Planet::Uranus,
+        semi_major_axis_km: 129_900.0,
+        orbital_period_days: 1.413479,
+        eccentricity: 0.0013,
+        radius_km: 235.8,
+        mean_longitude_j2000_deg: 68.0,
+    },
+    // Ariel - brightest of the Uranian moons
+    MoonOrbitalElements {
+        name: "Ariel",
+        parent: Planet::Uranus,
+        semi_major_axis_km: 190_900.0,
+        orbital_period_days: 2.520379,
+        eccentricity: 0.0012,
+        radius_km: 578.9,
+        mean_longitude_j2000_deg: 115.0,
+    },
+    // Umbriel - darkest of the major moons
+    MoonOrbitalElements {
+        name: "Umbriel",
+        parent: Planet::Uranus,
+        semi_major_axis_km: 266_000.0,
+        orbital_period_days: 4.144176,
+        eccentricity: 0.0039,
+        radius_km: 584.7,
+        mean_longitude_j2000_deg: 180.0,
+    },
+    // Titania - largest moon of Uranus
+    MoonOrbitalElements {
+        name: "Titania",
+        parent: Planet::Uranus,
+        semi_major_axis_km: 436_300.0,
+        orbital_period_days: 8.705867,
+        eccentricity: 0.0011,
+        radius_km: 788.9,
+        mean_longitude_j2000_deg: 240.0,
+    },
+    // Oberon - outermost of the major moons
+    MoonOrbitalElements {
+        name: "Oberon",
+        parent: Planet::Uranus,
+        semi_major_axis_km: 583_500.0,
+        orbital_period_days: 13.463234,
+        eccentricity: 0.0014,
+        radius_km: 761.4,
+        mean_longitude_j2000_deg: 310.0,
+    },
+];
+
+/// Neptune's major moon - Triton (only large moon, captured KBO)
+/// Note: Triton has a RETROGRADE orbit, handled by negative period
+pub const NEPTUNE_MOONS: [MoonOrbitalElements; 1] = [
+    MoonOrbitalElements {
+        name: "Triton",
+        parent: Planet::Neptune,
+        semi_major_axis_km: 354_759.0,
+        orbital_period_days: -5.876854, // Negative = retrograde orbit
+        eccentricity: 0.000016, // Nearly circular
+        radius_km: 1353.4,
+        mean_longitude_j2000_deg: 264.0,
+    },
+];
+
+/// Mars's moons - Phobos and Deimos
+/// Both are small, irregularly shaped captured asteroids
+pub const MARS_MOONS: [MoonOrbitalElements; 2] = [
+    // Phobos - inner moon, orbits faster than Mars rotates
+    MoonOrbitalElements {
+        name: "Phobos",
+        parent: Planet::Mars,
+        semi_major_axis_km: 9_376.0,
+        orbital_period_days: 0.31891, // 7.66 hours
+        eccentricity: 0.0151,
+        radius_km: 11.1, // Mean radius of irregular shape
+        mean_longitude_j2000_deg: 92.0,
+    },
+    // Deimos - outer moon
+    MoonOrbitalElements {
+        name: "Deimos",
+        parent: Planet::Mars,
+        semi_major_axis_km: 23_458.0,
+        orbital_period_days: 1.26244, // 30.3 hours
+        eccentricity: 0.0002,
+        radius_km: 6.2, // Mean radius of irregular shape
+        mean_longitude_j2000_deg: 325.0,
+    },
+];
+
 /// Planetary moon identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum PlanetaryMoon {
-    // Jupiter's Galilean moons
+    // Jupiter's Galilean moons (0-3)
     Io = 0,
     Europa = 1,
     Ganymede = 2,
     Callisto = 3,
-    // Saturn's major moons
+    // Saturn's major moons (4-9)
     Mimas = 4,
     Enceladus = 5,
     Tethys = 6,
     Dione = 7,
     Rhea = 8,
     Titan = 9,
+    // Uranus's major moons (10-14)
+    Miranda = 10,
+    Ariel = 11,
+    Umbriel = 12,
+    Titania = 13,
+    Oberon = 14,
+    // Neptune's major moon (15)
+    Triton = 15,
+    // Mars's moons (16-17)
+    Phobos = 16,
+    Deimos = 17,
 }
 
 impl PlanetaryMoon {
-    /// All planetary moons in order (Jupiter's moons first, then Saturn's)
-    pub const ALL: [PlanetaryMoon; 10] = [
+    /// All planetary moons in order
+    pub const ALL: [PlanetaryMoon; 18] = [
+        // Jupiter
         PlanetaryMoon::Io,
         PlanetaryMoon::Europa,
         PlanetaryMoon::Ganymede,
         PlanetaryMoon::Callisto,
+        // Saturn
         PlanetaryMoon::Mimas,
         PlanetaryMoon::Enceladus,
         PlanetaryMoon::Tethys,
         PlanetaryMoon::Dione,
         PlanetaryMoon::Rhea,
         PlanetaryMoon::Titan,
+        // Uranus
+        PlanetaryMoon::Miranda,
+        PlanetaryMoon::Ariel,
+        PlanetaryMoon::Umbriel,
+        PlanetaryMoon::Titania,
+        PlanetaryMoon::Oberon,
+        // Neptune
+        PlanetaryMoon::Triton,
+        // Mars
+        PlanetaryMoon::Phobos,
+        PlanetaryMoon::Deimos,
     ];
 
     /// Jupiter's Galilean moons only
@@ -283,13 +419,28 @@ impl PlanetaryMoon {
     ];
 
     /// Saturn's major moons only
-    pub const SATURN_MOONS: [PlanetaryMoon; 6] = [
+    pub const SATURN_MOONS_ENUM: [PlanetaryMoon; 6] = [
         PlanetaryMoon::Mimas,
         PlanetaryMoon::Enceladus,
         PlanetaryMoon::Tethys,
         PlanetaryMoon::Dione,
         PlanetaryMoon::Rhea,
         PlanetaryMoon::Titan,
+    ];
+
+    /// Uranus's major moons only
+    pub const URANUS_MOONS_ENUM: [PlanetaryMoon; 5] = [
+        PlanetaryMoon::Miranda,
+        PlanetaryMoon::Ariel,
+        PlanetaryMoon::Umbriel,
+        PlanetaryMoon::Titania,
+        PlanetaryMoon::Oberon,
+    ];
+
+    /// Mars's moons only
+    pub const MARS_MOONS_ENUM: [PlanetaryMoon; 2] = [
+        PlanetaryMoon::Phobos,
+        PlanetaryMoon::Deimos,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -308,6 +459,14 @@ impl PlanetaryMoon {
             PlanetaryMoon::Dione => &SATURN_MOONS[3],
             PlanetaryMoon::Rhea => &SATURN_MOONS[4],
             PlanetaryMoon::Titan => &SATURN_MOONS[5],
+            PlanetaryMoon::Miranda => &URANUS_MOONS[0],
+            PlanetaryMoon::Ariel => &URANUS_MOONS[1],
+            PlanetaryMoon::Umbriel => &URANUS_MOONS[2],
+            PlanetaryMoon::Titania => &URANUS_MOONS[3],
+            PlanetaryMoon::Oberon => &URANUS_MOONS[4],
+            PlanetaryMoon::Triton => &NEPTUNE_MOONS[0],
+            PlanetaryMoon::Phobos => &MARS_MOONS[0],
+            PlanetaryMoon::Deimos => &MARS_MOONS[1],
         }
     }
 
@@ -412,21 +571,32 @@ pub fn compute_planetary_moon_position(
     }
 }
 
-/// Compute positions for all planetary moons (Jupiter + Saturn).
-pub fn compute_all_planetary_moon_positions(time: &SkyTime) -> [PlanetaryMoonPosition; 10] {
+/// Compute positions for all planetary moons.
+pub fn compute_all_planetary_moon_positions(time: &SkyTime) -> [PlanetaryMoonPosition; 18] {
     [
-        // Jupiter's Galilean moons
+        // Jupiter's Galilean moons (0-3)
         compute_planetary_moon_position(PlanetaryMoon::Io, time),
         compute_planetary_moon_position(PlanetaryMoon::Europa, time),
         compute_planetary_moon_position(PlanetaryMoon::Ganymede, time),
         compute_planetary_moon_position(PlanetaryMoon::Callisto, time),
-        // Saturn's major moons
+        // Saturn's major moons (4-9)
         compute_planetary_moon_position(PlanetaryMoon::Mimas, time),
         compute_planetary_moon_position(PlanetaryMoon::Enceladus, time),
         compute_planetary_moon_position(PlanetaryMoon::Tethys, time),
         compute_planetary_moon_position(PlanetaryMoon::Dione, time),
         compute_planetary_moon_position(PlanetaryMoon::Rhea, time),
         compute_planetary_moon_position(PlanetaryMoon::Titan, time),
+        // Uranus's major moons (10-14)
+        compute_planetary_moon_position(PlanetaryMoon::Miranda, time),
+        compute_planetary_moon_position(PlanetaryMoon::Ariel, time),
+        compute_planetary_moon_position(PlanetaryMoon::Umbriel, time),
+        compute_planetary_moon_position(PlanetaryMoon::Titania, time),
+        compute_planetary_moon_position(PlanetaryMoon::Oberon, time),
+        // Neptune's major moon (15)
+        compute_planetary_moon_position(PlanetaryMoon::Triton, time),
+        // Mars's moons (16-17)
+        compute_planetary_moon_position(PlanetaryMoon::Phobos, time),
+        compute_planetary_moon_position(PlanetaryMoon::Deimos, time),
     ]
 }
 
@@ -479,7 +649,7 @@ mod tests {
         eprintln!("Saturn angular diameter: {:.1} arcsec", saturn_ang_diam_arcsec);
 
         // Get each moon's position and calculate angular separation
-        for moon in PlanetaryMoon::SATURN_MOONS {
+        for moon in PlanetaryMoon::SATURN_MOONS_ENUM {
             let moon_pos = compute_planetary_moon_position(moon, &time);
 
             // Angular separation using dot product

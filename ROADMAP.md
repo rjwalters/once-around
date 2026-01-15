@@ -30,14 +30,6 @@ Use `history.replaceState()` to update URL as user navigates without creating hi
 
 ## Medium Priority
 
-### Additional Planet Moons
-Expand planetary moon support beyond current Jupiter (4) and Saturn (6) moons:
-
-- **Uranus**: Miranda, Ariel, Umbriel, Titania, Oberon
-- **Neptune**: Triton (bright, easy target)
-- **Mars**: Phobos, Deimos (enables "Moons of Mars" video)
-- **Saturn**: Janus & Epimetheus (famous co-orbital pair), Iapetus
-
 ### Major Asteroid Ephemeris
 Add orbital elements for bright asteroids:
 - Vesta, Pallas, Hygiea (main belt)
@@ -91,6 +83,9 @@ Add `manifest.json` and service worker for:
 - [x] Saturn moons: Mimas, Enceladus, Tethys, Dione, Rhea, Titan
 - [x] Dwarf planets: Pluto, Ceres, Eris, Makemake, Haumea
 - [x] TNOs: Sedna, Quaoar, Gonggong, Orcus, Varuna
+- [x] Uranus moons: Miranda, Ariel, Umbriel, Titania, Oberon
+- [x] Neptune moon: Triton (retrograde orbit)
+- [x] Mars moons: Phobos, Deimos
 
 ## Not Planned
 
