@@ -29,6 +29,7 @@ export interface Settings {
   orbitsVisible: boolean;
   dsosVisible: boolean;
   nightVisionEnabled: boolean;
+  arModeEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -43,6 +44,7 @@ const DEFAULT_SETTINGS: Settings = {
   orbitsVisible: false,
   dsosVisible: false,
   nightVisionEnabled: false,
+  arModeEnabled: false,
 };
 
 /**

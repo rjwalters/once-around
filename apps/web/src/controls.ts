@@ -22,6 +22,8 @@ export interface CelestialControls {
   getCameraState(): CameraState;
   setCameraState(state: CameraState): void;
   getRaDec(): { ra: number; dec: number };
+  setQuaternion(quaternion: THREE.Quaternion): void;
+  setEnabled(enabled: boolean): void;
   onFovChange?: (fov: number) => void;
   onCameraChange?: () => void;
 }
@@ -204,7 +206,7 @@ export function createCelestialControls(
   // --- Mouse handlers ---
 
   function onMouseDown(event: MouseEvent): void {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !inputEnabled) return;
 
     isDragging = true;
     isAnimating = false;
@@ -246,6 +248,7 @@ export function createCelestialControls(
   }
 
   function onWheel(event: WheelEvent): void {
+    if (!inputEnabled) return;
     event.preventDefault();
     const delta = event.deltaY * zoomSpeed;
     const newFov = Math.max(minFov, Math.min(maxFov, camera.fov + delta));
@@ -270,6 +273,7 @@ export function createCelestialControls(
   }
 
   function onTouchStart(event: TouchEvent): void {
+    if (!inputEnabled) return;
     if (event.touches.length === 1) {
       isDragging = true;
       isAnimating = false;
@@ -318,6 +322,7 @@ export function createCelestialControls(
   const ARROW_KEY_SPEED = 0.05;
 
   function onKeyDown(event: KeyboardEvent): void {
+    if (!inputEnabled) return;
     let angleX = 0;
     let angleY = 0;
 
@@ -487,6 +492,27 @@ export function createCelestialControls(
     return { ra, dec };
   }
 
+  /**
+   * Set the view quaternion directly (used by device orientation / AR mode).
+   */
+  function setQuaternion(quaternion: THREE.Quaternion): void {
+    viewQuaternion.copy(quaternion);
+    isAnimating = false;
+    updateCameraDirection();
+  }
+
+  // Track whether user input is enabled (disabled during AR mode)
+  let inputEnabled = true;
+
+  /**
+   * Enable or disable user input controls (mouse/touch/keyboard).
+   * Used to disable manual controls when device orientation / AR mode is active.
+   */
+  function setEnabled(enabled: boolean): void {
+    inputEnabled = enabled;
+    domElement.style.cursor = enabled ? "grab" : "default";
+  }
+
   const controlsApi: CelestialControls = {
     update,
     dispose,
@@ -495,6 +521,8 @@ export function createCelestialControls(
     getCameraState,
     setCameraState,
     getRaDec,
+    setQuaternion,
+    setEnabled,
     onFovChange: undefined,
     onCameraChange: undefined,
   };

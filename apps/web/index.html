@@ -1287,10 +1287,218 @@
       .tour-caption.hidden {
         display: none;
       }
+
+      /* AR Mode Button */
+      .ar-mode-btn {
+        margin-top: 8px;
+        padding: 8px 12px;
+        background: linear-gradient(135deg, #2a3a2a 0%, #2a4a3a 100%);
+        border: 1px solid #447744;
+        color: #88cc88;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        width: 100%;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .ar-mode-btn:hover {
+        background: linear-gradient(135deg, #3a4a3a 0%, #3a5a4a 100%);
+        border-color: #55aa55;
+        color: #aaffaa;
+      }
+
+      .ar-mode-btn.active {
+        background: linear-gradient(135deg, #2a5a3a 0%, #3a6a4a 100%);
+        border-color: #66cc66;
+        color: #aaffaa;
+        box-shadow: 0 0 10px rgba(102, 204, 102, 0.3);
+      }
+
+      .ar-mode-btn.unsupported {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+
+      .ar-mode-icon {
+        font-size: 16px;
+      }
+
+      .ar-mode-status {
+        position: fixed;
+        bottom: 120px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: #aaa;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        z-index: 200;
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+      }
+
+      .ar-mode-status.visible {
+        opacity: 1;
+      }
+
+      /* Mobile Panel Toggle */
+      .mobile-panel-toggle {
+        display: none;
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        width: 44px;
+        height: 44px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid #444;
+        border-radius: 8px;
+        color: #888;
+        font-size: 20px;
+        cursor: pointer;
+        z-index: 101;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+
+      .mobile-panel-toggle:hover {
+        background: rgba(0, 0, 0, 0.85);
+        border-color: #666;
+        color: #fff;
+      }
+
+      .mobile-panel-toggle.active {
+        background: rgba(74, 158, 255, 0.2);
+        border-color: #4a9eff;
+        color: #4a9eff;
+      }
+
+      /* Responsive Mobile Styles */
+      @media (max-width: 600px) {
+        .mobile-panel-toggle {
+          display: flex;
+        }
+
+        #controls {
+          top: 70px;
+          left: 10px;
+          right: 10px;
+          width: auto;
+          min-width: unset;
+          max-height: 0;
+          overflow: hidden;
+          opacity: 0;
+          padding: 0 16px;
+          transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+        }
+
+        #controls.expanded {
+          max-height: calc(100vh - 180px);
+          overflow-y: auto;
+          opacity: 1;
+          padding: 16px;
+        }
+
+        /* Larger touch targets */
+        .time-step-btn,
+        .time-step-unit,
+        .eclipse-btn,
+        .tour-btn,
+        .ar-mode-btn,
+        .about-button {
+          min-height: 44px;
+        }
+
+        .checkbox-group label {
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+          width: 20px;
+          height: 20px;
+        }
+
+        /* Prevent zoom on input focus */
+        input[type="text"],
+        input[type="datetime-local"] {
+          font-size: 16px;
+        }
+
+        /* Adjust info text */
+        #info {
+          font-size: 10px;
+          left: 10px;
+          right: 10px;
+          text-align: center;
+        }
+
+        /* Adjust coordinates display */
+        #coordinates {
+          right: 10px;
+          font-size: 11px;
+          padding: 4px 8px;
+        }
+
+        /* Adjust eclipse banner for mobile */
+        .eclipse-banner {
+          left: 10px;
+          right: 10px;
+          transform: none;
+          flex-direction: column;
+          gap: 8px;
+          padding: 10px 14px;
+        }
+
+        .eclipse-banner.hidden {
+          transform: translateY(20px);
+        }
+
+        /* Adjust tour playback for mobile */
+        .tour-playback {
+          left: 10px;
+          right: 10px;
+          transform: none;
+          min-width: unset;
+          max-width: none;
+        }
+
+        .tour-playback.hidden {
+          transform: translateY(20px);
+        }
+
+        /* Hide keyboard shortcut hints on mobile */
+        .shortcut {
+          display: none;
+        }
+      }
+
+      /* Extra small screens */
+      @media (max-width: 400px) {
+        .time-step-controls {
+          flex-wrap: wrap;
+        }
+
+        .time-step-btn,
+        .time-step-unit {
+          flex: 1 1 30%;
+        }
+      }
     </style>
   </head>
   <body>
     <div id="app"></div>
+
+    <button id="mobile-panel-toggle" class="mobile-panel-toggle" aria-label="Toggle controls">☰</button>
 
     <div id="controls">
       <div class="control-group">
@@ -1361,6 +1569,11 @@
           Night vision mode <span class="shortcut">(R)</span>
         </label>
       </div>
+
+      <button id="ar-mode-btn" class="ar-mode-btn" aria-pressed="false" title="Point your phone at the sky">
+        <span class="ar-mode-icon">📱</span>
+        <span>AR Mode</span>
+      </button>
 
       <div id="stats">
         Visible: <span id="star-count">0</span> / <span id="total-stars">0</span><br />
@@ -1530,6 +1743,8 @@
 
     <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | E = eclipse | R = night vision | Space = galactic center</div>
 
+    <div id="ar-mode-status" class="ar-mode-status"></div>
+
     <div id="eclipse-banner" class="eclipse-banner hidden">
       <div class="eclipse-banner-icon">☀</div>
       <div class="eclipse-banner-content">
@@ -1584,6 +1799,17 @@
     <script>
       if (window.location.search.includes('debug')) {
         document.getElementById('debug').style.display = 'block';
+      }
+
+      // Mobile panel toggle
+      const mobileToggle = document.getElementById('mobile-panel-toggle');
+      const controlsPanel = document.getElementById('controls');
+      if (mobileToggle && controlsPanel) {
+        mobileToggle.addEventListener('click', () => {
+          const isExpanded = controlsPanel.classList.toggle('expanded');
+          mobileToggle.classList.toggle('active', isExpanded);
+          mobileToggle.textContent = isExpanded ? '✕' : '☰';
+        });
       }
     </script>
 

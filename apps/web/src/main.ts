@@ -8,6 +8,7 @@ import { STAR_DATA } from "./starData";
 import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA, type DSOType } from "./dsoData";
 import { loadSettings, createSettingsSaver } from "./settings";
+import { createDeviceOrientationManager } from "./deviceOrientation";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import { getNextTotalSolarEclipse, getSunMoonSeparation, type TotalSolarEclipse } from "./eclipseData";
 import { createTourEngine, type TourPlaybackState } from "./tour";
@@ -842,6 +843,86 @@ async function main(): Promise<void> {
     nightVisionCheckbox.addEventListener("change", () => {
       setNightVision(nightVisionCheckbox.checked);
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // AR Mode (Device Orientation)
+  // ---------------------------------------------------------------------------
+  const arModeBtn = document.getElementById("ar-mode-btn");
+  const arModeStatus = document.getElementById("ar-mode-status");
+  let arModeEnabled = false;
+
+  // Create device orientation manager
+  const deviceOrientation = createDeviceOrientationManager({
+    onOrientationChange: (quaternion) => {
+      if (arModeEnabled) {
+        controls.setQuaternion(quaternion);
+      }
+    },
+    onStateChange: (state) => {
+      // Update button state based on device orientation state
+      if (arModeBtn) {
+        arModeBtn.classList.toggle("active", state.enabled);
+      }
+    },
+  });
+
+  function updateArModeUI(enabled: boolean, message?: string): void {
+    if (arModeBtn) {
+      arModeBtn.classList.toggle("active", enabled);
+      arModeBtn.setAttribute("aria-pressed", String(enabled));
+    }
+    if (arModeStatus) {
+      arModeStatus.textContent = message ?? "";
+      arModeStatus.classList.toggle("visible", !!message);
+    }
+  }
+
+  async function toggleArMode(): Promise<void> {
+    if (!deviceOrientation.isSupported()) {
+      updateArModeUI(false, "Not supported on this device");
+      setTimeout(() => updateArModeUI(false), 3000);
+      return;
+    }
+
+    if (arModeEnabled) {
+      // Disable AR mode
+      deviceOrientation.stop();
+      controls.setEnabled(true);
+      arModeEnabled = false;
+      updateArModeUI(false);
+      settingsSaver.save({ arModeEnabled: false });
+      return;
+    }
+
+    // Enable AR mode
+    if (deviceOrientation.requiresPermission()) {
+      const granted = await deviceOrientation.requestPermission();
+      if (!granted) {
+        updateArModeUI(false, "Permission denied");
+        setTimeout(() => updateArModeUI(false), 3000);
+        return;
+      }
+    }
+
+    deviceOrientation.start();
+    controls.setEnabled(false);
+    arModeEnabled = true;
+    updateArModeUI(true);
+    settingsSaver.save({ arModeEnabled: true });
+  }
+
+  // Set up AR mode button
+  if (arModeBtn) {
+    // Show/hide button based on device support
+    if (!deviceOrientation.isSupported()) {
+      arModeBtn.classList.add("unsupported");
+      arModeBtn.title = "Device orientation not supported";
+    } else {
+      arModeBtn.addEventListener("click", () => {
+        void toggleArMode();
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
