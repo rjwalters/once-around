@@ -30,11 +30,6 @@ Use `history.replaceState()` to update URL as user navigates without creating hi
 
 ## Medium Priority
 
-### Major Asteroid Ephemeris
-Add orbital elements for bright asteroids:
-- Vesta, Pallas, Hygiea (main belt)
-- Apophis, Bennu (NEOs with videos)
-
 ### Video Curation Expansion
 Review uncurated videos (192 of 306) for mappable objects:
 - Some map to specific locations (e.g., supernova remnants)
@@ -86,6 +81,8 @@ Add `manifest.json` and service worker for:
 - [x] Uranus moons: Miranda, Ariel, Umbriel, Titania, Oberon
 - [x] Neptune moon: Triton (retrograde orbit)
 - [x] Mars moons: Phobos, Deimos
+- [x] Major asteroids: Vesta, Pallas, Hygiea
+- [x] Near-Earth objects: Apophis, Bennu
 
 ## Not Planned
 

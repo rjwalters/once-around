@@ -21,7 +21,8 @@ const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Satur
 // Minor body names in the order they appear in the minor bodies buffer
 const MINOR_BODY_NAMES = [
   "Pluto", "Ceres", "Eris", "Makemake", "Haumea",
-  "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna"
+  "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna",
+  "Vesta", "Pallas", "Hygiea", "Apophis", "Bennu"
 ];
 const SKY_RADIUS = 50;
 

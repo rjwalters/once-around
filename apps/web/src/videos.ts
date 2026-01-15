@@ -50,6 +50,12 @@ function matchVideoToBody(objectName: string): string | null {
     gonggong: "Gonggong",
     orcus: "Orcus",
     varuna: "Varuna",
+    // Asteroids
+    vesta: "Vesta",
+    pallas: "Pallas",
+    hygiea: "Hygiea",
+    apophis: "Apophis",
+    bennu: "Bennu",
   };
 
   for (const [key, bodyName] of Object.entries(exactMatches)) {

@@ -205,34 +205,130 @@ pub const VARUNA: OrbitalElements = OrbitalElements::from_degrees(
     334.0,              // Mean radius (km)
 );
 
+// =============================================================================
+// Major Asteroids - Orbital elements from JPL Small-Body Database
+// =============================================================================
+
+/// Vesta (4) - second-largest asteroid, visited by Dawn spacecraft
+/// Orbital elements: JPL Small-Body Database
+pub const VESTA: OrbitalElements = OrbitalElements::from_degrees(
+    "Vesta",
+    2.3615,             // Semi-major axis (AU)
+    0.0887,             // Eccentricity
+    7.14,               // Inclination (degrees)
+    103.8,              // Longitude of ascending node (degrees)
+    150.7,              // Argument of perihelion (degrees)
+    20.0,               // Mean anomaly at J2000 (degrees) - estimated
+    3.63,               // Orbital period (years)
+    262.7,              // Mean radius (km)
+);
+
+/// Pallas (2) - third-largest asteroid, highly inclined orbit
+/// Orbital elements: JPL Small-Body Database
+pub const PALLAS: OrbitalElements = OrbitalElements::from_degrees(
+    "Pallas",
+    2.772,              // Semi-major axis (AU)
+    0.2302,             // Eccentricity
+    34.93,              // Inclination (degrees) - unusually high!
+    172.92,             // Longitude of ascending node (degrees)
+    310.87,             // Argument of perihelion (degrees)
+    40.6,               // Mean anomaly at J2000 (degrees)
+    4.62,               // Orbital period (years)
+    256.0,              // Mean radius (km)
+);
+
+/// Hygiea (10) - fourth-largest asteroid, nearly spherical
+/// Orbital elements: JPL Small-Body Database
+pub const HYGIEA: OrbitalElements = OrbitalElements::from_degrees(
+    "Hygiea",
+    3.1416,             // Semi-major axis (AU)
+    0.1114,             // Eccentricity
+    3.83,               // Inclination (degrees)
+    283.17,             // Longitude of ascending node (degrees)
+    312.48,             // Argument of perihelion (degrees)
+    75.0,               // Mean anomaly at J2000 (degrees) - estimated
+    5.57,               // Orbital period (years)
+    217.0,              // Mean radius (km)
+);
+
+// =============================================================================
+// Near-Earth Objects (NEOs) - Asteroids with orbits crossing Earth's
+// =============================================================================
+
+/// Apophis (99942) - potentially hazardous asteroid, close approach 2029
+/// Orbital elements: JPL Small-Body Database
+pub const APOPHIS: OrbitalElements = OrbitalElements::from_degrees(
+    "Apophis",
+    0.9224,             // Semi-major axis (AU) - crosses Earth's orbit!
+    0.1914,             // Eccentricity
+    3.34,               // Inclination (degrees)
+    204.5,              // Longitude of ascending node (degrees)
+    126.4,              // Argument of perihelion (degrees)
+    180.0,              // Mean anomaly at J2000 (degrees) - estimated
+    0.89,               // Orbital period (years) - less than 1 year!
+    0.17,               // Mean radius (km) - ~340m diameter
+);
+
+/// Bennu (101955) - OSIRIS-REx sample return target
+/// Orbital elements: JPL Small-Body Database
+pub const BENNU: OrbitalElements = OrbitalElements::from_degrees(
+    "Bennu",
+    1.126,              // Semi-major axis (AU)
+    0.2037,             // Eccentricity
+    6.03,               // Inclination (degrees)
+    2.06,               // Longitude of ascending node (degrees)
+    66.22,              // Argument of perihelion (degrees)
+    101.7,              // Mean anomaly at J2000 (degrees)
+    1.20,               // Orbital period (years)
+    0.245,              // Mean radius (km) - ~490m diameter
+);
+
 /// Minor body identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MinorBody {
+    // Dwarf planets
     Pluto = 0,
     Ceres = 1,
     Eris = 2,
     Makemake = 3,
     Haumea = 4,
+    // TNOs
     Sedna = 5,
     Quaoar = 6,
     Gonggong = 7,
     Orcus = 8,
     Varuna = 9,
+    // Major asteroids
+    Vesta = 10,
+    Pallas = 11,
+    Hygiea = 12,
+    // Near-Earth Objects
+    Apophis = 13,
+    Bennu = 14,
 }
 
 impl MinorBody {
-    pub const ALL: [MinorBody; 10] = [
+    pub const ALL: [MinorBody; 15] = [
+        // Dwarf planets
         MinorBody::Pluto,
         MinorBody::Ceres,
         MinorBody::Eris,
         MinorBody::Makemake,
         MinorBody::Haumea,
+        // TNOs
         MinorBody::Sedna,
         MinorBody::Quaoar,
         MinorBody::Gonggong,
         MinorBody::Orcus,
         MinorBody::Varuna,
+        // Major asteroids
+        MinorBody::Vesta,
+        MinorBody::Pallas,
+        MinorBody::Hygiea,
+        // NEOs
+        MinorBody::Apophis,
+        MinorBody::Bennu,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -251,6 +347,11 @@ impl MinorBody {
             MinorBody::Gonggong => &GONGGONG,
             MinorBody::Orcus => &ORCUS,
             MinorBody::Varuna => &VARUNA,
+            MinorBody::Vesta => &VESTA,
+            MinorBody::Pallas => &PALLAS,
+            MinorBody::Hygiea => &HYGIEA,
+            MinorBody::Apophis => &APOPHIS,
+            MinorBody::Bennu => &BENNU,
         }
     }
 }
@@ -481,11 +582,11 @@ mod tests {
                 body.name(), len
             );
 
-            // Distance should be positive and reasonable (> 1 AU, < 1000 AU from Earth)
+            // Distance should be positive and reasonable (NEOs can be < 1 AU, TNOs up to ~1000 AU)
             let distance_au = pos.distance_km / AU_TO_KM;
             assert!(
-                distance_au > 1.0 && distance_au < 1000.0,
-                "{} distance should be 1-1000 AU from Earth, got {} AU",
+                distance_au > 0.01 && distance_au < 1000.0,
+                "{} distance should be 0.01-1000 AU from Earth, got {} AU",
                 body.name(), distance_au
             );
 
