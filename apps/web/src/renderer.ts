@@ -700,6 +700,8 @@ export interface SkyRenderer {
   getRenderedStarCount(): number;
   /** Update eclipse rendering based on Sun-Moon angular separation */
   updateEclipse(sunMoonSeparationDeg: number): void;
+  /** Enable/disable eclipse alignment mode (snaps Moon to Sun position) */
+  setEclipseAlignment(enabled: boolean): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -908,6 +910,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   // Track corona animation time
   let coronaTime = 0;
+
+  // Eclipse alignment mode - when enabled, Moon is positioned at Sun location
+  // to compensate for Moon ephemeris error during known eclipses
+  let eclipseAlignmentEnabled = false;
 
   // ---------------------------------------------------------------------------
   // Planetary moons (Io, Europa, Ganymede, Callisto, Titan)
@@ -1534,7 +1540,13 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setFlagLine(0, sunPos, sunLabelPos);
 
     // Moon position (index 1)
-    const moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
+    let moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
+
+    // During eclipse alignment mode, snap Moon to Sun position
+    // This compensates for Moon ephemeris error (~1°) during known eclipses
+    if (eclipseAlignmentEnabled) {
+      moonPos = sunPos.clone();
+    }
 
     // Update Moon mesh position
     moonMesh.position.copy(moonPos);
@@ -1846,8 +1858,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   // Eclipse thresholds in degrees
-  const ECLIPSE_FULL_VISIBILITY_THRESHOLD = 0.3; // Full corona visible below this
-  const ECLIPSE_FADE_START_THRESHOLD = 1.5; // Corona starts fading in at this separation
+  // Note: The Moon ephemeris has ~1° error, so we use larger thresholds
+  // to ensure the corona is visible during cataloged eclipses
+  const ECLIPSE_FULL_VISIBILITY_THRESHOLD = 1.5; // Full corona visible below this
+  const ECLIPSE_FADE_START_THRESHOLD = 3.0; // Corona starts fading in at this separation
 
   /**
    * Update eclipse rendering based on Sun-Moon angular separation.
@@ -1887,6 +1901,15 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     }
   }
 
+  /**
+   * Enable or disable eclipse alignment mode.
+   * When enabled, the Moon is positioned at the Sun's location to create
+   * proper eclipse visuals (compensates for Moon ephemeris error).
+   */
+  function setEclipseAlignment(enabled: boolean): void {
+    eclipseAlignmentEnabled = enabled;
+  }
+
   function render(): void {
     // Update corona animation time
     coronaTime += 0.016; // ~60fps assumed
@@ -1918,6 +1941,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setDSOsVisible,
     getRenderedStarCount,
     updateEclipse,
+    setEclipseAlignment,
     render,
     resize,
   };

@@ -1063,6 +1063,60 @@
         color: #666;
         font-size: 12px;
       }
+
+      /* Eclipse info banner */
+      .eclipse-banner {
+        position: fixed;
+        bottom: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, rgba(40, 20, 60, 0.95) 0%, rgba(60, 30, 80, 0.95) 100%);
+        border: 1px solid #8855aa;
+        border-radius: 8px;
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        z-index: 150;
+        box-shadow: 0 4px 20px rgba(136, 85, 170, 0.3);
+        transition: opacity 0.3s, transform 0.3s;
+      }
+
+      .eclipse-banner.hidden {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+        pointer-events: none;
+      }
+
+      .eclipse-banner-icon {
+        font-size: 28px;
+        filter: drop-shadow(0 0 8px rgba(255, 200, 100, 0.8));
+      }
+
+      .eclipse-banner-content {
+        flex: 1;
+      }
+
+      .eclipse-banner-title {
+        color: #cc88ff;
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+
+      .eclipse-banner-details {
+        color: #aaa;
+        font-size: 11px;
+      }
+
+      .eclipse-banner-separation {
+        color: #88ff88;
+        font-family: monospace;
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 6px 10px;
+        border-radius: 4px;
+      }
     </style>
   </head>
   <body>
@@ -1283,6 +1337,21 @@
     </div>
 
     <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | E = eclipse | Space = galactic center</div>
+
+    <div id="eclipse-banner" class="eclipse-banner hidden">
+      <div class="eclipse-banner-icon">☀</div>
+      <div class="eclipse-banner-content">
+        <div class="eclipse-banner-title">Total Solar Eclipse</div>
+        <div class="eclipse-banner-details">
+          <span id="eclipse-banner-date"></span> &bull;
+          <span id="eclipse-banner-path"></span> &bull;
+          Duration: <span id="eclipse-banner-duration"></span>s
+        </div>
+      </div>
+      <div class="eclipse-banner-separation">
+        Sun-Moon: <span id="eclipse-banner-sep">--</span>°
+      </div>
+    </div>
 
     <div id="crosshair"></div>
     <div id="reference-circle" title="50 arcsec reference circle"></div>

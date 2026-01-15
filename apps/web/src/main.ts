@@ -454,13 +454,45 @@ async function main(): Promise<void> {
         requestAnimationFrame(() => {
           const bodyPos = getBodyPositions(engine);
           const sunPos = bodyPos.get("Sun");
+          const moonPos = bodyPos.get("Moon");
           if (sunPos) {
-            const { ra, dec } = positionToRaDec(sunPos);
-            controls.animateToRaDec(ra, dec, 1000);
+            const sunRaDec = positionToRaDec(sunPos);
+            controls.animateToRaDec(sunRaDec.ra, sunRaDec.dec, 1000);
+
+            // Update eclipse banner with separation
+            if (moonPos) {
+              const separation = calculateSunMoonSeparation(bodyPos);
+              const sepEl = document.getElementById("eclipse-banner-sep");
+              if (sepEl && separation !== null) {
+                sepEl.textContent = separation.toFixed(2);
+              }
+            }
           }
         });
 
-        // Show eclipse info toast
+        // Enable eclipse alignment mode (snaps Moon to Sun)
+        renderer.setEclipseAlignment(true);
+
+        // Trigger a re-render to apply alignment
+        renderer.updateFromEngine(engine);
+
+        // Show eclipse info banner
+        const eclipseBanner = document.getElementById("eclipse-banner");
+        const dateEl = document.getElementById("eclipse-banner-date");
+        const pathEl = document.getElementById("eclipse-banner-path");
+        const durationEl = document.getElementById("eclipse-banner-duration");
+
+        if (eclipseBanner) {
+          const eclipseDate = new Date(nextEclipse.datetime);
+          if (dateEl) dateEl.textContent = eclipseDate.toLocaleDateString("en-US", {
+            year: "numeric", month: "short", day: "numeric",
+            hour: "2-digit", minute: "2-digit", timeZone: "UTC"
+          }) + " UTC";
+          if (pathEl) pathEl.textContent = nextEclipse.path;
+          if (durationEl) durationEl.textContent = String(nextEclipse.durationSec);
+          eclipseBanner.classList.remove("hidden");
+        }
+
         console.log(`Next total solar eclipse: ${nextEclipse.datetime}`);
         console.log(`Path: ${nextEclipse.path}`);
         console.log(`Duration: ${nextEclipse.durationSec}s`);
@@ -497,10 +529,21 @@ async function main(): Promise<void> {
       if (videoMarkersRef) {
         videoMarkersRef.updateMovingPositions(bodyPos);
       }
-      // Update eclipse rendering
+      // Update eclipse rendering and banner
       const sunMoonSep = calculateSunMoonSeparation(bodyPos);
       if (sunMoonSep !== null) {
         renderer.updateEclipse(sunMoonSep);
+        // Update banner separation if visible, or hide if too far
+        const eclipseBanner = document.getElementById("eclipse-banner");
+        const sepEl = document.getElementById("eclipse-banner-sep");
+        if (eclipseBanner && !eclipseBanner.classList.contains("hidden")) {
+          if (sepEl) sepEl.textContent = sunMoonSep.toFixed(2);
+          // Hide banner and disable alignment if Sun-Moon separation is too large
+          if (sunMoonSep > 5) {
+            eclipseBanner.classList.add("hidden");
+            renderer.setEclipseAlignment(false);
+          }
+        }
       }
       settingsSaver.save({ datetime: date.toISOString() });
       // Update URL with new time
