@@ -1349,6 +1349,181 @@
         opacity: 1;
       }
 
+      /* Location Panel */
+      .location-section {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #333;
+      }
+
+      .location-section-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .location-section-header .icon {
+        font-size: 14px;
+      }
+
+      .location-search-group {
+        position: relative;
+        margin-bottom: 8px;
+      }
+
+      .location-search-group input[type="text"] {
+        width: 100%;
+        padding: 6px 8px;
+        background: #222;
+        border: 1px solid #444;
+        color: #fff;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+
+      .location-search-group input[type="text"]:focus {
+        outline: none;
+        border-color: #4a9eff;
+      }
+
+      .location-search-group input[type="text"]::placeholder {
+        color: #666;
+      }
+
+      .location-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        margin-top: 4px;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 200;
+        display: none;
+      }
+
+      .location-results.visible {
+        display: block;
+      }
+
+      .location-result {
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 12px;
+        border-bottom: 1px solid #2a2a2a;
+      }
+
+      .location-result:last-child {
+        border-bottom: none;
+      }
+
+      .location-result:hover,
+      .location-result.selected {
+        background: #2a2a2a;
+      }
+
+      .location-result-name {
+        color: #fff;
+      }
+
+      .location-result-country {
+        color: #888;
+        margin-left: 4px;
+      }
+
+      .location-coords {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .location-coord-input {
+        flex: 1;
+      }
+
+      .location-coord-input label {
+        display: block;
+        font-size: 10px;
+        color: #666;
+        margin-bottom: 2px;
+      }
+
+      .location-coord-input input[type="number"] {
+        width: 100%;
+        padding: 4px 6px;
+        background: #222;
+        border: 1px solid #444;
+        color: #fff;
+        border-radius: 4px;
+        font-size: 12px;
+        font-family: monospace;
+      }
+
+      .location-coord-input input[type="number"]:focus {
+        outline: none;
+        border-color: #4a9eff;
+      }
+
+      .location-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .location-btn {
+        flex: 1;
+        padding: 6px 8px;
+        background: #333;
+        border: 1px solid #555;
+        color: #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+
+      .location-btn:hover {
+        background: #444;
+        border-color: #666;
+        color: #fff;
+      }
+
+      .location-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .location-current {
+        margin-top: 8px;
+        padding: 6px 8px;
+        background: rgba(74, 158, 255, 0.1);
+        border-radius: 4px;
+        font-size: 11px;
+      }
+
+      .location-current-name {
+        color: #4a9eff;
+        font-weight: 500;
+      }
+
+      .location-current-coords {
+        color: #888;
+        font-family: monospace;
+        font-size: 10px;
+        margin-top: 2px;
+      }
+
       /* Mobile Panel Toggle */
       .mobile-panel-toggle {
         display: none;
@@ -1574,6 +1749,36 @@
         <span class="ar-mode-icon">📱</span>
         <span>AR Mode</span>
       </button>
+
+      <div class="location-section">
+        <div class="location-section-header">
+          <span class="icon">📍</span>
+          <span>Observer Location</span>
+        </div>
+        <div class="location-search-group">
+          <input type="text" id="location-search" placeholder="Search cities..." autocomplete="off" />
+          <div id="location-results" class="location-results"></div>
+        </div>
+        <div class="location-coords">
+          <div class="location-coord-input">
+            <label>Latitude</label>
+            <input type="number" id="location-lat" step="0.0001" min="-90" max="90" />
+          </div>
+          <div class="location-coord-input">
+            <label>Longitude</label>
+            <input type="number" id="location-lon" step="0.0001" min="-180" max="180" />
+          </div>
+        </div>
+        <div class="location-actions">
+          <button id="location-geolocate" class="location-btn" title="Use device GPS">
+            <span>📍</span> My Location
+          </button>
+        </div>
+        <div class="location-current">
+          <div class="location-current-name" id="location-name">San Francisco, USA</div>
+          <div class="location-current-coords" id="location-coords-display">37.77° N, 122.42° W</div>
+        </div>
+      </div>
 
       <div id="stats">
         Visible: <span id="star-count">0</span> / <span id="total-stars">0</span><br />

@@ -9,6 +9,7 @@ import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA, type DSOType } from "./dsoData";
 import { loadSettings, createSettingsSaver } from "./settings";
 import { createDeviceOrientationManager } from "./deviceOrientation";
+import { createLocationManager, formatLatitude, formatLongitude, type ObserverLocation } from "./location";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import { getNextTotalSolarEclipse, getSunMoonSeparation, type TotalSolarEclipse } from "./eclipseData";
 import { createTourEngine, type TourPlaybackState } from "./tour";
@@ -106,6 +107,8 @@ interface UrlState {
   fov?: number;
   t?: string; // ISO 8601 datetime
   mag?: number;
+  lat?: number; // Observer latitude
+  lon?: number; // Observer longitude
 }
 
 /**
@@ -184,6 +187,12 @@ function updateUrlState(state: UrlState): void {
     }
     if (pendingUrlState.mag !== undefined) {
       params.set('mag', pendingUrlState.mag.toFixed(1));
+    }
+    if (pendingUrlState.lat !== undefined) {
+      params.set('lat', pendingUrlState.lat.toFixed(4));
+    }
+    if (pendingUrlState.lon !== undefined) {
+      params.set('lon', pendingUrlState.lon.toFixed(4));
     }
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
@@ -922,6 +931,214 @@ async function main(): Promise<void> {
       arModeBtn.addEventListener("click", () => {
         void toggleArMode();
       });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Observer Location
+  // ---------------------------------------------------------------------------
+  const locationSearchInput = document.getElementById("location-search") as HTMLInputElement | null;
+  const locationResults = document.getElementById("location-results");
+  const locationLatInput = document.getElementById("location-lat") as HTMLInputElement | null;
+  const locationLonInput = document.getElementById("location-lon") as HTMLInputElement | null;
+  const locationGeolocateBtn = document.getElementById("location-geolocate");
+  const locationNameEl = document.getElementById("location-name");
+  const locationCoordsDisplayEl = document.getElementById("location-coords-display");
+
+  // Create location manager with initial location from settings
+  const locationManager = createLocationManager(
+    {
+      latitude: settings.observerLatitude,
+      longitude: settings.observerLongitude,
+      name: settings.observerName,
+    },
+    {
+      onLocationChange: (location: ObserverLocation) => {
+        // Update UI
+        updateLocationDisplay(location);
+        // Save to settings
+        settingsSaver.save({
+          observerLatitude: location.latitude,
+          observerLongitude: location.longitude,
+          observerName: location.name ?? "Custom",
+        });
+        // Update URL params
+        updateUrlState({
+          lat: location.latitude,
+          lon: location.longitude,
+        });
+      },
+    }
+  );
+
+  function updateLocationDisplay(location: ObserverLocation): void {
+    if (locationNameEl) {
+      locationNameEl.textContent = location.name ?? "Custom Location";
+    }
+    if (locationCoordsDisplayEl) {
+      locationCoordsDisplayEl.textContent = `${formatLatitude(location.latitude)}, ${formatLongitude(location.longitude)}`;
+    }
+    if (locationLatInput) {
+      locationLatInput.value = location.latitude.toFixed(4);
+    }
+    if (locationLonInput) {
+      locationLonInput.value = location.longitude.toFixed(4);
+    }
+  }
+
+  // Initialize display with current location
+  updateLocationDisplay(locationManager.getLocation());
+
+  // Location search
+  let locationSearchResults: ReturnType<typeof locationManager.searchCities> = [];
+  let selectedLocationIndex = -1;
+
+  function renderLocationResults(): void {
+    if (!locationResults) return;
+
+    if (locationSearchResults.length === 0) {
+      locationResults.classList.remove("visible");
+      return;
+    }
+
+    locationResults.innerHTML = locationSearchResults
+      .map(
+        (city, i) => `
+      <div class="location-result${i === selectedLocationIndex ? " selected" : ""}" data-index="${i}">
+        <span class="location-result-name">${city.name}</span>
+        <span class="location-result-country">${city.country}</span>
+      </div>
+    `
+      )
+      .join("");
+
+    locationResults.classList.add("visible");
+  }
+
+  function hideLocationResults(): void {
+    if (locationResults) {
+      locationResults.classList.remove("visible");
+    }
+    selectedLocationIndex = -1;
+  }
+
+  function selectLocationResult(index: number): void {
+    if (index >= 0 && index < locationSearchResults.length) {
+      const city = locationSearchResults[index];
+      locationManager.setLocationFromCity(city);
+      hideLocationResults();
+      if (locationSearchInput) {
+        locationSearchInput.value = "";
+        locationSearchInput.blur();
+      }
+    }
+  }
+
+  if (locationSearchInput) {
+    locationSearchInput.addEventListener("input", () => {
+      const query = locationSearchInput.value.trim();
+      if (query.length === 0) {
+        hideLocationResults();
+        locationSearchResults = [];
+        return;
+      }
+
+      locationSearchResults = locationManager.searchCities(query);
+      selectedLocationIndex = locationSearchResults.length > 0 ? 0 : -1;
+      renderLocationResults();
+    });
+
+    locationSearchInput.addEventListener("keydown", (e) => {
+      if (locationSearchResults.length === 0) return;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          selectedLocationIndex = Math.min(selectedLocationIndex + 1, locationSearchResults.length - 1);
+          renderLocationResults();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          selectedLocationIndex = Math.max(selectedLocationIndex - 1, 0);
+          renderLocationResults();
+          break;
+        case "Enter":
+          e.preventDefault();
+          selectLocationResult(selectedLocationIndex);
+          break;
+        case "Escape":
+          hideLocationResults();
+          locationSearchInput.blur();
+          break;
+      }
+    });
+
+    locationSearchInput.addEventListener("blur", () => {
+      setTimeout(hideLocationResults, 150);
+    });
+  }
+
+  // Click on location result
+  if (locationResults) {
+    locationResults.addEventListener("click", (e) => {
+      const target = (e.target as HTMLElement).closest(".location-result");
+      if (target) {
+        const index = parseInt(target.getAttribute("data-index") || "-1", 10);
+        selectLocationResult(index);
+      }
+    });
+  }
+
+  // Manual lat/lon input
+  function applyManualCoordinates(): void {
+    const lat = parseFloat(locationLatInput?.value ?? "");
+    const lon = parseFloat(locationLonInput?.value ?? "");
+    if (!isNaN(lat) && !isNaN(lon)) {
+      locationManager.setLocation({
+        latitude: lat,
+        longitude: lon,
+        name: "Custom",
+      });
+    }
+  }
+
+  if (locationLatInput) {
+    locationLatInput.addEventListener("change", applyManualCoordinates);
+  }
+  if (locationLonInput) {
+    locationLonInput.addEventListener("change", applyManualCoordinates);
+  }
+
+  // Geolocation button
+  if (locationGeolocateBtn) {
+    locationGeolocateBtn.addEventListener("click", async () => {
+      locationGeolocateBtn.setAttribute("disabled", "true");
+      const originalText = locationGeolocateBtn.innerHTML;
+      locationGeolocateBtn.innerHTML = "<span>⏳</span> Locating...";
+
+      const result = await locationManager.requestGeolocation();
+
+      locationGeolocateBtn.removeAttribute("disabled");
+      locationGeolocateBtn.innerHTML = originalText;
+
+      if (!result) {
+        // Show error briefly
+        locationGeolocateBtn.innerHTML = "<span>❌</span> Failed";
+        setTimeout(() => {
+          locationGeolocateBtn.innerHTML = originalText;
+        }, 2000);
+      }
+    });
+  }
+
+  // Check URL for location params
+  const urlLat = new URLSearchParams(window.location.search).get("lat");
+  const urlLon = new URLSearchParams(window.location.search).get("lon");
+  if (urlLat !== null && urlLon !== null) {
+    const lat = parseFloat(urlLat);
+    const lon = parseFloat(urlLon);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      locationManager.setLocation({ latitude: lat, longitude: lon, name: "URL Location" });
     }
   }
 

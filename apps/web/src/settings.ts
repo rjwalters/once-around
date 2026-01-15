@@ -30,6 +30,12 @@ export interface Settings {
   dsosVisible: boolean;
   nightVisionEnabled: boolean;
   arModeEnabled: boolean;
+  horizonVisible: boolean;
+
+  // Observer location
+  observerLatitude: number;
+  observerLongitude: number;
+  observerName: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -45,6 +51,12 @@ const DEFAULT_SETTINGS: Settings = {
   dsosVisible: false,
   nightVisionEnabled: false,
   arModeEnabled: false,
+  horizonVisible: false,
+
+  // Default: San Francisco
+  observerLatitude: 37.7749,
+  observerLongitude: -122.4194,
+  observerName: "San Francisco, USA",
 };
 
 /**

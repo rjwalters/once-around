@@ -117,7 +117,7 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
  * (one complete Io orbit).
  *
  * Uses a date in mid-2024 when Jupiter is well-positioned.
- * Jupiter position June 2024: RA ~65°, Dec ~23°
+ * Jupiter position June 15, 2024: RA ~65° (4h 20m), Dec ~21° (in Taurus)
  */
 export const JUPITER_MOONS_TOUR: TourDefinition = {
   id: 'jupiter-moons',
@@ -127,7 +127,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // Start: Jupiter in view
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 20,
       datetime: '2024-06-15T00:00:00Z',
       holdDuration: 3000,
@@ -138,7 +138,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // Zoom in to see moons clearly
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 1.5,
       datetime: '2024-06-15T00:00:00Z',
       holdDuration: 3000,
@@ -149,7 +149,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // +6 hours: Io has moved noticeably
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 1.5,
       datetime: '2024-06-15T06:00:00Z',
       holdDuration: 2500,
@@ -160,7 +160,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // +12 hours
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 1.5,
       datetime: '2024-06-15T12:00:00Z',
       holdDuration: 2500,
@@ -171,7 +171,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // +18 hours
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 1.5,
       datetime: '2024-06-15T18:00:00Z',
       holdDuration: 2500,
@@ -182,7 +182,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // +24 hours
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 1.5,
       datetime: '2024-06-16T00:00:00Z',
       holdDuration: 2500,
@@ -193,7 +193,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // +36 hours
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 1.5,
       datetime: '2024-06-16T12:00:00Z',
       holdDuration: 2500,
@@ -204,7 +204,7 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
     {
       // +42 hours: Io completes one orbit
       ra: 65,
-      dec: 23,
+      dec: 21,
       fov: 1.5,
       datetime: '2024-06-16T18:00:00Z',
       holdDuration: 4000,
