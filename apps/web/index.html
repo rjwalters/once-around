@@ -20,6 +20,22 @@
         overflow: hidden;
       }
 
+      /* Night Vision Mode - red filter for outdoor observing */
+      body.night-vision {
+        filter: sepia(100%) saturate(300%) brightness(70%) hue-rotate(-30deg);
+      }
+
+      body.night-vision #controls {
+        background: rgba(30, 0, 0, 0.85);
+        border-color: #500;
+      }
+
+      body.night-vision .tour-playback,
+      body.night-vision .eclipse-banner {
+        background: rgba(30, 0, 0, 0.95);
+        border-color: #800;
+      }
+
       #app {
         width: 100vw;
         height: 100vh;
@@ -1339,6 +1355,13 @@
         </label>
       </div>
 
+      <div class="control-group checkbox-group">
+        <label>
+          <input type="checkbox" id="night-vision" />
+          Night vision mode <span class="shortcut">(R)</span>
+        </label>
+      </div>
+
       <div id="stats">
         Visible: <span id="star-count">0</span> / <span id="total-stars">0</span><br />
         Rendered: <span id="rendered-stars">0</span>
@@ -1505,7 +1528,7 @@
       </div>
     </div>
 
-    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | E = eclipse | Space = galactic center</div>
+    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | E = eclipse | R = night vision | Space = galactic center</div>
 
     <div id="eclipse-banner" class="eclipse-banner hidden">
       <div class="eclipse-banner-icon">☀</div>

@@ -28,6 +28,7 @@ export interface Settings {
   videosVisible: boolean;
   orbitsVisible: boolean;
   dsosVisible: boolean;
+  nightVisionEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +42,7 @@ const DEFAULT_SETTINGS: Settings = {
   videosVisible: true,
   orbitsVisible: false,
   dsosVisible: false,
+  nightVisionEnabled: false,
 };
 
 /**

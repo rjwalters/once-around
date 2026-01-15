@@ -822,6 +822,28 @@ async function main(): Promise<void> {
     });
   }
 
+  // Night vision mode checkbox
+  const nightVisionCheckbox = document.getElementById("night-vision") as HTMLInputElement | null;
+
+  function setNightVision(enabled: boolean): void {
+    document.body.classList.toggle("night-vision", enabled);
+    if (nightVisionCheckbox) {
+      nightVisionCheckbox.checked = enabled;
+    }
+    settingsSaver.save({ nightVisionEnabled: enabled });
+  }
+
+  if (nightVisionCheckbox) {
+    // Restore from settings
+    const initialNightVision = settings.nightVisionEnabled ?? false;
+    nightVisionCheckbox.checked = initialNightVision;
+    document.body.classList.toggle("night-vision", initialNightVision);
+
+    nightVisionCheckbox.addEventListener("change", () => {
+      setNightVision(nightVisionCheckbox.checked);
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Search functionality
   // ---------------------------------------------------------------------------
@@ -1438,6 +1460,10 @@ async function main(): Promise<void> {
           }
           settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
         }
+        break;
+      case "r":
+        // Toggle night vision mode
+        setNightVision(!document.body.classList.contains("night-vision"));
         break;
       case "e":
         // Next Total Eclipse

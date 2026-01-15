@@ -4,14 +4,9 @@ Feature ideas for future development.
 
 ## High Priority
 
-### Scene Replay / Tours
-Infrastructure for scripted sequences that control both camera position and time progression, enabling planetarium-style guided tours.
-
-Components:
-- Scene format: array of keyframes with RA/Dec, FOV, datetime, duration
-- Playback engine: smooth interpolation between keyframes
-- UI: play/pause controls, progress indicator
-- Predefined tours: "Solar Eclipse 2024", "Jupiter's Moons", etc.
+### ~~Scene Replay / Tours~~ (Done)
+Planetarium-style guided tours with keyframe animation.
+Predefined tours: "2024 Eclipse", "Jupiter's Moons".
 
 ### Mobile / Touch Improvements
 Better experience on phones and tablets:
@@ -45,9 +40,9 @@ Depends on: Observer Location
 ### Keyboard Shortcut Help
 Press `?` to show overlay listing all keyboard shortcuts.
 
-### Night Vision Mode
+### ~~Night Vision Mode~~ (Done)
 Red-only color scheme for outdoor observing.
-Could be CSS filter or proper theme system.
+Toggle with checkbox or `R` key.
 
 ### PWA Support
 Add `manifest.json` and service worker for:
