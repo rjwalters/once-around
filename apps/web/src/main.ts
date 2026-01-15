@@ -12,7 +12,7 @@ import { createDeviceOrientationManager } from "./deviceOrientation";
 import { createLocationManager, formatLatitude, formatLongitude, type ObserverLocation } from "./location";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import { getNextTotalSolarEclipse, getSunMoonSeparation, type TotalSolarEclipse } from "./eclipseData";
-import { createTourEngine, type TourPlaybackState } from "./tour";
+import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tour";
 import { getTourById } from "./tourData";
 import type { SkyEngine } from "./wasm/sky_engine";
 
@@ -22,6 +22,19 @@ declare const __GIT_COMMIT__: string;
 
 // Body names in the order they appear in the position buffer
 const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
+
+// Map from tour target names to body indices (must match BODY_NAMES order)
+const TARGET_BODY_INDEX: Record<TargetBody, number> = {
+  sun: 0,
+  moon: 1,
+  mercury: 2,
+  venus: 3,
+  mars: 4,
+  jupiter: 5,
+  saturn: 6,
+  uranus: 7,
+  neptune: 8,
+};
 // Minor body names in the order they appear in the minor bodies buffer
 const MINOR_BODY_NAMES = [
   "Pluto", "Ceres", "Eris", "Makemake", "Haumea",
@@ -306,6 +319,45 @@ async function main(): Promise<void> {
     },
     getFov: () => renderer.camera.fov,
     setTime: setTimeForTour,
+    resolveBodyPosition: (target: TargetBody, datetime: Date) => {
+      // Temporarily set engine time to compute body position at keyframe datetime
+      const savedTime = new Date(currentDate);
+
+      // Set engine to keyframe time
+      engine.set_time_utc(
+        datetime.getUTCFullYear(),
+        datetime.getUTCMonth() + 1,
+        datetime.getUTCDate(),
+        datetime.getUTCHours(),
+        datetime.getUTCMinutes(),
+        datetime.getUTCSeconds()
+      );
+      engine.recompute();
+
+      // Get body position
+      const bodyIndex = TARGET_BODY_INDEX[target];
+      const bodyPos = getBodyPositions(engine);
+      const bodyName = BODY_NAMES[bodyIndex];
+      const pos = bodyPos.get(bodyName);
+
+      // Restore original time
+      engine.set_time_utc(
+        savedTime.getUTCFullYear(),
+        savedTime.getUTCMonth() + 1,
+        savedTime.getUTCDate(),
+        savedTime.getUTCHours(),
+        savedTime.getUTCMinutes(),
+        savedTime.getUTCSeconds()
+      );
+      engine.recompute();
+
+      if (!pos) {
+        console.error(`Could not find position for body: ${target}`);
+        return { ra: 0, dec: 0 };
+      }
+
+      return positionToRaDec(pos);
+    },
     onStateChange: (state: TourPlaybackState) => {
       updateTourUI(state);
     },
@@ -857,6 +909,23 @@ async function main(): Promise<void> {
     });
   }
 
+  // Horizon/ground plane checkbox
+  const horizonCheckbox = document.getElementById("horizon") as HTMLInputElement | null;
+  if (horizonCheckbox) {
+    // Restore from settings
+    const initialHorizon = settings.horizonVisible ?? false;
+    horizonCheckbox.checked = initialHorizon;
+    renderer.setGroundPlaneVisible(initialHorizon);
+
+    // Initialize ground plane orientation with location from settings
+    renderer.updateGroundPlaneOrientation(settings.observerLatitude, settings.observerLongitude);
+
+    horizonCheckbox.addEventListener("change", () => {
+      renderer.setGroundPlaneVisible(horizonCheckbox.checked);
+      settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // AR Mode (Device Orientation)
   // ---------------------------------------------------------------------------
@@ -961,6 +1030,8 @@ async function main(): Promise<void> {
         updateLocationDisplay(location);
         // Update engine's observer location (for topocentric Moon correction)
         engine.set_observer_location(location.latitude, location.longitude);
+        // Update ground plane orientation for topocentric view
+        renderer.updateGroundPlaneOrientation(location.latitude, location.longitude);
         // Save to settings
         settingsSaver.save({
           observerLatitude: location.latitude,
@@ -1768,6 +1839,14 @@ async function main(): Promise<void> {
         // Toggle night vision mode
         setNightVision(!document.body.classList.contains("night-vision"));
         break;
+      case "h":
+        // Toggle horizon/ground plane
+        if (horizonCheckbox) {
+          horizonCheckbox.checked = !horizonCheckbox.checked;
+          renderer.setGroundPlaneVisible(horizonCheckbox.checked);
+          settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
+        }
+        break;
       case "e":
         // Next Total Eclipse
         if (nextEclipseBtn) {
@@ -1979,6 +2058,8 @@ async function main(): Promise<void> {
     requestAnimationFrame(animate);
     controls.update();
     tourEngine.update();
+    // Update ground plane position for current sidereal time
+    renderer.updateGroundPlaneForTime(currentDate);
     renderer.render();
   }
 

@@ -711,6 +711,12 @@ export interface SkyRenderer {
   updateEclipse(sunMoonSeparationDeg: number): void;
   /** Enable/disable eclipse alignment mode (snaps Moon to Sun position) */
   setEclipseAlignment(enabled: boolean): void;
+  /** Set ground plane (horizon/Earth) visibility for topocentric mode */
+  setGroundPlaneVisible(visible: boolean): void;
+  /** Update ground plane orientation based on observer location */
+  updateGroundPlaneOrientation(latitudeDeg: number, longitudeDeg?: number): void;
+  /** Update ground plane position for current simulation time (call each frame) */
+  updateGroundPlaneForTime(date: Date): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -742,44 +748,52 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   scene.add(milkyWaySphere);
 
   // ---------------------------------------------------------------------------
-  // Ground Plane / Earth for topocentric mode
-  // Shows horizon and Earth below when observer location is set
+  // Ground Hemisphere for topocentric mode
+  // Shows the below-horizon portion of the celestial sphere as "ground"
+  // The horizon is a great circle 90° from the zenith - we use a hemisphere
+  // geometry to accurately represent this on the celestial sphere.
   // ---------------------------------------------------------------------------
-  const GROUND_PLANE_RADIUS = SKY_RADIUS * 1.1; // Slightly beyond sky sphere
-
   const groundPlaneGroup = new THREE.Group();
   groundPlaneGroup.visible = false; // Start hidden
+  groundPlaneGroup.renderOrder = 999; // Render last (on top)
   scene.add(groundPlaneGroup);
 
-  // Dark earth-colored disc
-  const groundGeometry = new THREE.CircleGeometry(GROUND_PLANE_RADIUS, 64);
+  // Hemisphere covering exactly half the celestial sphere (below horizon)
+  // SphereGeometry params: radius, widthSegments, heightSegments, phiStart, phiLength, thetaStart, thetaLength
+  // theta goes from 0 (top) to PI (bottom), so thetaStart=PI/2, thetaLength=PI/2 gives bottom hemisphere
+  const groundGeometry = new THREE.SphereGeometry(
+    SKY_RADIUS - 0.1, // Slightly inside sky sphere
+    64, // width segments
+    32, // height segments
+    0, Math.PI * 2, // full phi (longitude)
+    Math.PI / 2, Math.PI / 2 // theta from equator to bottom pole (hemisphere)
+  );
   const groundMaterial = new THREE.MeshBasicMaterial({
     color: 0x1a2a1a, // Dark earth green
-    side: THREE.DoubleSide,
+    side: THREE.BackSide, // Render inside of hemisphere (visible from origin)
     transparent: true,
     opacity: 0.95,
-    depthTest: false, // Render as overlay
+    depthTest: false,
+    depthWrite: false,
   });
   const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+  groundMesh.renderOrder = 999;
   groundPlaneGroup.add(groundMesh);
 
-  // Horizon ring for visual emphasis
-  const horizonRingGeometry = new THREE.RingGeometry(
-    GROUND_PLANE_RADIUS - 0.5,
-    GROUND_PLANE_RADIUS,
-    64
-  );
+  // Horizon ring at the equator of the hemisphere (the actual horizon line)
+  const horizonRingGeometry = new THREE.TorusGeometry(SKY_RADIUS - 0.1, 0.15, 8, 128);
   const horizonRingMaterial = new THREE.MeshBasicMaterial({
-    color: 0x4a6a4a, // Slightly brighter ring
-    side: THREE.DoubleSide,
+    color: 0x6a8a6a, // Brighter green ring
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.9,
+    depthTest: false,
+    depthWrite: false,
   });
   const horizonRing = new THREE.Mesh(horizonRingGeometry, horizonRingMaterial);
+  // Torus is created in XY plane, rotate to be horizontal (in XZ plane)
+  horizonRing.rotation.x = Math.PI / 2;
+  horizonRing.renderOrder = 1000;
   groundPlaneGroup.add(horizonRing);
-
-  // Track current observer latitude for ground plane orientation
-  let currentObserverLatitude = 0;
 
   const camera = new THREE.PerspectiveCamera(
     60,
@@ -1759,6 +1773,91 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   /**
+   * Set ground plane (horizon/Earth) visibility for topocentric mode.
+   */
+  function setGroundPlaneVisible(visible: boolean): void {
+    groundPlaneGroup.visible = visible;
+  }
+
+  // Track observer location for ground plane updates
+  let groundPlaneLatitude = 0;
+  let groundPlaneLongitude = 0;
+
+  /**
+   * Compute Greenwich Mean Sidereal Time (GMST) from a Date.
+   * Returns GMST in degrees (0-360).
+   * Uses IAU 2006 formula.
+   */
+  function computeGMST(date: Date): number {
+    // Julian Date
+    const JD = date.getTime() / 86400000 + 2440587.5;
+    // Julian centuries since J2000.0
+    const T = (JD - 2451545.0) / 36525;
+    // GMST in degrees (IAU 2006)
+    let gmst = 280.46061837 + 360.98564736629 * (JD - 2451545.0)
+             + 0.000387933 * T * T - T * T * T / 38710000;
+    // Normalize to 0-360
+    gmst = ((gmst % 360) + 360) % 360;
+    return gmst;
+  }
+
+  /**
+   * Update the ground plane orientation based on observer location and time.
+   * The ground plane is perpendicular to the local zenith direction.
+   * Zenith is at Dec = latitude, RA = Local Sidereal Time.
+   */
+  function updateGroundPlaneOrientation(latitudeDeg: number, longitudeDeg?: number): void {
+    groundPlaneLatitude = latitudeDeg;
+    if (longitudeDeg !== undefined) {
+      groundPlaneLongitude = longitudeDeg;
+    }
+  }
+
+  /**
+   * Update ground hemisphere orientation based on current simulation time.
+   * Called during render to keep horizon aligned with sidereal time.
+   */
+  function updateGroundPlaneForTime(date: Date): void {
+    if (!groundPlaneGroup.visible) return;
+
+    const latRad = groundPlaneLatitude * Math.PI / 180;
+
+    // Compute Local Sidereal Time
+    const gmst = computeGMST(date);
+    const lst = gmst + groundPlaneLongitude; // LST in degrees
+    const lstRad = (lst * Math.PI) / 180;
+
+    // Zenith direction: Dec = latitude, RA = LST
+    // In equatorial coords (Z-up): x = cos(dec)*cos(ra), y = cos(dec)*sin(ra), z = sin(dec)
+    const cosLat = Math.cos(latRad);
+    const sinLat = Math.sin(latRad);
+    const cosLst = Math.cos(lstRad);
+    const sinLst = Math.sin(lstRad);
+
+    // Equatorial coords (Z-up)
+    const eqX = cosLat * cosLst;
+    const eqY = cosLat * sinLst;
+    const eqZ = sinLat;
+
+    // Convert to Three.js (Y-up): (-X, Z, Y)
+    const zenith = new THREE.Vector3(-eqX, eqZ, eqY).normalize();
+
+    // The hemisphere is created with pole at -Y and equator in XZ plane.
+    // We need to rotate it so the pole points toward the nadir (opposite of zenith).
+    // The nadir direction is -zenith.
+    const nadir = zenith.clone().negate();
+
+    // Create a quaternion that rotates from -Y (default pole) to nadir direction
+    const defaultPole = new THREE.Vector3(0, -1, 0);
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromUnitVectors(defaultPole, nadir);
+
+    // Apply rotation to the group (hemisphere is at origin, camera is at origin)
+    groundPlaneGroup.position.set(0, 0, 0);
+    groundPlaneGroup.quaternion.copy(quaternion);
+  }
+
+  /**
    * Focus on a single planet's orbit, hiding all others.
    * Pass the body index (2=Mercury, 3=Venus, etc.) or null to show all.
    */
@@ -2009,6 +2108,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     getRenderedStarCount,
     updateEclipse,
     setEclipseAlignment,
+    setGroundPlaneVisible,
+    updateGroundPlaneOrientation,
+    updateGroundPlaneForTime,
     render,
     resize,
   };
