@@ -55,7 +55,7 @@ export function createRendererContext(container: HTMLElement): RendererContext {
   labelRenderer.setSize(container.clientWidth, container.clientHeight);
   labelRenderer.domElement.style.position = "absolute";
   labelRenderer.domElement.style.top = "0";
-  labelRenderer.domElement.style.pointerEvents = "auto";
+  labelRenderer.domElement.style.pointerEvents = "none";
   container.appendChild(labelRenderer.domElement);
 
   // Labels group
