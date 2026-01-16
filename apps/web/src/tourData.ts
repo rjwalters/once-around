@@ -530,6 +530,123 @@ export const HALLEY_2061_TOUR: TourDefinition = {
 };
 
 /**
+ * Betelgeuse Nova Tour (Hypothetical)
+ *
+ * A hypothetical tour showing what it might look like when Betelgeuse
+ * explodes as a Type II supernova. This is a fictional event set in 2031.
+ *
+ * Scientific basis:
+ * - Betelgeuse (HR 2061) is a red supergiant ~700 light-years away
+ * - Expected to explode within the next 100,000 years
+ * - Peak brightness estimate: magnitude -11 to -14 (we use -12.4)
+ * - Would be visible in daylight, cast shadows at night
+ * - Type II-P light curve: rapid rise, ~100 day plateau, gradual fade
+ */
+export const BETELGEUSE_NOVA_TOUR: TourDefinition = {
+  id: 'betelgeuse-nova',
+  name: 'Betelgeuse Nova',
+  description: 'Witness a hypothetical supernova explosion',
+  keyframes: [
+    {
+      // Keyframe 1: Normal Betelgeuse (Feb 14, 2031 evening)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 40,
+      datetime: '2031-02-14T23:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'Orion rises in the winter sky. Betelgeuse marks the hunter\'s shoulder...',
+      starOverrides: [{ starHR: 2061, magnitude: 0.42, bvColor: 1.85 }],
+    },
+    {
+      // Keyframe 2: Shock breakout begins (Feb 15 04:00)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 15,
+      datetime: '2031-02-15T04:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'The core collapses. Shock breakout begins...',
+      starOverrides: [{ starHR: 2061, magnitude: -8, bvColor: 0.0, scale: 3 }],
+    },
+    {
+      // Keyframe 3: Peak brightness (Feb 15 12:00)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 20,
+      datetime: '2031-02-15T12:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'At magnitude -12, Betelgeuse rivals the full Moon',
+      starOverrides: [{ starHR: 2061, magnitude: -12.4, bvColor: -0.1, scale: 8 }],
+    },
+    {
+      // Keyframe 4: Plateau phase (Mar 15, 2031)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 25,
+      datetime: '2031-03-15T20:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'The plateau phase: bright enough to cast shadows at night',
+      starOverrides: [{ starHR: 2061, magnitude: -11, bvColor: 0.2, scale: 6 }],
+    },
+    {
+      // Keyframe 5: Fading (Jun 15, 2031)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 30,
+      datetime: '2031-06-15T21:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'The supernova fades as radioactive decay slows',
+      starOverrides: [{ starHR: 2061, magnitude: -2, bvColor: 0.8, scale: 2 }],
+    },
+    {
+      // Keyframe 6: Dim remnant (Feb 2032)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 30,
+      datetime: '2032-02-15T20:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'One year later: a dim ember where the star once burned',
+      starOverrides: [{ starHR: 2061, magnitude: 4, bvColor: 1.2, scale: 1.2 }],
+    },
+    {
+      // Keyframe 7: Nebula forming (Feb 2036)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 25,
+      datetime: '2036-02-15T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Five years on: the Betelgeuse Nebula takes shape',
+      starOverrides: [{ starHR: 2061, magnitude: 6, bvColor: 0.5, scale: 1.5 }],
+    },
+    {
+      // Keyframe 8: Far future nebula (Feb 2131)
+      ra: 88.79,
+      dec: 7.41,
+      fov: 35,
+      datetime: '2131-02-15T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'A century later: Orion wears a new jewel at its shoulder',
+      starOverrides: [{ starHR: 2061, magnitude: 8, bvColor: 0.3, scale: 2 }],
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
@@ -539,6 +656,7 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   HALE_BOPP_1997_TOUR,
   HALLEY_1986_TOUR,
   HALLEY_2061_TOUR,
+  BETELGEUSE_NOVA_TOUR,
 ];
 
 /**

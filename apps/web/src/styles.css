@@ -1390,7 +1390,7 @@ canvas {
   color: #6c6;
 }
 
-/* Crosshair */
+/* Viewpoint marker (ring) */
 #crosshair {
   position: fixed;
   top: 50%;
@@ -1398,29 +1398,10 @@ canvas {
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 50;
-}
-
-#crosshair::before,
-#crosshair::after {
-  content: '';
-  position: absolute;
-  background: rgba(102, 204, 102, 0.6);
-}
-
-#crosshair::before {
-  /* Horizontal line */
-  width: 20px;
-  height: 1px;
-  left: -10px;
-  top: 0;
-}
-
-#crosshair::after {
-  /* Vertical line */
-  width: 1px;
-  height: 20px;
-  left: 0;
-  top: -10px;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid rgba(102, 204, 102, 0.6);
+  border-radius: 50%;
 }
 
 /* Reference circle */

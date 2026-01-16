@@ -47,6 +47,24 @@ export interface TourLocation {
 }
 
 /**
+ * Star property override for special effects during tours.
+ * Used for hypothetical events like supernovae.
+ */
+export interface StarOverride {
+  /** Harvard Revised catalog number (e.g., 2061 for Betelgeuse) */
+  starHR: number;
+
+  /** Override apparent magnitude */
+  magnitude?: number;
+
+  /** Override B-V color index (-0.4 to 2.0) */
+  bvColor?: number;
+
+  /** Size multiplier (1.0 = normal) */
+  scale?: number;
+}
+
+/**
  * A single keyframe in a tour sequence.
  */
 export interface TourKeyframe {
@@ -79,6 +97,9 @@ export interface TourKeyframe {
 
   /** Optional caption/annotation for this keyframe */
   caption?: string;
+
+  /** Optional star property overrides for special effects (e.g., supernovae) */
+  starOverrides?: StarOverride[];
 }
 
 /**
@@ -168,6 +189,12 @@ export interface TourCallbacks {
 
   /** Called when user should see a caption */
   onCaptionChange?: (caption: string | null) => void;
+
+  /** Apply star property overrides (for special effects like supernovae) */
+  setStarOverrides?: (overrides: StarOverride[]) => void;
+
+  /** Clear all star property overrides */
+  clearStarOverrides?: () => void;
 }
 
 /**
@@ -249,6 +276,69 @@ function lerpTime(fromDate: Date, toDate: Date, t: number): Date {
 }
 
 /**
+ * Interpolate star overrides between two keyframes.
+ * Matches stars by HR number and interpolates their properties.
+ */
+function interpolateStarOverrides(
+  from: StarOverride[],
+  to: StarOverride[],
+  t: number
+): StarOverride[] {
+  // Build a map of target overrides for quick lookup
+  const toMap = new Map<number, StarOverride>();
+  for (const override of to) {
+    toMap.set(override.starHR, override);
+  }
+
+  // Build a map of source overrides
+  const fromMap = new Map<number, StarOverride>();
+  for (const override of from) {
+    fromMap.set(override.starHR, override);
+  }
+
+  // Interpolate all stars that appear in either source or target
+  const allStars = new Set([...fromMap.keys(), ...toMap.keys()]);
+  const result: StarOverride[] = [];
+
+  for (const starHR of allStars) {
+    const fromOverride = fromMap.get(starHR);
+    const toOverride = toMap.get(starHR);
+
+    if (fromOverride && toOverride) {
+      // Both have this star - interpolate
+      result.push({
+        starHR,
+        magnitude: lerp(fromOverride.magnitude ?? 0, toOverride.magnitude ?? 0, t),
+        bvColor: lerp(fromOverride.bvColor ?? 0, toOverride.bvColor ?? 0, t),
+        scale: lerp(fromOverride.scale ?? 1, toOverride.scale ?? 1, t),
+      });
+    } else if (toOverride) {
+      // Only in target - fade in from defaults
+      const defaultMag = 0.42; // Betelgeuse default
+      const defaultBv = 1.85;
+      result.push({
+        starHR,
+        magnitude: lerp(defaultMag, toOverride.magnitude ?? defaultMag, t),
+        bvColor: lerp(defaultBv, toOverride.bvColor ?? defaultBv, t),
+        scale: lerp(1, toOverride.scale ?? 1, t),
+      });
+    } else if (fromOverride) {
+      // Only in source - fade out to defaults
+      const defaultMag = 0.42;
+      const defaultBv = 1.85;
+      result.push({
+        starHR,
+        magnitude: lerp(fromOverride.magnitude ?? defaultMag, defaultMag, t),
+        bvColor: lerp(fromOverride.bvColor ?? defaultBv, defaultBv, t),
+        scale: lerp(fromOverride.scale ?? 1, 1, t),
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Create a tour engine instance.
  */
 export function createTourEngine(callbacks: TourCallbacks): TourEngine {
@@ -270,6 +360,11 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
   let startLocation: TourLocation | null = null;
   let targetLocation: TourLocation | null = null;
   let hasLocationChange = false;
+
+  // Star override interpolation state
+  let startStarOverrides: StarOverride[] = [];
+  let targetStarOverrides: StarOverride[] = [];
+  let hasStarOverrideChange = false;
 
   // Track if we've started the camera animation for current transition
   let cameraAnimationStarted = false;
@@ -368,6 +463,19 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
       targetLocation = null;
     }
 
+    // Set up star override interpolation
+    if (firstKeyframe.starOverrides && callbacks.setStarOverrides) {
+      startStarOverrides = [];
+      targetStarOverrides = firstKeyframe.starOverrides;
+      hasStarOverrideChange = true;
+      // For first keyframe, apply star overrides immediately
+      callbacks.setStarOverrides(targetStarOverrides);
+    } else {
+      hasStarOverrideChange = false;
+      startStarOverrides = [];
+      targetStarOverrides = [];
+    }
+
     // Resolve position (either from target body or explicit ra/dec)
     const { ra, dec } = resolveKeyframePosition(firstKeyframe, callbacks.resolveBodyPosition);
 
@@ -408,6 +516,7 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     currentKeyframeIndex = 0;
     phase = 'transition';
     callbacks.onCaptionChange?.(null);
+    callbacks.clearStarOverrides?.();
     notifyStateChange();
   }
 
@@ -454,6 +563,25 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
       hasLocationChange = false;
       startLocation = null;
       targetLocation = null;
+    }
+
+    // Set up star override interpolation
+    if (keyframe.starOverrides && callbacks.setStarOverrides) {
+      startStarOverrides = prevKeyframe?.starOverrides ?? [];
+      targetStarOverrides = keyframe.starOverrides;
+      hasStarOverrideChange = true;
+      // Apply immediately if instant transition
+      if (keyframe.transitionDuration === 0) {
+        callbacks.setStarOverrides(targetStarOverrides);
+      }
+    } else if (prevKeyframe?.starOverrides && callbacks.clearStarOverrides) {
+      // Previous keyframe had overrides but this one doesn't - clear them
+      callbacks.clearStarOverrides();
+      hasStarOverrideChange = false;
+      startStarOverrides = [];
+      targetStarOverrides = [];
+    } else {
+      hasStarOverrideChange = false;
     }
 
     // Resolve position (either from target body or explicit ra/dec)
@@ -541,6 +669,12 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
             targetLocation.name
           );
         }
+      }
+
+      // Interpolate star overrides if changing
+      if (hasStarOverrideChange && callbacks.setStarOverrides) {
+        const interpolated = interpolateStarOverrides(startStarOverrides, targetStarOverrides, eased);
+        callbacks.setStarOverrides(interpolated);
       }
 
       // Check if transition complete

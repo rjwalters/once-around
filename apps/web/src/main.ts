@@ -7,15 +7,26 @@ import { setupUI, applyTimeToEngine } from "./ui";
 import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement, type BodyPositions } from "./videos";
 import { STAR_DATA } from "./starData";
 import { CONSTELLATION_DATA } from "./constellationData";
-import { DSO_DATA, type DSOType } from "./dsoData";
+import { DSO_DATA } from "./dsoData";
 import { loadSettings, createSettingsSaver, type ViewMode } from "./settings";
-import { createDeviceOrientationManager } from "./deviceOrientation";
 import { createLocationManager, formatLatitude, formatLongitude, type ObserverLocation } from "./location";
-import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
-import { getNextTotalSolarEclipse, getSunMoonSeparation, type TotalSolarEclipse } from "./eclipseData";
+import { CONSTELLATION_CENTERS, type SearchItem } from "./search";
+import { getSunMoonSeparation } from "./eclipseData";
 import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tour";
-import { getTourById, PREDEFINED_TOURS } from "./tourData";
 import type { SkyEngine } from "./wasm/sky_engine";
+import { createTimeControls } from "./time-controls";
+import { setupSimpleModal, setupModalClose } from "./modal-utils";
+import { createViewModeManager } from "./view-mode";
+import { createARModeManager } from "./ar-mode";
+import { createLocationUI } from "./location-ui";
+import { createSearchUI } from "./search-ui";
+import { setupTourUI } from "./tour-ui";
+import { createCoordinateDisplay } from "./coordinate-display";
+import { setupVideoMarkerInteractions } from "./video-marker-interactions";
+import { createEclipseHandler } from "./eclipse-handler";
+import { setupInfoModals } from "./info-modals";
+import { setupKeyboardHandler } from "./keyboard-handler";
+import { buildSearchIndex } from "./search-index";
 
 // Build-time constants injected by Vite
 declare const __BUILD_TIME__: string;
@@ -267,6 +278,14 @@ async function main(): Promise<void> {
   // Create Three.js renderer
   const renderer = createRenderer(container);
 
+  // Helper to update rendered star count display
+  const starCountEl = document.getElementById("star-count");
+  function updateRenderedStars(): void {
+    if (starCountEl) {
+      starCountEl.textContent = renderer.getRenderedStarCount().toLocaleString();
+    }
+  }
+
   // Create camera controls
   const controls = createCelestialControls(
     renderer.camera,
@@ -414,6 +433,12 @@ async function main(): Promise<void> {
         captionEl.classList.toggle("hidden", !caption);
       }
     },
+    setStarOverrides: (overrides) => {
+      renderer.setStarOverrides(overrides);
+    },
+    clearStarOverrides: () => {
+      renderer.clearStarOverrides();
+    },
   });
 
   // Update tour UI based on state
@@ -531,218 +556,26 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // Time step controls
   // ---------------------------------------------------------------------------
-  const timeStepUnits = [
-    { label: "1h", ms: 60 * 60 * 1000, description: "1 hour - watch Jupiter's moons move" },
-    { label: "1d", ms: 24 * 60 * 60 * 1000, description: "1 day - watch planets move against stars" },
-    { label: "1w", ms: 7 * 24 * 60 * 60 * 1000, description: "1 week - watch outer planets and retrograde" },
-  ];
-  let currentStepIndex = 0;
-
-  const timeNowBtn = document.getElementById("time-now");
-  const timeBackBtn = document.getElementById("time-back");
-  const timeForwardBtn = document.getElementById("time-forward");
-  const timePlayBtn = document.getElementById("time-play");
-  const timeStepUnitBtn = document.getElementById("time-step-unit");
-
-  // Play/pause state
-  let isPlaying = false;
-  let playInterval: ReturnType<typeof setInterval> | null = null;
-  const PLAY_INTERVAL_MS = 200; // Step every 200ms when playing
-
-  function stepTime(direction: 1 | -1): void {
-    if (!datetimeInput) return;
-    const currentStep = timeStepUnits[currentStepIndex];
-    const currentTime = datetimeInput.value ? new Date(datetimeInput.value) : new Date();
-    const newTime = new Date(currentTime.getTime() + direction * currentStep.ms);
-
-    // Update the datetime input
-    const year = newTime.getFullYear();
-    const month = String(newTime.getMonth() + 1).padStart(2, "0");
-    const day = String(newTime.getDate()).padStart(2, "0");
-    const hours = String(newTime.getHours()).padStart(2, "0");
-    const minutes = String(newTime.getMinutes()).padStart(2, "0");
-    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-    // Trigger the change event to update the engine
-    datetimeInput.dispatchEvent(new Event("change"));
-  }
-
-  function jumpToNow(): void {
-    if (!datetimeInput) return;
-    stopPlayback();
-
-    // Hide eclipse banner when jumping to now
-    const eclipseBanner = document.getElementById("eclipse-banner");
-    if (eclipseBanner) {
-      eclipseBanner.classList.add("hidden");
-    }
-
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-
-    // Trigger the change event to update the engine
-    datetimeInput.dispatchEvent(new Event("change"));
-  }
-
-  function startPlayback(): void {
-    if (isPlaying) return;
-    isPlaying = true;
-    if (timePlayBtn) {
-      timePlayBtn.textContent = "⏸";
-      timePlayBtn.classList.add("playing");
-    }
-    playInterval = setInterval(() => stepTime(1), PLAY_INTERVAL_MS);
-  }
-
-  function stopPlayback(): void {
-    if (!isPlaying) return;
-    isPlaying = false;
-    if (timePlayBtn) {
-      timePlayBtn.textContent = "▶";
-      timePlayBtn.classList.remove("playing");
-    }
-    if (playInterval) {
-      clearInterval(playInterval);
-      playInterval = null;
-    }
-  }
-
-  function togglePlayback(): void {
-    if (isPlaying) {
-      stopPlayback();
-    } else {
-      startPlayback();
-    }
-  }
-
-  function cycleStepUnit(): void {
-    currentStepIndex = (currentStepIndex + 1) % timeStepUnits.length;
-    if (timeStepUnitBtn) {
-      timeStepUnitBtn.textContent = timeStepUnits[currentStepIndex].label;
-      timeStepUnitBtn.title = timeStepUnits[currentStepIndex].description;
-    }
-  }
-
-  if (timeNowBtn) {
-    timeNowBtn.addEventListener("click", jumpToNow);
-  }
-  if (timeBackBtn) {
-    timeBackBtn.addEventListener("click", () => {
-      stopPlayback(); // Stop playback when manually stepping
-      stepTime(-1);
-    });
-  }
-  if (timeForwardBtn) {
-    timeForwardBtn.addEventListener("click", () => {
-      stopPlayback(); // Stop playback when manually stepping
-      stepTime(1);
-    });
-  }
-  if (timePlayBtn) {
-    timePlayBtn.addEventListener("click", togglePlayback);
-  }
-  if (timeStepUnitBtn) {
-    timeStepUnitBtn.addEventListener("click", cycleStepUnit);
-    timeStepUnitBtn.title = timeStepUnits[currentStepIndex].description;
-  }
-
-  // Stop playback when user manually changes the datetime input
-  if (datetimeInput) {
-    datetimeInput.addEventListener("focus", stopPlayback);
-  }
+  const timeControls = datetimeInput ? createTimeControls({ datetimeInput }) : null;
+  timeControls?.setupEventListeners();
 
   // ---------------------------------------------------------------------------
   // Next Total Eclipse handler (used by dynamically generated button)
   // ---------------------------------------------------------------------------
-  function handleNextEclipseClick(): void {
-    stopPlayback(); // Stop any time playback
-
-    // Get current date from datetime input or use now
-    // Add 1 minute buffer to avoid re-selecting the same eclipse
-    // (datetime-local input truncates seconds, so we need this offset)
-    const currentTime = datetimeInput?.value ? new Date(datetimeInput.value) : new Date();
-    const searchTime = new Date(currentTime.getTime() + 60 * 1000); // +1 minute
-    const nextEclipse = getNextTotalSolarEclipse(searchTime);
-
-    if (nextEclipse) {
-      const eclipseDate = new Date(nextEclipse.datetime);
-
-      // Update the datetime input
-      if (datetimeInput) {
-        const year = eclipseDate.getFullYear();
-        const month = String(eclipseDate.getMonth() + 1).padStart(2, "0");
-        const day = String(eclipseDate.getDate()).padStart(2, "0");
-        const hours = String(eclipseDate.getHours()).padStart(2, "0");
-        const minutes = String(eclipseDate.getMinutes()).padStart(2, "0");
-        datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-      }
-
-      // Update the engine directly (don't rely on change event timing)
-      applyTimeToEngine(engine, eclipseDate);
-      engine.recompute();
-
-      // Update renderer with new positions
-      renderer.updateFromEngine(engine);
-
-      // Get updated body positions and animate to sun
-      const bodyPos = getBodyPositions(engine);
-
-      // Update eclipse rendering (shows corona)
-      const sunMoonSep = calculateSunMoonSeparation(bodyPos);
-      if (sunMoonSep !== null) {
-        renderer.updateEclipse(sunMoonSep);
-      }
-      const sunPos = bodyPos.get("Sun");
-      const moonPos = bodyPos.get("Moon");
-
-      // Update video markers with new body positions
-      if (videoMarkersRef) {
-        videoMarkersRef.updateMovingPositions(bodyPos);
-      }
-
-      if (sunPos) {
-        const sunRaDec = positionToRaDec(sunPos);
-        controls.animateToRaDec(sunRaDec.ra, sunRaDec.dec, 1000);
-
-        // Update eclipse banner with separation
-        if (moonPos) {
-          const separation = calculateSunMoonSeparation(bodyPos);
-          const sepEl = document.getElementById("eclipse-banner-sep");
-          if (sepEl && separation !== null) {
-            sepEl.textContent = separation.toFixed(2);
-          }
-        }
-      }
-
-      // Show eclipse info banner
-      const eclipseBanner = document.getElementById("eclipse-banner");
-      const dateEl = document.getElementById("eclipse-banner-date");
-      const pathEl = document.getElementById("eclipse-banner-path");
-      const durationEl = document.getElementById("eclipse-banner-duration");
-
-      if (eclipseBanner) {
-        const eclipseDate = new Date(nextEclipse.datetime);
-        if (dateEl) dateEl.textContent = eclipseDate.toLocaleDateString("en-US", {
-          year: "numeric", month: "short", day: "numeric",
-          hour: "2-digit", minute: "2-digit", timeZone: "UTC"
-        }) + " UTC";
-        if (pathEl) pathEl.textContent = nextEclipse.path;
-        if (durationEl) durationEl.textContent = String(nextEclipse.durationSec);
-        eclipseBanner.classList.remove("hidden");
-      }
-
-      console.log(`Next total solar eclipse: ${nextEclipse.datetime}`);
-      console.log(`Path: ${nextEclipse.path}`);
-      console.log(`Duration: ${nextEclipse.durationSec}s`);
-    } else {
-      console.log("No more total solar eclipses in the catalog (extends to 2045)");
-    }
-  }
+  const handleNextEclipseClick = createEclipseHandler({
+    getDatetimeInputValue: () => datetimeInput?.value,
+    setDatetimeInputValue: (value) => { if (datetimeInput) datetimeInput.value = value; },
+    stopTimePlayback: () => timeControls?.stopPlayback(),
+    applyTimeToEngine: (date) => applyTimeToEngine(engine, date),
+    recomputeEngine: () => engine.recompute(),
+    updateRenderer: () => renderer.updateFromEngine(engine),
+    getBodyPositions: () => getBodyPositions(engine),
+    positionToRaDec,
+    calculateSunMoonSeparation,
+    updateEclipseRendering: (sep) => renderer.updateEclipse(sep),
+    updateVideoMarkers: (bodyPos) => videoMarkersRef?.updateMovingPositions(bodyPos),
+    animateToRaDec: (ra, dec, dur) => controls.animateToRaDec(ra, dec, dur),
+  });
 
   // Update display after restoring settings (pass saved FOV for consistent LOD)
   renderer.updateFromEngine(engine, settings.fov);
@@ -763,7 +596,7 @@ async function main(): Promise<void> {
       renderer.updateFromEngine(engine);
       updateRenderedStars();
       // Update topocentric parameters (LST changes with time)
-      updateTopocentricParamsForTime(date);
+      viewModeManager.updateTopocentricParamsForTime(date);
       // Recompute orbits if they are visible
       if (orbitsCheckbox?.checked) {
         void renderer.computeOrbits(engine, currentDate);
@@ -954,206 +787,42 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // View Mode Toggle (Geocentric vs Topocentric)
   // ---------------------------------------------------------------------------
-  const geocentricBtn = document.getElementById("view-geocentric");
-  const topocentricBtn = document.getElementById("view-topocentric");
-  const locationSection = document.getElementById("location-section");
-  const coordAltAzGroup = document.getElementById("coord-altaz-group");
-  const coordRaDecGroup = document.getElementById("coord-radec-group");
-
-  // Track current view mode
-  let currentViewMode: ViewMode = settings.viewMode ?? 'geocentric';
-
-  /**
-   * Compute Greenwich Mean Sidereal Time (GMST) from a Date.
-   * Returns GMST in degrees (0-360).
-   */
-  function computeGMST(date: Date): number {
-    const jd = date.getTime() / 86400000 + 2440587.5;
-    const T = (jd - 2451545.0) / 36525;
-    let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) +
-               T * T * (0.000387933 - T / 38710000);
-    gmst = ((gmst % 360) + 360) % 360;
-    return gmst;
-  }
-
-  /**
-   * Update topocentric parameters based on given time and observer location.
-   * This is called from onTimeChange callback.
-   */
-  function updateTopocentricParamsForTime(date: Date): void {
-    const gmst = computeGMST(date);
-    const lst = gmst + settings.observerLongitude; // LST in degrees
-    const latRad = (settings.observerLatitude * Math.PI) / 180;
-    const lstRad = (lst * Math.PI) / 180;
-    controls.setTopocentricParams(latRad, lstRad);
-  }
-
-  /**
-   * Update topocentric parameters based on current time and observer location.
-   */
-  function updateTopocentricParams(): void {
-    updateTopocentricParamsForTime(currentDate);
-  }
-
-  /**
-   * Update UI to reflect current view mode.
-   */
-  function updateViewModeUI(mode: ViewMode): void {
-    geocentricBtn?.classList.toggle("active", mode === 'geocentric');
-    topocentricBtn?.classList.toggle("active", mode === 'topocentric');
-
-    // Show/hide location section based on mode
-    // (location is relevant in topocentric mode)
-    // Note: We keep it visible in both modes for now so users can change location
-
-    // Show Alt/Az in topocentric mode, RA/Dec in geocentric mode
-    if (coordAltAzGroup) {
-      coordAltAzGroup.style.display = mode === 'topocentric' ? 'inline' : 'none';
-    }
-    if (coordRaDecGroup) {
-      coordRaDecGroup.style.display = mode === 'geocentric' ? 'inline' : 'none';
-    }
-
-    // Auto-enable horizon in topocentric mode, auto-disable in geocentric mode
-    if (mode === 'topocentric' && horizonCheckbox && !horizonCheckbox.checked) {
-      horizonCheckbox.checked = true;
-      renderer.setGroundPlaneVisible(true);
-      settingsSaver.save({ horizonVisible: true });
-    } else if (mode === 'geocentric' && horizonCheckbox && horizonCheckbox.checked) {
-      horizonCheckbox.checked = false;
-      renderer.setGroundPlaneVisible(false);
-      settingsSaver.save({ horizonVisible: false });
-    }
-  }
-
-  /**
-   * Set the view mode.
-   */
-  function setViewMode(mode: ViewMode): void {
-    if (mode === currentViewMode) return;
-
-    currentViewMode = mode;
-
-    // Update topocentric params before switching mode
-    updateTopocentricParams();
-
-    // Switch the controls to the new mode
-    controls.setViewMode(mode);
-
-    // Update UI
-    updateViewModeUI(mode);
-
-    // When switching to topocentric, animate to a nice default view
-    // Looking south (azimuth 180°) at 30° above the horizon
-    if (mode === 'topocentric') {
-      controls.animateToAltAz(30, 180, 800);
-    }
-
-    // Save to settings
-    settingsSaver.save({ viewMode: mode });
-  }
-
-  // Initialize view mode from settings
-  updateTopocentricParams();
-  if (currentViewMode === 'topocentric') {
-    controls.setViewMode('topocentric');
-  }
-  updateViewModeUI(currentViewMode);
-
-  // View mode toggle button handlers
-  geocentricBtn?.addEventListener("click", () => setViewMode('geocentric'));
-  topocentricBtn?.addEventListener("click", () => setViewMode('topocentric'));
+  const viewModeManager = createViewModeManager({
+    initialMode: settings.viewMode ?? 'geocentric',
+    getObserverLocation: () => ({
+      latitude: settings.observerLatitude,
+      longitude: settings.observerLongitude,
+    }),
+    getCurrentDate: () => currentDate,
+    onModeChange: (mode) => {
+      settingsSaver.save({ viewMode: mode });
+    },
+    onHorizonChange: (visible) => {
+      if (horizonCheckbox && horizonCheckbox.checked !== visible) {
+        horizonCheckbox.checked = visible;
+        renderer.setGroundPlaneVisible(visible);
+        settingsSaver.save({ horizonVisible: visible });
+      }
+    },
+    setControlsViewMode: (mode) => controls.setViewMode(mode),
+    setTopocentricParams: (latRad, lstRad) => controls.setTopocentricParams(latRad, lstRad),
+    animateToAltAz: (alt, az, duration) => controls.animateToAltAz(alt, az, duration),
+  });
+  viewModeManager.setupEventListeners();
 
   // ---------------------------------------------------------------------------
   // AR Mode (Device Orientation)
   // ---------------------------------------------------------------------------
-  const arModeBtn = document.getElementById("ar-mode-btn");
-  const arModeStatus = document.getElementById("ar-mode-status");
-  let arModeEnabled = false;
-
-  // Create device orientation manager
-  const deviceOrientation = createDeviceOrientationManager({
-    onOrientationChange: (quaternion) => {
-      if (arModeEnabled) {
-        controls.setQuaternion(quaternion);
-      }
-    },
-    onStateChange: (state) => {
-      // Update button state based on device orientation state
-      if (arModeBtn) {
-        arModeBtn.classList.toggle("active", state.enabled);
-      }
-    },
+  const arModeManager = createARModeManager({
+    onQuaternionChange: (quaternion) => controls.setQuaternion(quaternion),
+    setControlsEnabled: (enabled) => controls.setEnabled(enabled),
+    onModeChange: (enabled) => settingsSaver.save({ arModeEnabled: enabled }),
   });
-
-  function updateArModeUI(enabled: boolean, message?: string): void {
-    if (arModeBtn) {
-      arModeBtn.classList.toggle("active", enabled);
-      arModeBtn.setAttribute("aria-pressed", String(enabled));
-    }
-    if (arModeStatus) {
-      arModeStatus.textContent = message ?? "";
-      arModeStatus.classList.toggle("visible", !!message);
-    }
-  }
-
-  async function toggleArMode(): Promise<void> {
-    if (!deviceOrientation.isSupported()) {
-      updateArModeUI(false, "Not supported on this device");
-      setTimeout(() => updateArModeUI(false), 3000);
-      return;
-    }
-
-    if (arModeEnabled) {
-      // Disable AR mode
-      deviceOrientation.stop();
-      controls.setEnabled(true);
-      arModeEnabled = false;
-      updateArModeUI(false);
-      settingsSaver.save({ arModeEnabled: false });
-      return;
-    }
-
-    // Enable AR mode
-    if (deviceOrientation.requiresPermission()) {
-      const granted = await deviceOrientation.requestPermission();
-      if (!granted) {
-        updateArModeUI(false, "Permission denied");
-        setTimeout(() => updateArModeUI(false), 3000);
-        return;
-      }
-    }
-
-    deviceOrientation.start();
-    controls.setEnabled(false);
-    arModeEnabled = true;
-    updateArModeUI(true);
-    settingsSaver.save({ arModeEnabled: true });
-  }
-
-  // Set up AR mode button
-  if (arModeBtn) {
-    // Show/hide button based on device support
-    if (!deviceOrientation.isSupported()) {
-      arModeBtn.classList.add("unsupported");
-      arModeBtn.title = "Device orientation not supported";
-    } else {
-      arModeBtn.addEventListener("click", () => {
-        void toggleArMode();
-      });
-    }
-  }
+  arModeManager.setupEventListeners();
 
   // ---------------------------------------------------------------------------
   // Observer Location
   // ---------------------------------------------------------------------------
-  const locationSearchInput = document.getElementById("location-search") as HTMLInputElement | null;
-  const locationResults = document.getElementById("location-results");
-  const locationLatInput = document.getElementById("location-lat") as HTMLInputElement | null;
-  const locationLonInput = document.getElementById("location-lon") as HTMLInputElement | null;
-  const locationGeolocateBtn = document.getElementById("location-geolocate");
-  const locationNameEl = document.getElementById("location-name");
-
   // Create location manager with initial location from settings
   const locationManager = createLocationManager(
     {
@@ -1164,7 +833,7 @@ async function main(): Promise<void> {
     {
       onLocationChange: (location: ObserverLocation) => {
         // Update UI
-        updateLocationDisplay(location);
+        locationUI.updateDisplay(location);
         // Update engine's observer location (for topocentric Moon correction)
         engine.set_observer_location(location.latitude, location.longitude);
         // Update ground plane orientation for topocentric view
@@ -1173,8 +842,8 @@ async function main(): Promise<void> {
         settings.observerLatitude = location.latitude;
         settings.observerLongitude = location.longitude;
         // Update topocentric camera if in that mode
-        if (currentViewMode === 'topocentric') {
-          updateTopocentricParams();
+        if (viewModeManager.getMode() === 'topocentric') {
+          viewModeManager.updateTopocentricParams();
         }
         // Save to settings
         settingsSaver.save({
@@ -1194,181 +863,21 @@ async function main(): Promise<void> {
   // Wire up location manager for tour system
   locationManagerRef = locationManager;
 
-  function updateLocationDisplay(location: ObserverLocation): void {
-    if (locationNameEl) {
-      locationNameEl.textContent = location.name ?? "Custom Location";
-    }
-    if (locationLatInput) {
-      locationLatInput.value = location.latitude.toFixed(4);
-    }
-    if (locationLonInput) {
-      locationLonInput.value = location.longitude.toFixed(4);
-    }
-  }
-
-  // Initialize display with current location
-  updateLocationDisplay(locationManager.getLocation());
-
-  // Location search
-  let locationSearchResults: ReturnType<typeof locationManager.searchCities> = [];
-  let selectedLocationIndex = -1;
-
-  function renderLocationResults(): void {
-    if (!locationResults) return;
-
-    if (locationSearchResults.length === 0) {
-      locationResults.classList.remove("visible");
-      return;
-    }
-
-    locationResults.innerHTML = locationSearchResults
-      .map(
-        (city, i) => `
-      <div class="location-result${i === selectedLocationIndex ? " selected" : ""}" data-index="${i}">
-        <span class="location-result-name">${city.name}</span>
-        <span class="location-result-country">${city.country}</span>
-      </div>
-    `
-      )
-      .join("");
-
-    locationResults.classList.add("visible");
-  }
-
-  function hideLocationResults(): void {
-    if (locationResults) {
-      locationResults.classList.remove("visible");
-    }
-    selectedLocationIndex = -1;
-  }
-
-  function selectLocationResult(index: number): void {
-    if (index >= 0 && index < locationSearchResults.length) {
-      const city = locationSearchResults[index];
-      locationManager.setLocationFromCity(city);
-      hideLocationResults();
-      if (locationSearchInput) {
-        locationSearchInput.value = "";
-        locationSearchInput.blur();
-      }
-    }
-  }
-
-  if (locationSearchInput) {
-    locationSearchInput.addEventListener("input", () => {
-      const query = locationSearchInput.value.trim();
-      if (query.length === 0) {
-        hideLocationResults();
-        locationSearchResults = [];
-        return;
-      }
-
-      locationSearchResults = locationManager.searchCities(query);
-      selectedLocationIndex = locationSearchResults.length > 0 ? 0 : -1;
-      renderLocationResults();
-    });
-
-    locationSearchInput.addEventListener("keydown", (e) => {
-      if (locationSearchResults.length === 0) return;
-
-      switch (e.key) {
-        case "ArrowDown":
-          e.preventDefault();
-          selectedLocationIndex = Math.min(selectedLocationIndex + 1, locationSearchResults.length - 1);
-          renderLocationResults();
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          selectedLocationIndex = Math.max(selectedLocationIndex - 1, 0);
-          renderLocationResults();
-          break;
-        case "Enter":
-          e.preventDefault();
-          selectLocationResult(selectedLocationIndex);
-          break;
-        case "Escape":
-          hideLocationResults();
-          locationSearchInput.blur();
-          break;
-      }
-    });
-
-    locationSearchInput.addEventListener("blur", () => {
-      setTimeout(hideLocationResults, 150);
-    });
-  }
-
-  // Click on location result
-  if (locationResults) {
-    locationResults.addEventListener("click", (e) => {
-      const target = (e.target as HTMLElement).closest(".location-result");
-      if (target) {
-        const index = parseInt(target.getAttribute("data-index") || "-1", 10);
-        selectLocationResult(index);
-      }
-    });
-  }
-
-  // Manual lat/lon input
-  function applyManualCoordinates(): void {
-    const lat = parseFloat(locationLatInput?.value ?? "");
-    const lon = parseFloat(locationLonInput?.value ?? "");
-    if (!isNaN(lat) && !isNaN(lon)) {
-      locationManager.setLocation({
-        latitude: lat,
-        longitude: lon,
-        name: "Custom",
-      });
-    }
-  }
-
-  if (locationLatInput) {
-    locationLatInput.addEventListener("change", applyManualCoordinates);
-  }
-  if (locationLonInput) {
-    locationLonInput.addEventListener("change", applyManualCoordinates);
-  }
-
-  // Geolocation button
-  if (locationGeolocateBtn) {
-    locationGeolocateBtn.addEventListener("click", async () => {
-      locationGeolocateBtn.setAttribute("disabled", "true");
-      const originalText = locationGeolocateBtn.innerHTML;
-      locationGeolocateBtn.innerHTML = "<span>⏳</span> Locating...";
-
-      const result = await locationManager.requestGeolocation();
-
-      locationGeolocateBtn.removeAttribute("disabled");
-      locationGeolocateBtn.innerHTML = originalText;
-
-      if (!result) {
-        // Show error briefly
-        locationGeolocateBtn.innerHTML = "<span>❌</span> Failed";
-        setTimeout(() => {
-          locationGeolocateBtn.innerHTML = originalText;
-        }, 2000);
-      }
-    });
-  }
-
-  // Check URL for location params
-  const urlLat = new URLSearchParams(window.location.search).get("lat");
-  const urlLon = new URLSearchParams(window.location.search).get("lon");
-  if (urlLat !== null && urlLon !== null) {
-    const lat = parseFloat(urlLat);
-    const lon = parseFloat(urlLon);
-    if (!isNaN(lat) && !isNaN(lon)) {
-      locationManager.setLocation({ latitude: lat, longitude: lon, name: "URL Location" });
-    }
-  }
+  // Create location UI handlers
+  const locationUI = createLocationUI({
+    searchCities: (query) => locationManager.searchCities(query),
+    setLocationFromCity: (city) => locationManager.setLocationFromCity(city),
+    setLocation: (loc) => locationManager.setLocation(loc),
+    requestGeolocation: () => locationManager.requestGeolocation(),
+    getLocation: () => locationManager.getLocation(),
+  });
+  locationUI.setupEventListeners();
+  locationUI.checkUrlParams();
 
   // ---------------------------------------------------------------------------
   // Search functionality
   // ---------------------------------------------------------------------------
-  const searchInput = document.getElementById("search") as HTMLInputElement | null;
-  const searchResults = document.getElementById("search-results");
   let searchIndex: SearchItem[] = [];
-  let selectedResultIndex = -1;
 
   // Build search index from all available data
   async function buildSearchIndex(): Promise<SearchItem[]> {
@@ -1465,173 +974,35 @@ async function main(): Promise<void> {
     return items;
   }
 
-  // Render search results dropdown
-  function renderSearchResults(results: SearchResult[]): void {
-    if (!searchResults) return;
-
-    if (results.length === 0) {
-      searchResults.innerHTML = '<div class="search-empty">No results found</div>';
-      searchResults.classList.add("visible");
-      return;
-    }
-
-    searchResults.innerHTML = results.map((result, i) => `
-      <div class="search-result${i === selectedResultIndex ? ' selected' : ''}" data-index="${i}">
-        <div class="search-result-dot" style="background: ${TYPE_COLORS[result.type]}"></div>
-        <div class="search-result-info">
-          <div class="search-result-name">${result.name}</div>
-          ${result.subtitle ? `<div class="search-result-subtitle">${result.subtitle}</div>` : ''}
-        </div>
-        <div class="search-result-type">${result.type}</div>
-      </div>
-    `).join('');
-
-    searchResults.classList.add("visible");
-  }
-
-  // Hide search results
-  function hideSearchResults(): void {
-    if (searchResults) {
-      searchResults.classList.remove("visible");
-      searchResults.innerHTML = '';
-    }
-    selectedResultIndex = -1;
-  }
-
-  // Navigate to a search result
-  function navigateToResult(result: SearchResult): void {
-    let ra = result.ra;
-    let dec = result.dec;
-
-    // For planets, get current position (they move with time)
-    if (result.type === 'planet') {
-      const currentBodyPositions = getBodyPositions(engine);
-      const pos = currentBodyPositions.get(result.name);
-      if (pos) {
-        const coords = positionToRaDec(pos);
-        ra = coords.ra;
-        dec = coords.dec;
-      }
-    }
-
-    controls.animateToRaDec(ra, dec, 1000);
-    hideSearchResults();
-    if (searchInput) {
-      searchInput.value = '';
-      searchInput.blur();
-    }
-  }
-
-  // Initialize search
+  // Initialize search index
   buildSearchIndex().then(index => {
     searchIndex = index;
     console.log(`Search index built: ${index.length} items`);
   });
 
-  // Search input event handlers
-  if (searchInput && searchResults) {
-    let currentResults: SearchResult[] = [];
-
-    searchInput.addEventListener("input", () => {
-      const query = searchInput.value.trim();
-      if (query.length === 0) {
-        hideSearchResults();
-        currentResults = [];
-        return;
-      }
-
-      currentResults = search(query, searchIndex, 8);
-      selectedResultIndex = currentResults.length > 0 ? 0 : -1;
-      renderSearchResults(currentResults);
-    });
-
-    searchInput.addEventListener("keydown", (e) => {
-      if (currentResults.length === 0) return;
-
-      switch (e.key) {
-        case "ArrowDown":
-          e.preventDefault();
-          selectedResultIndex = Math.min(selectedResultIndex + 1, currentResults.length - 1);
-          renderSearchResults(currentResults);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          selectedResultIndex = Math.max(selectedResultIndex - 1, 0);
-          renderSearchResults(currentResults);
-          break;
-        case "Enter":
-          e.preventDefault();
-          if (selectedResultIndex >= 0 && selectedResultIndex < currentResults.length) {
-            navigateToResult(currentResults[selectedResultIndex]);
-          }
-          break;
-        case "Escape":
-          hideSearchResults();
-          searchInput.blur();
-          break;
-      }
-    });
-
-    searchInput.addEventListener("blur", () => {
-      // Delay hiding to allow click events on results
-      setTimeout(hideSearchResults, 150);
-    });
-
-    // Click on search result
-    searchResults.addEventListener("click", (e) => {
-      const target = (e.target as HTMLElement).closest(".search-result");
-      if (target) {
-        const index = parseInt(target.getAttribute("data-index") || "-1", 10);
-        if (index >= 0 && index < currentResults.length) {
-          navigateToResult(currentResults[index]);
-        }
-      }
-    });
-  }
+  // Create search UI
+  const searchUI = createSearchUI({
+    getSearchIndex: () => searchIndex,
+    navigateToResult: (result) => {
+      controls.animateToRaDec(result.ra, result.dec, 1000);
+    },
+    getPlanetPosition: (name) => {
+      const pos = getBodyPositions(engine).get(name);
+      return pos ? positionToRaDec(pos) : null;
+    },
+  });
+  searchUI.setupEventListeners();
 
   // About modal
-  const aboutBtn = document.getElementById("about-btn");
-  const aboutModal = document.getElementById("about-modal");
-  const aboutClose = document.getElementById("about-close");
-
-  if (aboutBtn && aboutModal && aboutClose) {
-    aboutBtn.addEventListener("click", () => {
-      aboutModal.classList.remove("hidden");
-    });
-
-    aboutClose.addEventListener("click", () => {
-      aboutModal.classList.add("hidden");
-    });
-
-    aboutModal.addEventListener("click", (e) => {
-      if (e.target === aboutModal) {
-        aboutModal.classList.add("hidden");
-      }
-    });
-  }
+  setupSimpleModal(
+    document.getElementById("about-btn"),
+    document.getElementById("about-modal"),
+    document.getElementById("about-close")
+  );
 
   // Help modal (keyboard shortcuts)
   const helpModal = document.getElementById("help-modal");
-  const helpClose = document.getElementById("help-modal-close");
-
-  if (helpModal && helpClose) {
-    helpClose.addEventListener("click", () => {
-      helpModal.classList.add("hidden");
-    });
-
-    helpModal.addEventListener("click", (e) => {
-      if (e.target === helpModal) {
-        helpModal.classList.add("hidden");
-      }
-    });
-
-    // Close on Escape key
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !helpModal.classList.contains("hidden")) {
-        helpModal.classList.add("hidden");
-      }
-    });
-  }
+  setupModalClose(helpModal, document.getElementById("help-modal-close"), { closeOnEscape: true });
 
   // Populate build info
   const buildInfo = document.getElementById("build-info");
@@ -1648,338 +1019,9 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------
-  // Star info popup
+  // Info modals (star, constellation, DSO, comet)
   // ---------------------------------------------------------------------------
-  const starModal = document.getElementById("star-modal");
-  const starModalClose = document.getElementById("star-modal-close");
-  const starModalName = document.getElementById("star-modal-name");
-  const starModalDesignation = document.getElementById("star-modal-designation");
-  const starModalConstellation = document.getElementById("star-modal-constellation");
-  const starModalMagnitude = document.getElementById("star-modal-magnitude");
-  const starModalDistance = document.getElementById("star-modal-distance");
-  const starModalType = document.getElementById("star-modal-type");
-  const starModalDescription = document.getElementById("star-modal-description");
-
-  function showStarInfo(hr: number): void {
-    const info = STAR_DATA[hr];
-    if (!info || !starModal) return;
-
-    if (starModalName) starModalName.textContent = info.name;
-    if (starModalDesignation) starModalDesignation.textContent = info.designation;
-    if (starModalConstellation) starModalConstellation.textContent = info.constellation;
-    if (starModalMagnitude) starModalMagnitude.textContent = info.magnitude.toFixed(2);
-    if (starModalDistance) starModalDistance.textContent = info.distance;
-    if (starModalType) starModalType.textContent = info.type;
-    if (starModalDescription) starModalDescription.textContent = info.description;
-
-    starModal.classList.remove("hidden");
-  }
-
-  // Close star modal
-  if (starModal && starModalClose) {
-    starModalClose.addEventListener("click", () => {
-      starModal.classList.add("hidden");
-    });
-
-    starModal.addEventListener("click", (e) => {
-      if (e.target === starModal) {
-        starModal.classList.add("hidden");
-      }
-    });
-  }
-
-  // Handle clicks on star labels (using event delegation)
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.classList.contains("star-label") && target.dataset.hr) {
-      const hr = parseInt(target.dataset.hr, 10);
-      if (!isNaN(hr)) {
-        showStarInfo(hr);
-      }
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Constellation info popup
-  // ---------------------------------------------------------------------------
-  const constellationModal = document.getElementById("constellation-modal");
-  const constellationModalClose = document.getElementById("constellation-modal-close");
-  const constellationModalName = document.getElementById("constellation-modal-name");
-  const constellationModalAbbr = document.getElementById("constellation-modal-abbr");
-  const constellationModalMeaning = document.getElementById("constellation-modal-meaning");
-  const constellationModalStar = document.getElementById("constellation-modal-star");
-  const constellationModalArea = document.getElementById("constellation-modal-area");
-  const constellationModalViewing = document.getElementById("constellation-modal-viewing");
-  const constellationModalQuadrant = document.getElementById("constellation-modal-quadrant");
-  const constellationModalObjectsContainer = document.getElementById("constellation-modal-objects-container");
-  const constellationModalObjects = document.getElementById("constellation-modal-objects");
-  const constellationModalDescription = document.getElementById("constellation-modal-description");
-
-  function showConstellationInfo(name: string): void {
-    const info = CONSTELLATION_DATA[name];
-    if (!info || !constellationModal) return;
-
-    if (constellationModalName) constellationModalName.textContent = info.name;
-    if (constellationModalAbbr) constellationModalAbbr.textContent = info.abbreviation;
-    if (constellationModalMeaning) constellationModalMeaning.textContent = info.meaning;
-    if (constellationModalStar) constellationModalStar.textContent = info.brightestStar;
-    if (constellationModalArea) constellationModalArea.textContent = `${info.areaSqDeg} sq°`;
-    if (constellationModalViewing) constellationModalViewing.textContent = info.bestViewing;
-    if (constellationModalQuadrant) constellationModalQuadrant.textContent = info.quadrant;
-
-    // Show/hide notable objects section based on whether there are any
-    if (constellationModalObjectsContainer && constellationModalObjects) {
-      if (info.notableObjects.length > 0) {
-        constellationModalObjects.textContent = info.notableObjects.join(", ");
-        constellationModalObjectsContainer.style.display = "block";
-      } else {
-        constellationModalObjectsContainer.style.display = "none";
-      }
-    }
-
-    if (constellationModalDescription) constellationModalDescription.textContent = info.description;
-
-    constellationModal.classList.remove("hidden");
-  }
-
-  // Close constellation modal
-  if (constellationModal && constellationModalClose) {
-    constellationModalClose.addEventListener("click", () => {
-      constellationModal.classList.add("hidden");
-    });
-
-    constellationModal.addEventListener("click", (e) => {
-      if (e.target === constellationModal) {
-        constellationModal.classList.add("hidden");
-      }
-    });
-  }
-
-  // Handle clicks on constellation labels (using event delegation)
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.classList.contains("constellation-label") && target.dataset.constellation) {
-      showConstellationInfo(target.dataset.constellation);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // DSO (Deep Sky Object) info popup
-  // ---------------------------------------------------------------------------
-  const dsoModal = document.getElementById("dso-modal");
-  const dsoModalClose = document.getElementById("dso-modal-close");
-  const dsoModalName = document.getElementById("dso-modal-name");
-  const dsoModalCommonName = document.getElementById("dso-modal-common-name");
-  const dsoModalTypeBadge = document.getElementById("dso-modal-type-badge");
-  const dsoModalMagnitude = document.getElementById("dso-modal-magnitude");
-  const dsoModalSize = document.getElementById("dso-modal-size");
-  const dsoModalDistance = document.getElementById("dso-modal-distance");
-  const dsoModalCoords = document.getElementById("dso-modal-coords");
-  const dsoModalDescription = document.getElementById("dso-modal-description");
-
-  // Format DSO type for display
-  function formatDSOType(type: DSOType): string {
-    const typeLabels: Record<DSOType, string> = {
-      galaxy: "Galaxy",
-      emission_nebula: "Emission Nebula",
-      planetary_nebula: "Planetary Nebula",
-      reflection_nebula: "Reflection Nebula",
-      dark_nebula: "Dark Nebula",
-      globular_cluster: "Globular Cluster",
-      open_cluster: "Open Cluster",
-    };
-    return typeLabels[type] || type;
-  }
-
-  // Format RA for display (hours:minutes)
-  function formatRAForDSO(raDeg: number): string {
-    const raHours = raDeg / 15;
-    const h = Math.floor(raHours);
-    const m = Math.floor((raHours - h) * 60);
-    return `${h}h ${m.toString().padStart(2, "0")}m`;
-  }
-
-  // Format Dec for display (degrees)
-  function formatDecForDSO(decDeg: number): string {
-    const sign = decDeg >= 0 ? "+" : "";
-    return `${sign}${Math.round(decDeg)}°`;
-  }
-
-  function showDSOInfo(dsoId: string): void {
-    const dso = DSO_DATA.find(d => d.id === dsoId);
-    if (!dso || !dsoModal) return;
-
-    if (dsoModalName) dsoModalName.textContent = dso.id;
-    if (dsoModalCommonName) dsoModalCommonName.textContent = dso.name;
-    if (dsoModalTypeBadge) dsoModalTypeBadge.textContent = formatDSOType(dso.type);
-    if (dsoModalMagnitude) dsoModalMagnitude.textContent = dso.magnitude < 90 ? dso.magnitude.toFixed(1) : "N/A";
-    if (dsoModalSize) dsoModalSize.textContent = `${dso.sizeArcmin[0]}' × ${dso.sizeArcmin[1]}'`;
-    if (dsoModalDistance) dsoModalDistance.textContent = dso.distance;
-    if (dsoModalCoords) dsoModalCoords.textContent = `RA ${formatRAForDSO(dso.ra)}, Dec ${formatDecForDSO(dso.dec)}`;
-    if (dsoModalDescription) dsoModalDescription.textContent = dso.description;
-
-    dsoModal.classList.remove("hidden");
-  }
-
-  // Close DSO modal
-  if (dsoModal && dsoModalClose) {
-    dsoModalClose.addEventListener("click", () => {
-      dsoModal.classList.add("hidden");
-    });
-
-    dsoModal.addEventListener("click", (e) => {
-      if (e.target === dsoModal) {
-        dsoModal.classList.add("hidden");
-      }
-    });
-  }
-
-  // Handle clicks on DSO labels (using event delegation)
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.classList.contains("dso-label") && target.dataset.dsoId) {
-      showDSOInfo(target.dataset.dsoId);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Comet info popup
-  // ---------------------------------------------------------------------------
-  interface CometInfo {
-    name: string;
-    commonName: string;
-    type: string;
-    period: string;
-    perihelion: string;
-    lastVisit: string;
-    nextReturn: string;
-    description: string;
-  }
-
-  const COMET_INFO: Record<string, CometInfo> = {
-    "1P/Halley": {
-      name: "1P/Halley",
-      commonName: "Halley's Comet",
-      type: "Periodic",
-      period: "~76 years",
-      perihelion: "0.59 AU",
-      lastVisit: "Feb 9, 1986",
-      nextReturn: "Jul 28, 2061",
-      description: "The most famous comet in history, observed for over 2,000 years. Edmond Halley predicted its return in 1705, proving comets follow orbits. In 1986, the Giotto spacecraft flew within 596 km of its nucleus, revealing a potato-shaped body 15 km long."
-    },
-    "2P/Encke": {
-      name: "2P/Encke",
-      commonName: "Encke's Comet",
-      type: "Periodic",
-      period: "3.3 years",
-      perihelion: "0.34 AU",
-      lastVisit: "Oct 2023",
-      nextReturn: "Jan 2027",
-      description: "Has the shortest orbital period of any known comet. Named after Johann Franz Encke who calculated its orbit in 1819. The parent body of the Taurid meteor stream, which produces fireballs in October-November."
-    },
-    "67P/C-G": {
-      name: "67P/Churyumov-Gerasimenko",
-      commonName: "Comet 67P",
-      type: "Periodic",
-      period: "6.4 years",
-      perihelion: "1.24 AU",
-      lastVisit: "Nov 2021",
-      nextReturn: "Mar 2028",
-      description: "Target of ESA's Rosetta mission, which orbited the comet from 2014-2016. The Philae lander made the first soft landing on a comet in November 2014. Its distinctive duck-shaped nucleus is about 4 km across."
-    },
-    "46P/Wirtanen": {
-      name: "46P/Wirtanen",
-      commonName: "Comet Wirtanen",
-      type: "Periodic",
-      period: "5.4 years",
-      perihelion: "1.06 AU",
-      lastVisit: "Dec 2018",
-      nextReturn: "May 2024",
-      description: "In December 2018, it passed within 11.6 million km of Earth—one of the closest comet approaches in centuries. Originally the target for ESA's Rosetta mission before a launch delay forced a target change."
-    },
-    "C/2020 F3 NEOWISE": {
-      name: "C/2020 F3 NEOWISE",
-      commonName: "Comet NEOWISE",
-      type: "Long-period",
-      period: "~6,800 years",
-      perihelion: "0.29 AU",
-      lastVisit: "Jul 3, 2020",
-      nextReturn: "~Year 8800",
-      description: "The brightest comet visible from the Northern Hemisphere since Hale-Bopp in 1997. Discovered by NASA's NEOWISE space telescope on March 27, 2020. At peak brightness it reached magnitude 1, visible to the naked eye with a spectacular dual tail."
-    },
-    "C/2023 A3 T-ATLAS": {
-      name: "C/2023 A3 Tsuchinshan-ATLAS",
-      commonName: "Comet Tsuchinshan-ATLAS",
-      type: "Long-period",
-      period: "~26,000 years",
-      perihelion: "0.39 AU",
-      lastVisit: "Sep 27, 2024",
-      nextReturn: "~Year 28000",
-      description: "Discovered independently in 2023 by observatories in China (Purple Mountain) and South Africa (ATLAS). Became a spectacular naked-eye comet in October 2024, with early estimates suggesting it could reach magnitude -3."
-    },
-    "C/1995 O1 Hale-Bopp": {
-      name: "C/1995 O1 Hale-Bopp",
-      commonName: "Comet Hale-Bopp",
-      type: "Long-period",
-      period: "~2,533 years",
-      perihelion: "0.91 AU",
-      lastVisit: "Apr 1, 1997",
-      nextReturn: "~Year 4530",
-      description: "The 'Great Comet of 1997' was visible to the naked eye for a record 18 months. Independently discovered by Alan Hale and Thomas Bopp in 1995 when it was still beyond Jupiter. Reached magnitude -1.8 at perihelion, brighter than any star except Sirius."
-    }
-  };
-
-  const cometModal = document.getElementById("comet-modal");
-  const cometModalClose = document.getElementById("comet-modal-close");
-  const cometModalName = document.getElementById("comet-modal-name");
-  const cometModalCommonName = document.getElementById("comet-modal-common-name");
-  const cometModalTypeBadge = document.getElementById("comet-modal-type-badge");
-  const cometModalPeriod = document.getElementById("comet-modal-period");
-  const cometModalPerihelion = document.getElementById("comet-modal-perihelion");
-  const cometModalLastVisit = document.getElementById("comet-modal-last-visit");
-  const cometModalNextReturn = document.getElementById("comet-modal-next-return");
-  const cometModalDescription = document.getElementById("comet-modal-description");
-
-  function showCometInfo(cometIndex: number): void {
-    const cometName = COMET_NAMES[cometIndex];
-    const info = COMET_INFO[cometName];
-    if (!info || !cometModal) return;
-
-    if (cometModalName) cometModalName.textContent = info.name;
-    if (cometModalCommonName) cometModalCommonName.textContent = info.commonName;
-    if (cometModalTypeBadge) cometModalTypeBadge.textContent = info.type;
-    if (cometModalPeriod) cometModalPeriod.textContent = info.period;
-    if (cometModalPerihelion) cometModalPerihelion.textContent = info.perihelion;
-    if (cometModalLastVisit) cometModalLastVisit.textContent = info.lastVisit;
-    if (cometModalNextReturn) cometModalNextReturn.textContent = info.nextReturn;
-    if (cometModalDescription) cometModalDescription.textContent = info.description;
-
-    cometModal.classList.remove("hidden");
-  }
-
-  // Close comet modal
-  if (cometModal && cometModalClose) {
-    cometModalClose.addEventListener("click", () => {
-      cometModal.classList.add("hidden");
-    });
-
-    cometModal.addEventListener("click", (e) => {
-      if (e.target === cometModal) {
-        cometModal.classList.add("hidden");
-      }
-    });
-  }
-
-  // Handle clicks on comet labels (using event delegation)
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.classList.contains("comet-label") && target.dataset.comet) {
-      const cometIndex = parseInt(target.dataset.comet, 10);
-      if (!isNaN(cometIndex)) {
-        showCometInfo(cometIndex);
-      }
-    }
-  });
+  setupInfoModals();
 
   // Handle clicks on planet labels to focus orbit
   // Track which planet is focused (null = show all, body index = focused)
@@ -2020,75 +1062,13 @@ async function main(): Promise<void> {
     }
   });
 
-  // Click handling for video markers
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-
-  renderer.renderer.domElement.addEventListener("click", (event) => {
-    // Only process if videos layer is visible
-    if (!videoMarkers.group.visible) return;
-
-    // Calculate mouse position in normalized device coordinates
-    const rect = renderer.renderer.domElement.getBoundingClientRect();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-    // Update raycaster
-    raycaster.setFromCamera(mouse, renderer.camera);
-
-    // Check for video marker intersection
-    const video = videoMarkers.getVideoAtPosition(raycaster);
-    if (video) {
-      // Center camera on the video's celestial coordinates
-      controls.lookAtRaDec(video.ra, video.dec);
-      videoPopup.show(video);
-    }
-  });
-
-  // Hover detection for video markers - change cursor to pointer
-  // Throttled to reduce raycast frequency
-  let isHoveringVideo = false;
-  let lastMouseMoveTime = 0;
-  const MOUSE_MOVE_THROTTLE = 50; // ms
-
-  renderer.renderer.domElement.addEventListener("mousemove", (event) => {
-    // Only process if videos layer is visible
-    if (!videoMarkers.group.visible) {
-      if (isHoveringVideo) {
-        renderer.renderer.domElement.style.cursor = "grab";
-        isHoveringVideo = false;
-      }
-      return;
-    }
-
-    // Throttle mousemove raycasts
-    const now = performance.now();
-    if (now - lastMouseMoveTime < MOUSE_MOVE_THROTTLE) {
-      return;
-    }
-    lastMouseMoveTime = now;
-
-    // Calculate mouse position in normalized device coordinates
-    const rect = renderer.renderer.domElement.getBoundingClientRect();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-    // Update raycaster
-    raycaster.setFromCamera(mouse, renderer.camera);
-
-    // Check for video marker intersection
-    const video = videoMarkers.getVideoAtPosition(raycaster);
-    if (video) {
-      if (!isHoveringVideo) {
-        renderer.renderer.domElement.style.cursor = "pointer";
-        isHoveringVideo = true;
-      }
-    } else {
-      if (isHoveringVideo) {
-        renderer.renderer.domElement.style.cursor = "grab";
-        isHoveringVideo = false;
-      }
-    }
+  // Click and hover handling for video markers
+  setupVideoMarkerInteractions({
+    domElement: renderer.renderer.domElement,
+    camera: renderer.camera,
+    videoMarkers,
+    onVideoClick: (video) => videoPopup.show(video),
+    lookAtRaDec: (ra, dec) => controls.lookAtRaDec(ra, dec),
   });
 
   // Handle window resize
@@ -2097,122 +1077,81 @@ async function main(): Promise<void> {
   });
 
   // Keyboard shortcuts
-  window.addEventListener("keydown", (event) => {
-    // Don't trigger shortcuts when typing in input fields
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-      return;
-    }
-
-    switch (event.key.toLowerCase()) {
-      case "l":
-        // Toggle labels
-        if (labelsCheckbox) {
-          labelsCheckbox.checked = !labelsCheckbox.checked;
-          renderer.setLabelsVisible(labelsCheckbox.checked);
-          settingsSaver.save({ labelsVisible: labelsCheckbox.checked });
+  setupKeyboardHandler({
+    toggleLabels: () => {
+      if (labelsCheckbox) {
+        labelsCheckbox.checked = !labelsCheckbox.checked;
+        renderer.setLabelsVisible(labelsCheckbox.checked);
+        settingsSaver.save({ labelsVisible: labelsCheckbox.checked });
+      }
+    },
+    toggleConstellations: () => {
+      if (constellationCheckbox) {
+        constellationCheckbox.checked = !constellationCheckbox.checked;
+        renderer.setConstellationsVisible(constellationCheckbox.checked);
+        settingsSaver.save({ constellationsVisible: constellationCheckbox.checked });
+      }
+    },
+    toggleVideos: () => {
+      if (videosCheckbox) {
+        videosCheckbox.checked = !videosCheckbox.checked;
+        videoMarkers.setVisible(videosCheckbox.checked);
+        videoMarkers.setLabelsVisible(videosCheckbox.checked);
+        settingsSaver.save({ videosVisible: videosCheckbox.checked });
+      }
+    },
+    toggleOrbits: () => {
+      if (orbitsCheckbox) {
+        orbitsCheckbox.checked = !orbitsCheckbox.checked;
+        renderer.setOrbitsVisible(orbitsCheckbox.checked);
+        if (orbitsCheckbox.checked) {
+          void renderer.computeOrbits(engine, currentDate);
         }
-        break;
-      case "c":
-        // Toggle constellations
-        if (constellationCheckbox) {
-          constellationCheckbox.checked = !constellationCheckbox.checked;
-          renderer.setConstellationsVisible(constellationCheckbox.checked);
-          settingsSaver.save({ constellationsVisible: constellationCheckbox.checked });
+        focusedOrbitBody = null;
+        settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
+      }
+    },
+    toggleDSOs: () => {
+      if (dsosCheckbox) {
+        dsosCheckbox.checked = !dsosCheckbox.checked;
+        renderer.setDSOsVisible(dsosCheckbox.checked);
+        if (dsosCheckbox.checked) {
+          const currentFov = controls.getCameraState().fov;
+          const currentMag = magnitudeInput ? parseFloat(magnitudeInput.value) : 6.5;
+          renderer.updateDSOs(currentFov, currentMag);
         }
-        break;
-      case "v":
-        // Toggle videos
-        if (videosCheckbox) {
-          videosCheckbox.checked = !videosCheckbox.checked;
-          videoMarkers.setVisible(videosCheckbox.checked);
-          videoMarkers.setLabelsVisible(videosCheckbox.checked);
-          settingsSaver.save({ videosVisible: videosCheckbox.checked });
-        }
-        break;
-      case "o":
-        // Toggle orbits
-        if (orbitsCheckbox) {
-          orbitsCheckbox.checked = !orbitsCheckbox.checked;
-          renderer.setOrbitsVisible(orbitsCheckbox.checked);
-          // Compute orbits when turning on
-          if (orbitsCheckbox.checked) {
-            void renderer.computeOrbits(engine, currentDate);
-          }
-          // Clear any focused orbit when toggling
-          focusedOrbitBody = null;
-          settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
-        }
-        break;
-      case "d":
-        // Toggle DSOs (deep sky objects)
-        if (dsosCheckbox) {
-          dsosCheckbox.checked = !dsosCheckbox.checked;
-          renderer.setDSOsVisible(dsosCheckbox.checked);
-          if (dsosCheckbox.checked) {
-            const currentFov = controls.getCameraState().fov;
-            const currentMag = magnitudeInput ? parseFloat(magnitudeInput.value) : 6.5;
-            renderer.updateDSOs(currentFov, currentMag);
-          }
-          settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
-        }
-        break;
-      case "r":
-        // Toggle night vision mode
-        setNightVision(!document.body.classList.contains("night-vision"));
-        break;
-      case "h":
-        // Toggle horizon/ground plane
-        if (horizonCheckbox) {
-          horizonCheckbox.checked = !horizonCheckbox.checked;
-          renderer.setGroundPlaneVisible(horizonCheckbox.checked);
-          settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
-        }
-        break;
-      case "e":
-        // Next Total Eclipse
-        handleNextEclipseClick();
-        break;
-      case "n":
-        // Jump to now
-        jumpToNow();
-        break;
-      case " ":
-        // Spacebar: animate to galactic center (RA ~266.4°, Dec ~-29°)
-        event.preventDefault();
-        controls.animateToRaDec(266.4, -29, 1500);
-        break;
-      case "arrowleft":
-        // Step time backward
-        event.preventDefault();
-        stopPlayback();
-        stepTime(-1);
-        break;
-      case "arrowright":
-        // Step time forward
-        event.preventDefault();
-        stopPlayback();
-        stepTime(1);
-        break;
-      case "p":
-        // Toggle play/pause
-        togglePlayback();
-        break;
-      case "/":
-        // Focus search
-        event.preventDefault();
-        if (searchInput) {
-          searchInput.focus();
-        }
-        break;
-      case "?":
-        // Show keyboard shortcuts help
-        event.preventDefault();
-        const helpModal = document.getElementById("help-modal");
-        if (helpModal) {
-          helpModal.classList.remove("hidden");
-        }
-        break;
-    }
+        settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
+      }
+    },
+    toggleNightVision: () => {
+      setNightVision(!document.body.classList.contains("night-vision"));
+    },
+    toggleHorizon: () => {
+      if (horizonCheckbox) {
+        horizonCheckbox.checked = !horizonCheckbox.checked;
+        renderer.setGroundPlaneVisible(horizonCheckbox.checked);
+        settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
+      }
+    },
+    handleNextEclipse: handleNextEclipseClick,
+    jumpToNow: () => timeControls?.jumpToNow(),
+    animateToGalacticCenter: () => controls.animateToRaDec(266.4, -29, 1500),
+    stepTimeBackward: () => {
+      timeControls?.stopPlayback();
+      timeControls?.stepTime(-1);
+    },
+    stepTimeForward: () => {
+      timeControls?.stopPlayback();
+      timeControls?.stepTime(1);
+    },
+    togglePlayback: () => timeControls?.togglePlayback(),
+    focusSearch: () => searchInput?.focus(),
+    showHelp: () => {
+      const helpModal = document.getElementById("help-modal");
+      if (helpModal) {
+        helpModal.classList.remove("hidden");
+      }
+    },
   });
 
   // Flush settings before page unload
@@ -2223,254 +1162,26 @@ async function main(): Promise<void> {
   // ============================================================================
   // Tour UI Event Handlers
   // ============================================================================
-
-  // Helper to get tour icon based on tour id
-  function getTourIcon(tourId: string): string {
-    if (tourId.includes('eclipse')) return '☀';
-    if (tourId.includes('jupiter') || tourId.includes('saturn')) return '♃';
-    if (tourId.includes('halley') || tourId.includes('neowise') || tourId.includes('hale-bopp') || tourId.includes('comet')) return '☄';
-    return '✦';
-  }
-
-  // Generate tour list dynamically
-  const tourList = document.getElementById('tour-list');
-  const tourCount = document.getElementById('tour-count');
-
-  if (tourList) {
-    // Add "Next Eclipse" special item first
-    const nextEclipseItem = document.createElement('button');
-    nextEclipseItem.className = 'tour-item';
-    nextEclipseItem.id = 'next-eclipse';
-    nextEclipseItem.title = 'Jump to next total solar eclipse (E)';
-    nextEclipseItem.innerHTML = `
-      <span class="tour-item-icon">☀</span>
-      <div class="tour-item-content">
-        <span class="tour-item-name">Next Total Eclipse <span class="shortcut">(E)</span></span>
-        <span class="tour-item-desc">Jump to upcoming eclipse</span>
-      </div>
-    `;
-    nextEclipseItem.addEventListener('click', handleNextEclipseClick);
-    tourList.appendChild(nextEclipseItem);
-
-    // Add predefined tours
-    PREDEFINED_TOURS.forEach(tour => {
-      const item = document.createElement('button');
-      item.className = 'tour-item';
-      item.dataset.tour = tour.id;
-      item.title = tour.description;
-      item.innerHTML = `
-        <span class="tour-item-icon">${getTourIcon(tour.id)}</span>
-        <div class="tour-item-content">
-          <span class="tour-item-name">${tour.name}</span>
-          <span class="tour-item-desc">${tour.description}</span>
-        </div>
-      `;
-      tourList.appendChild(item);
-    });
-
-    // Update tour count
-    if (tourCount) {
-      tourCount.textContent = `${PREDEFINED_TOURS.length + 1} tours`;
-    }
-  }
-
-  // Tour selection buttons (handles dynamically generated buttons)
-  document.querySelectorAll("[data-tour]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tourId = (btn as HTMLElement).dataset.tour;
-      if (tourId) {
-        const tour = getTourById(tourId);
-        if (tour) {
-          // Stop any existing time playback
-          stopPlayback();
-          tourEngine.play(tour);
-        }
-      }
-    });
+  setupTourUI({
+    tourEngine,
+    onNextEclipse: handleNextEclipseClick,
+    stopTimePlayback: () => timeControls?.stopPlayback(),
   });
 
-  // Tour playback controls
-  const tourPlayPauseBtn = document.getElementById("tour-play-pause");
-  const tourStopBtn = document.getElementById("tour-stop");
-  const tourPrevBtn = document.getElementById("tour-prev");
-  const tourNextBtn = document.getElementById("tour-next");
-
-  tourPlayPauseBtn?.addEventListener("click", () => {
-    const state = tourEngine.getState();
-    if (state.status === "playing") {
-      tourEngine.pause();
-    } else if (state.status === "paused") {
-      tourEngine.resume();
-    }
+  // Coordinate display
+  createCoordinateDisplay({
+    getViewMode: () => viewModeManager.getMode(),
+    getCameraState: () => controls.getCameraState(),
+    getRaDec: () => controls.getRaDec(),
+    getAltAz: () => controls.getAltAz(),
+    onCameraChange: (callback) => {
+      const original = controls.onCameraChange;
+      controls.onCameraChange = () => {
+        original?.();
+        callback();
+      };
+    },
   });
-
-  tourStopBtn?.addEventListener("click", () => {
-    tourEngine.stop();
-  });
-
-  tourPrevBtn?.addEventListener("click", () => {
-    tourEngine.previous();
-  });
-
-  tourNextBtn?.addEventListener("click", () => {
-    tourEngine.next();
-  });
-
-  // Add keyboard shortcut: Escape to stop tour
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && tourEngine.isActive()) {
-      tourEngine.stop();
-    }
-  });
-
-  // Coordinate display elements
-  const coordRaEl = document.getElementById("coord-ra");
-  const coordDecEl = document.getElementById("coord-dec");
-  const coordFovEl = document.getElementById("coord-fov");
-  const coordAltEl = document.getElementById("coord-alt");
-  const coordAzEl = document.getElementById("coord-az");
-  const referenceCircle = document.getElementById("reference-circle");
-
-  // Reference circle size in arcseconds
-  const REFERENCE_ARCSEC = 50;
-
-  /**
-   * Format RA in hours/minutes (e.g., "12h 34m")
-   */
-  function formatRA(raDeg: number): string {
-    const raHours = raDeg / 15; // 360° = 24h
-    const h = Math.floor(raHours);
-    const m = Math.floor((raHours - h) * 60);
-    return `${h}h ${m.toString().padStart(2, "0")}m`;
-  }
-
-  /**
-   * Format Dec in degrees/arcminutes (e.g., "+45° 30'")
-   */
-  function formatDec(decDeg: number): string {
-    const sign = decDeg >= 0 ? "+" : "-";
-    const absDec = Math.abs(decDeg);
-    const d = Math.floor(absDec);
-    const m = Math.floor((absDec - d) * 60);
-    return `${sign}${d}° ${m.toString().padStart(2, "0")}'`;
-  }
-
-  /**
-   * Format altitude (e.g., "+45°")
-   */
-  function formatAltitude(altDeg: number): string {
-    const sign = altDeg >= 0 ? "+" : "";
-    return `${sign}${Math.round(altDeg)}°`;
-  }
-
-  /**
-   * Get compass direction from azimuth.
-   */
-  function getCompassDirection(azDeg: number): string {
-    const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-    const index = Math.round(((azDeg % 360) + 360) % 360 / 45) % 8;
-    return dirs[index];
-  }
-
-  /**
-   * Format azimuth with compass direction (e.g., "135° (SE)")
-   */
-  function formatAzimuth(azDeg: number): string {
-    const az = Math.round(((azDeg % 360) + 360) % 360);
-    const dir = getCompassDirection(azDeg);
-    return `${az}° (${dir})`;
-  }
-
-  /**
-   * Update the reference circle size based on current FOV.
-   * The circle represents REFERENCE_ARCSEC arcseconds.
-   * Only shown when FOV < 5° (where it becomes useful for comparison).
-   */
-  function updateReferenceCircle(fov: number): void {
-    if (!referenceCircle) return;
-
-    // Only show when zoomed in enough for it to be useful
-    if (fov > 5) {
-      referenceCircle.style.display = "none";
-      return;
-    }
-
-    // Calculate circle size in pixels
-    // FOV is the vertical field of view in degrees
-    // Reference is in arcseconds, FOV in degrees (1 deg = 3600 arcsec)
-    const fovArcsec = fov * 3600;
-    const canvasHeight = window.innerHeight;
-    const circlePx = (REFERENCE_ARCSEC / fovArcsec) * canvasHeight;
-
-    // Show the circle and set its size
-    referenceCircle.style.display = "block";
-    referenceCircle.style.width = `${circlePx}px`;
-    referenceCircle.style.height = `${circlePx}px`;
-  }
-
-  // Throttle coordinate updates to reduce DOM operations during drag
-  let lastCoordUpdateTime = 0;
-  let coordUpdatePending = false;
-  const COORD_UPDATE_INTERVAL = 100; // ms - update at most 10 times per second
-
-  function updateCoordinates(): void {
-    const now = performance.now();
-    if (now - lastCoordUpdateTime < COORD_UPDATE_INTERVAL) {
-      // Schedule update if not already pending
-      if (!coordUpdatePending) {
-        coordUpdatePending = true;
-        requestAnimationFrame(() => {
-          coordUpdatePending = false;
-          updateCoordinatesImmediate();
-        });
-      }
-      return;
-    }
-    updateCoordinatesImmediate();
-  }
-
-  function updateCoordinatesImmediate(): void {
-    lastCoordUpdateTime = performance.now();
-    const { fov } = controls.getCameraState();
-
-    // Update coordinates based on current view mode
-    if (currentViewMode === 'topocentric') {
-      // Show Alt/Az in topocentric mode
-      const altAz = controls.getAltAz();
-      if (altAz) {
-        if (coordAltEl) coordAltEl.textContent = formatAltitude(altAz.altitude);
-        if (coordAzEl) coordAzEl.textContent = formatAzimuth(altAz.azimuth);
-      }
-    } else {
-      // Show RA/Dec in geocentric mode
-      const { ra, dec } = controls.getRaDec();
-      if (coordRaEl) coordRaEl.textContent = formatRA(ra);
-      if (coordDecEl) coordDecEl.textContent = formatDec(dec);
-    }
-
-    // Update FOV display
-    if (coordFovEl) {
-      // Show decimal for small FOVs
-      if (fov < 1) {
-        coordFovEl.textContent = `${fov.toFixed(2)}°`;
-      } else if (fov < 10) {
-        coordFovEl.textContent = `${fov.toFixed(1)}°`;
-      } else {
-        coordFovEl.textContent = `${Math.round(fov)}°`;
-      }
-    }
-    updateReferenceCircle(fov);
-  }
-
-  // Update coordinates initially
-  updateCoordinatesImmediate();
-
-  // Update coordinates on camera change (throttled)
-  const originalOnCameraChange = controls.onCameraChange;
-  controls.onCameraChange = () => {
-    originalOnCameraChange?.();
-    updateCoordinates();
-  };
 
   // Animation loop
   function animate(): void {
