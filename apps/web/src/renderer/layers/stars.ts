@@ -4,6 +4,8 @@
  * Renders star field with LOD (Level of Detail) based on FOV,
  * major star labels with flag lines, and support for star overrides
  * (e.g., for supernova effects during tours).
+ *
+ * Includes atmospheric scintillation (twinkling) for topocentric view mode.
  */
 
 import * as THREE from "three";
@@ -20,9 +22,118 @@ import {
   LOD_MAX_STARS_NARROW_FOV,
   POINT_SOURCE_ANGULAR_SIZE_ARCSEC,
 } from "../constants";
-import { readPositionFromBuffer } from "../utils/coordinates";
+import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { bvToColor, angularSizeToPixels, starIdHash } from "../utils/colors";
 import { calculateLabelOffset } from "../utils/labels";
+
+// -----------------------------------------------------------------------------
+// Scintillation Shader
+// -----------------------------------------------------------------------------
+
+/**
+ * Vertex shader for stars with scintillation support.
+ * Passes position, color, and star ID hash to fragment shader.
+ */
+const SCINTILLATION_VERTEX_SHADER = `
+  attribute float starId;
+  attribute float magnitude;
+
+  varying vec3 vColor;
+  varying float vStarId;
+  varying float vMagnitude;
+  varying vec3 vPosition;
+
+  uniform float pointSize;
+
+  void main() {
+    vColor = color;
+    vStarId = starId;
+    vMagnitude = magnitude;
+    vPosition = position;
+
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = pointSize;
+  }
+`;
+
+/**
+ * Fragment shader for stars with scintillation support.
+ * Computes altitude-based twinkling with chromatic effects.
+ */
+const SCINTILLATION_FRAGMENT_SHADER = `
+  varying vec3 vColor;
+  varying float vStarId;
+  varying float vMagnitude;
+  varying vec3 vPosition;
+
+  uniform float time;
+  uniform vec3 zenith;
+  uniform float scintillationIntensity;
+  uniform bool scintillationEnabled;
+
+  // Compute altitude of star above horizon (0 to 1 for 0° to 90°)
+  float computeAltitude(vec3 starPos, vec3 zenithDir) {
+    vec3 starDir = normalize(starPos);
+    float sinAlt = dot(starDir, zenithDir);
+    return max(0.0, sinAlt); // 0 at horizon, 1 at zenith
+  }
+
+  // Compute airmass approximation (Kasten-Young simplified)
+  float computeAirmass(float altitude) {
+    float sinAlt = max(0.01, altitude); // Avoid division by zero
+    return 1.0 / sinAlt;
+  }
+
+  void main() {
+    // Circular point shape
+    vec2 center = gl_PointCoord - 0.5;
+    float dist = length(center);
+    if (dist > 0.5) discard;
+
+    vec3 finalColor = vColor;
+    float alpha = 0.9;
+
+    if (scintillationEnabled && scintillationIntensity > 0.0) {
+      // Only apply to bright stars (mag < 3.5)
+      if (vMagnitude < 3.5) {
+        float altitude = computeAltitude(vPosition, zenith);
+        float airmass = computeAirmass(altitude);
+
+        // Scintillation amplitude scales with airmass and inverse magnitude
+        // Bright stars (low mag) and low altitude (high airmass) twinkle more
+        float brightnessFactor = max(0.0, (3.5 - vMagnitude) / 4.0);
+        float amplitude = min(airmass / 8.0, 0.6) * brightnessFactor * scintillationIntensity;
+
+        // Multi-frequency oscillation for natural randomness
+        float phase = fract(vStarId * 1234.5678) * 6.28318;
+        float freq1 = 8.0 + mod(vStarId, 7.0);   // 8-15 Hz
+        float freq2 = 13.0 + mod(vStarId, 11.0); // 13-24 Hz
+        float t = time;
+
+        // Brightness modulation
+        float brightness = 1.0 + amplitude * 0.5 * (
+          sin(freq1 * t + phase) +
+          0.5 * sin(freq2 * t + phase * 1.7)
+        );
+
+        // Chromatic modulation (R/G/B at slightly different frequencies)
+        // This creates the famous color flashing of stars like Sirius
+        float colorAmp = amplitude * 0.25;
+        float r = 1.0 + colorAmp * sin(freq1 * 0.9 * t + phase);
+        float g = 1.0 + colorAmp * sin(freq1 * t + phase + 0.5);
+        float b = 1.0 + colorAmp * sin(freq1 * 1.1 * t + phase + 1.0);
+
+        finalColor = vColor * brightness * vec3(r, g, b);
+      }
+    }
+
+    // Soft edge falloff
+    float softness = 1.0 - smoothstep(0.3, 0.5, dist);
+    alpha *= softness;
+
+    gl_FragColor = vec4(finalColor, alpha);
+  }
+`;
 
 /** Star override data for special effects */
 export interface StarOverrideData {
@@ -56,6 +167,12 @@ export interface StarsLayer {
   clearOverrides(): void;
   /** Get number of rendered stars (after LOD culling) */
   getRenderedCount(): number;
+  /** Enable/disable scintillation (topocentric mode) */
+  setScintillationEnabled(enabled: boolean): void;
+  /** Set scintillation intensity (0-1, representing atmospheric turbulence) */
+  setScintillationIntensity(intensity: number): void;
+  /** Update scintillation for current frame (call each frame when enabled) */
+  updateScintillation(latitude: number, lst: number): void;
 }
 
 /**
@@ -96,15 +213,28 @@ function createGlowTexture(size = 128): THREE.Texture {
 }
 
 export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): StarsLayer {
-  // Main stars geometry and material
+  // Main stars geometry with custom shader for scintillation
   const starsGeometry = new THREE.BufferGeometry();
-  const starsMaterial = new THREE.PointsMaterial({
-    size: 1.5,
-    sizeAttenuation: false,
+
+  // Uniforms for scintillation shader
+  const scintillationUniforms = {
+    pointSize: { value: 1.5 },
+    time: { value: 0.0 },
+    zenith: { value: new THREE.Vector3(0, 1, 0) },
+    scintillationIntensity: { value: 0.7 },
+    scintillationEnabled: { value: false },
+  };
+
+  // Custom shader material with scintillation support
+  const starsMaterial = new THREE.ShaderMaterial({
+    uniforms: scintillationUniforms,
+    vertexShader: SCINTILLATION_VERTEX_SHADER,
+    fragmentShader: SCINTILLATION_FRAGMENT_SHADER,
     vertexColors: true,
     transparent: true,
-    opacity: 0.9,
+    depthWrite: false,
   });
+
   const starsPoints = new THREE.Points(starsGeometry, starsMaterial);
   scene.add(starsPoints);
 
@@ -241,8 +371,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     lastFov = fov;
     lastCanvasHeight = canvasHeight;
 
-    // Update point size based on FOV
-    starsMaterial.size = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, canvasHeight);
+    // Update point size uniform based on FOV
+    scintillationUniforms.pointSize.value = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, canvasHeight);
 
     const positions = getStarsPositionBuffer(engine);
     const meta = getStarsMetaBuffer(engine);
@@ -253,6 +383,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     if (totalStars === 0 && starOverrideMap.size === 0) {
       starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
       starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
+      starsGeometry.setAttribute("starId", new THREE.BufferAttribute(new Float32Array(0), 1));
+      starsGeometry.setAttribute("magnitude", new THREE.BufferAttribute(new Float32Array(0), 1));
       renderedStarCount = 0;
       return;
     }
@@ -290,6 +422,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     // Second pass: build arrays with LOD sampling
     const scaledPositions: number[] = [];
     const colors: number[] = [];
+    const starIds: number[] = [];
+    const magnitudes: number[] = [];
 
     const overridePositions: number[] = [];
     const overrideColors: number[] = [];
@@ -319,6 +453,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
         scaledPositions.push(pos.x, pos.y, pos.z);
         const color = bvToColor(bv);
         colors.push(color.r, color.g, color.b);
+        starIds.push(id);
+        magnitudes.push(vmag);
 
         if (hasOverride) {
           overridePositions.push(pos.x, pos.y, pos.z);
@@ -360,6 +496,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
         scaledPositions.push(pos.x, pos.y, pos.z);
         const color = bvToColor(bv);
         colors.push(color.r, color.g, color.b);
+        starIds.push(id);
+        magnitudes.push(vmag);
 
         overridePositions.push(pos.x, pos.y, pos.z);
         overrideColors.push(color.r, color.g, color.b);
@@ -374,6 +512,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
     starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(scaledPositions), 3));
     starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(colors), 3));
+    starsGeometry.setAttribute("starId", new THREE.BufferAttribute(new Float32Array(starIds), 1));
+    starsGeometry.setAttribute("magnitude", new THREE.BufferAttribute(new Float32Array(magnitudes), 1));
 
     renderedStarCount = scaledPositions.length / 3;
   }
@@ -431,6 +571,42 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     }
   }
 
+  // Scintillation state
+  let scintillationEnabled = false;
+  let scintillationStartTime = 0;
+
+  function setScintillationEnabled(enabled: boolean): void {
+    scintillationEnabled = enabled;
+    scintillationUniforms.scintillationEnabled.value = enabled;
+    if (enabled) {
+      scintillationStartTime = performance.now();
+    }
+  }
+
+  function setScintillationIntensity(intensity: number): void {
+    scintillationUniforms.scintillationIntensity.value = Math.max(0, Math.min(1, intensity));
+  }
+
+  /**
+   * Update scintillation for current frame.
+   * Call this every frame when scintillation is enabled.
+   * @param latitude - Observer latitude in degrees
+   * @param lst - Local Sidereal Time in degrees
+   */
+  function updateScintillation(latitude: number, lst: number): void {
+    if (!scintillationEnabled) return;
+
+    // Update time (in seconds since scintillation started)
+    const elapsed = (performance.now() - scintillationStartTime) / 1000;
+    scintillationUniforms.time.value = elapsed;
+
+    // Compute zenith direction in Three.js coordinates
+    // Zenith is at RA=LST, Dec=latitude
+    const zenith = raDecToPosition(lst, latitude, 1);
+    zenith.normalize();
+    scintillationUniforms.zenith.value.copy(zenith);
+  }
+
   return {
     points: starsPoints,
     overrideStarsGroup,
@@ -444,5 +620,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     setOverrides,
     clearOverrides,
     getRenderedCount: () => renderedStarCount,
+    setScintillationEnabled,
+    setScintillationIntensity,
+    updateScintillation,
   };
 }

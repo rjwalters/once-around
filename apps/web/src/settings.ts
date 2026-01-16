@@ -41,6 +41,9 @@ export interface Settings {
   observerLatitude: number;
   observerLongitude: number;
   observerName: string;
+
+  // Atmospheric scintillation (twinkling) intensity (0-1)
+  seeingIntensity: number;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -63,6 +66,9 @@ const DEFAULT_SETTINGS: Settings = {
   observerLatitude: 37.7749,
   observerLongitude: -122.4194,
   observerName: "San Francisco, USA",
+
+  // Atmospheric scintillation - "Average" seeing by default
+  seeingIntensity: 0.7,
 };
 
 /**

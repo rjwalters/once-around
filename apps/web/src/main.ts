@@ -15,7 +15,7 @@ import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tou
 import type { SkyEngine } from "./wasm/sky_engine";
 import { createTimeControls } from "./time-controls";
 import { setupSimpleModal, setupModalClose } from "./modal-utils";
-import { createViewModeManager } from "./view-mode";
+import { createViewModeManager, computeGMST } from "./view-mode";
 import { createARModeManager } from "./ar-mode";
 import { createLocationUI } from "./location-ui";
 import { createSearchUI } from "./search-ui";
@@ -611,6 +611,17 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // View Mode Toggle (Geocentric vs Topocentric)
   // ---------------------------------------------------------------------------
+  // Atmospheric seeing control
+  const seeingControl = document.getElementById("seeing-control") as HTMLDivElement | null;
+  const seeingSelect = document.getElementById("seeing-select") as HTMLSelectElement | null;
+
+  // Initialize seeing intensity from settings or default
+  const initialSeeingIntensity = settings.seeingIntensity ?? 0.7;
+  renderer.setScintillationIntensity(initialSeeingIntensity);
+  if (seeingSelect) {
+    seeingSelect.value = String(initialSeeingIntensity);
+  }
+
   const viewModeManager = createViewModeManager({
     initialMode: settings.viewMode ?? 'geocentric',
     getObserverLocation: () => ({
@@ -619,6 +630,13 @@ async function main(): Promise<void> {
     }),
     getCurrentDate: () => currentDate,
     onModeChange: (mode) => {
+      // Enable/disable scintillation based on view mode
+      // Scintillation only makes sense in topocentric (surface observer) mode
+      renderer.setScintillationEnabled(mode === 'topocentric');
+      // Show/hide atmospheric seeing control
+      if (seeingControl) {
+        seeingControl.style.display = mode === 'topocentric' ? 'block' : 'none';
+      }
       settingsSaver.save({ viewMode: mode });
     },
     onHorizonChange: (visible) => {
@@ -633,6 +651,20 @@ async function main(): Promise<void> {
     animateToAltAz: (alt, az, duration) => controls.animateToAltAz(alt, az, duration),
   });
   viewModeManager.setupEventListeners();
+
+  // Show seeing control if starting in topocentric mode
+  if (settings.viewMode === 'topocentric' && seeingControl) {
+    seeingControl.style.display = 'block';
+  }
+
+  // Handle seeing control changes
+  if (seeingSelect) {
+    seeingSelect.addEventListener("change", () => {
+      const intensity = parseFloat(seeingSelect.value);
+      renderer.setScintillationIntensity(intensity);
+      settingsSaver.save({ seeingIntensity: intensity });
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // AR Mode (Device Orientation)
@@ -901,7 +933,18 @@ async function main(): Promise<void> {
     tourEngine.update();
     // Update ground plane position for current sidereal time
     renderer.updateGroundPlaneForTime(currentDate);
+    // Update scintillation for topocentric mode
+    if (viewModeManager.getMode() === 'topocentric') {
+      const gmst = computeGMST(currentDate);
+      const lst = gmst + settings.observerLongitude; // LST in degrees
+      renderer.updateScintillation(settings.observerLatitude, lst);
+    }
     renderer.render();
+  }
+
+  // Enable scintillation if starting in topocentric mode
+  if (settings.viewMode === 'topocentric') {
+    renderer.setScintillationEnabled(true);
   }
 
   animate();

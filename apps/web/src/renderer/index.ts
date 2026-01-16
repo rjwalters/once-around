@@ -39,6 +39,9 @@ export interface SkyRenderer {
   updateGroundPlaneForTime(date: Date): void;
   setStarOverrides(overrides: Array<{ starHR: number; magnitude?: number; bvColor?: number; scale?: number }>): void;
   clearStarOverrides(): void;
+  setScintillationEnabled(enabled: boolean): void;
+  setScintillationIntensity(intensity: number): void;
+  updateScintillation(latitude: number, lst: number): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -145,6 +148,18 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     starsLayer.clearOverrides();
   }
 
+  function setScintillationEnabled(enabled: boolean): void {
+    starsLayer.setScintillationEnabled(enabled);
+  }
+
+  function setScintillationIntensity(intensity: number): void {
+    starsLayer.setScintillationIntensity(intensity);
+  }
+
+  function updateScintillation(latitude: number, lst: number): void {
+    starsLayer.updateScintillation(latitude, lst);
+  }
+
   function render(): void {
     eclipseLayer.updateTime();
     renderer.render(scene, camera);
@@ -178,6 +193,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     updateGroundPlaneForTime,
     setStarOverrides,
     clearStarOverrides,
+    setScintillationEnabled,
+    setScintillationIntensity,
+    updateScintillation,
     render,
     resize,
   };
