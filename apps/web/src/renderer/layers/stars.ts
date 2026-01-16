@@ -158,12 +158,12 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
     overrideStarsPoints.visible = true;
 
+    // Use the actual scale from the tour, with a small minimum to keep star visible
     const maxScale = Math.max(...scales);
     const baseSize = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, canvasHeight);
-    const finalSize = baseSize * Math.max(maxScale, 5);
+    // Minimum scale of 1.5 ensures override stars are visible but can still fade
+    const finalSize = baseSize * Math.max(maxScale, 1.5);
     overrideStarsMaterial.size = finalSize;
-
-    console.log('Override stars:', positions.length / 3, 'stars, size:', finalSize, 'scale:', maxScale, 'pos:', positions.slice(0, 3), 'color:', colors.slice(0, 3));
 
     const posAttr = new THREE.BufferAttribute(new Float32Array(positions), 3);
     const colorAttr = new THREE.BufferAttribute(new Float32Array(colors), 3);
@@ -245,7 +245,6 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
         foundOverrideStars.add(id);
         if (override.magnitude !== undefined) vmag = override.magnitude;
         if (override.bvColor !== undefined) bv = override.bvColor;
-        console.log('Found override star in visible list', id, 'vmag:', vmag, 'bv:', bv, 'scale:', override.scale);
       }
 
       const isBright = vmag < LOD_BRIGHT_MAG_THRESHOLD;
@@ -292,8 +291,6 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
         if (override.magnitude !== undefined) vmag = override.magnitude;
         if (override.bvColor !== undefined) bv = override.bvColor;
-
-        console.log('Found override star in full catalog', id, 'vmag:', vmag, 'bv:', bv, 'scale:', override.scale);
 
         const pos = readPositionFromBuffer(allPositions, i, SKY_RADIUS);
         starPositionMap.set(id, pos);
