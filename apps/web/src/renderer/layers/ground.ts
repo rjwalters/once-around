@@ -36,6 +36,7 @@ export function createGroundLayer(scene: THREE.Scene): GroundLayer {
   // Track observer location
   let latitude = 0;
   let longitude = 0;
+  let initialized = false; // Don't update until properly configured
 
   // Hemisphere covering exactly half the celestial sphere (below horizon)
   const groundGeometry = new THREE.SphereGeometry(
@@ -130,14 +131,26 @@ export function createGroundLayer(scene: THREE.Scene): GroundLayer {
   }
 
   function updateOrientation(latitudeDeg: number, longitudeDeg?: number): void {
-    latitude = latitudeDeg;
-    if (longitudeDeg !== undefined) {
+    // Validate inputs - use defaults if invalid
+    if (typeof latitudeDeg === 'number' && !isNaN(latitudeDeg) &&
+        latitudeDeg >= -90 && latitudeDeg <= 90) {
+      latitude = latitudeDeg;
+    } else {
+      console.warn("Invalid latitude for ground plane, using 0");
+      latitude = 0;
+    }
+    if (longitudeDeg !== undefined &&
+        typeof longitudeDeg === 'number' && !isNaN(longitudeDeg) &&
+        longitudeDeg >= -180 && longitudeDeg <= 180) {
       longitude = longitudeDeg;
     }
+    // Mark as initialized so updateForTime can start working
+    initialized = true;
   }
 
   function updateForTime(date: Date): void {
-    if (!group.visible) return;
+    // Don't update until properly initialized with observer location
+    if (!initialized || !group.visible) return;
 
     const latRad = latitude * Math.PI / 180;
 

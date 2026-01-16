@@ -80,6 +80,23 @@ export function loadSettings(): Settings {
     // Merge with defaults to handle missing fields from older versions
     const settings = { ...DEFAULT_SETTINGS, ...parsed };
 
+    // Validate observer location - must be valid numbers within range
+    // This prevents corrupted localStorage values from breaking the horizon
+    if (typeof settings.observerLatitude !== 'number' ||
+        isNaN(settings.observerLatitude) ||
+        settings.observerLatitude < -90 ||
+        settings.observerLatitude > 90) {
+      console.warn("Invalid observerLatitude, resetting to default");
+      settings.observerLatitude = DEFAULT_SETTINGS.observerLatitude;
+    }
+    if (typeof settings.observerLongitude !== 'number' ||
+        isNaN(settings.observerLongitude) ||
+        settings.observerLongitude < -180 ||
+        settings.observerLongitude > 180) {
+      console.warn("Invalid observerLongitude, resetting to default");
+      settings.observerLongitude = DEFAULT_SETTINGS.observerLongitude;
+    }
+
     // Check version - reset camera quaternion if outdated (coordinate system changed)
     if (!parsed.version || parsed.version < SETTINGS_VERSION) {
       console.log("Settings version changed, resetting camera orientation");
