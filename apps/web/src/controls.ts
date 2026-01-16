@@ -37,6 +37,7 @@ export interface CelestialControls {
   getViewMode(): ViewMode;
   setTopocentricParams(latitudeRad: number, lstRad: number): void;
   getAltAz(): { altitude: number; azimuth: number } | null;
+  animateToAltAz(altitude: number, azimuth: number, durationMs?: number): void;
   onFovChange?: (fov: number) => void;
   onCameraChange?: () => void;
 }
@@ -780,6 +781,78 @@ export function createCelestialControls(
     };
   }
 
+  // Animation state for Alt/Az
+  let altAzAnimStartAlt = 0;
+  let altAzAnimStartAz = 0;
+  let altAzAnimTargetAlt = 0;
+  let altAzAnimTargetAz = 0;
+  let altAzAnimDuration = 0;
+  let altAzAnimStartTime = 0;
+  let altAzIsAnimating = false;
+
+  /**
+   * Animate the view to a specific Alt/Az position (topocentric mode only).
+   * @param altitude Target altitude in degrees (-90 to +90)
+   * @param azimuth Target azimuth in degrees (0 to 360, 0 = North)
+   * @param durationMs Animation duration in milliseconds (default 1000)
+   */
+  function animateToAltAz(altitude: number, azimuth: number, durationMs: number = 1000): void {
+    if (viewMode !== 'topocentric') {
+      // If not in topocentric mode, convert to RA/Dec and use that animation
+      const lstDeg = (topoLST * 180) / Math.PI;
+      const latDeg = (topoLatitude * 180) / Math.PI;
+      const raDec = horizontalToEquatorial(azimuth, altitude, lstDeg, latDeg);
+      animateToRaDec(raDec.ra, raDec.dec, durationMs);
+      return;
+    }
+
+    altAzAnimStartAlt = topoAltitude;
+    altAzAnimStartAz = topoAzimuth;
+    altAzAnimTargetAlt = (altitude * Math.PI) / 180;
+
+    // Normalize target azimuth
+    let targetAz = ((azimuth % 360) * Math.PI) / 180;
+    if (targetAz < 0) targetAz += 2 * Math.PI;
+
+    // Choose shortest path for azimuth animation
+    let azDiff = targetAz - topoAzimuth;
+    if (azDiff > Math.PI) azDiff -= 2 * Math.PI;
+    if (azDiff < -Math.PI) azDiff += 2 * Math.PI;
+    altAzAnimTargetAz = topoAzimuth + azDiff;
+
+    altAzAnimDuration = durationMs;
+    altAzAnimStartTime = performance.now();
+    altAzIsAnimating = true;
+    isAnimating = true;
+  }
+
+  // Modify update to handle Alt/Az animation
+  const originalUpdate = update;
+  update = function() {
+    if (altAzIsAnimating && viewMode === 'topocentric') {
+      const elapsed = performance.now() - altAzAnimStartTime;
+      const t = Math.min(1, elapsed / altAzAnimDuration);
+
+      // Smooth easing
+      const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+      topoAltitude = altAzAnimStartAlt + (altAzAnimTargetAlt - altAzAnimStartAlt) * eased;
+      topoAzimuth = altAzAnimStartAz + (altAzAnimTargetAz - altAzAnimStartAz) * eased;
+
+      // Normalize azimuth
+      topoAzimuth = ((topoAzimuth % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+      updateTopocentricCamera();
+
+      if (t >= 1) {
+        altAzIsAnimating = false;
+        isAnimating = false;
+      }
+    }
+
+    originalUpdate();
+  };
+
   const controlsApi: CelestialControls = {
     update,
     dispose,
@@ -794,6 +867,7 @@ export function createCelestialControls(
     getViewMode,
     setTopocentricParams,
     getAltAz,
+    animateToAltAz,
     onFovChange: undefined,
     onCameraChange: undefined,
   };

@@ -1043,6 +1043,12 @@ async function main(): Promise<void> {
     // Update UI
     updateViewModeUI(mode);
 
+    // When switching to topocentric, animate to a nice default view
+    // Looking south (azimuth 180°) at 30° above the horizon
+    if (mode === 'topocentric') {
+      controls.animateToAltAz(30, 180, 800);
+    }
+
     // Save to settings
     settingsSaver.save({ viewMode: mode });
   }
