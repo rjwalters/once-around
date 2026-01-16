@@ -11,7 +11,6 @@ import { DSO_DATA } from "./dsoData";
 import { loadSettings, createSettingsSaver, type ViewMode } from "./settings";
 import { createLocationManager, formatLatitude, formatLongitude, type ObserverLocation } from "./location";
 import { CONSTELLATION_CENTERS, type SearchItem } from "./search";
-import { getSunMoonSeparation } from "./eclipseData";
 import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tour";
 import type { SkyEngine } from "./wasm/sky_engine";
 import { createTimeControls } from "./time-controls";
