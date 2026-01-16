@@ -27,13 +27,21 @@ import { createEclipseHandler } from "./eclipse-handler";
 import { setupInfoModals } from "./info-modals";
 import { setupKeyboardHandler } from "./keyboard-handler";
 import { buildSearchIndex } from "./search-index";
+import { setupOrbitFocus } from "./orbit-focus";
+import { readUrlState, createUrlStateUpdater } from "./url-state";
+import {
+  BODY_NAMES,
+  COMET_NAMES,
+  MINOR_BODY_NAMES,
+  getBodyPositions,
+  positionToRaDec,
+  calculateSunMoonSeparation,
+  type BodyPositions,
+} from "./body-positions";
 
 // Build-time constants injected by Vite
 declare const __BUILD_TIME__: string;
 declare const __GIT_COMMIT__: string;
-
-// Body names in the order they appear in the position buffer
-const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
 
 // Map from tour target names to body/comet names in the position buffer
 const TARGET_TO_NAME: Record<TargetBody, string> = {
@@ -55,201 +63,14 @@ const TARGET_TO_NAME: Record<TargetBody, string> = {
   'tsuchinshan-atlas': 'C/2023 A3 T-ATLAS',
   'hale-bopp': 'C/1995 O1 Hale-Bopp',
 };
-// Minor body names in the order they appear in the minor bodies buffer
-const MINOR_BODY_NAMES = [
-  "Pluto", "Ceres", "Eris", "Makemake", "Haumea",
-  "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna",
-  "Vesta", "Pallas", "Hygiea", "Apophis", "Bennu"
-];
-// Comet names in the order they appear in the comets buffer
-const COMET_NAMES = [
-  "1P/Halley", "2P/Encke", "67P/C-G", "46P/Wirtanen",
-  "C/2020 F3 NEOWISE", "C/2023 A3 T-ATLAS", "C/1995 O1 Hale-Bopp"
-];
-const SKY_RADIUS = 50;
 
-// Build a map of body names to their current 3D positions
-function getBodyPositions(engine: SkyEngine): BodyPositions {
-  const bodyPositions = getBodiesPositionBuffer(engine);
-  const minorBodies = getMinorBodiesBuffer(engine);
-  const comets = getCometsBuffer(engine);
-  const positions: BodyPositions = new Map();
-  // Use SKY_RADIUS - 0.5 to match video marker positioning
-  const radius = SKY_RADIUS - 0.5;
-
-  // Add major bodies (Sun, Moon, planets)
-  for (let i = 0; i < BODY_NAMES.length; i++) {
-    // Rust coords: X → RA=0, Y → RA=90°, Z → north pole
-    const rustX = bodyPositions[i * 3];
-    const rustY = bodyPositions[i * 3 + 1];
-    const rustZ = bodyPositions[i * 3 + 2];
-    // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
-    const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
-    positions.set(BODY_NAMES[i], pos);
-  }
-
-  // Add minor bodies (Pluto, dwarf planets)
-  // Minor bodies buffer: 4 floats per body (x, y, z, angular_diameter)
-  for (let i = 0; i < MINOR_BODY_NAMES.length; i++) {
-    const rustX = minorBodies[i * 4];
-    const rustY = minorBodies[i * 4 + 1];
-    const rustZ = minorBodies[i * 4 + 2];
-    // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
-    const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
-    positions.set(MINOR_BODY_NAMES[i], pos);
-  }
-
-  // Add comets
-  // Comets buffer: 4 floats per comet (x, y, z, magnitude)
-  for (let i = 0; i < COMET_NAMES.length; i++) {
-    const rustX = comets[i * 4];
-    const rustY = comets[i * 4 + 1];
-    const rustZ = comets[i * 4 + 2];
-    // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
-    const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
-    positions.set(COMET_NAMES[i], pos);
-  }
-
-  return positions;
-}
-
-/**
- * Convert a 3D position (Three.js coordinates) to RA/Dec in degrees.
- * Three.js uses Y-up: X→RA=0°, Y→North pole, Z→RA=90°
- */
-function positionToRaDec(pos: THREE.Vector3): { ra: number; dec: number } {
-  // Normalize the position
-  const normalized = pos.clone().normalize();
-
-  // Dec is the angle from the equatorial plane (Y component)
-  const dec = Math.asin(normalized.y) * (180 / Math.PI);
-
-  // RA is the angle in the XZ plane (X is negated for east-west fix)
-  let ra = Math.atan2(normalized.z, -normalized.x) * (180 / Math.PI);
-  if (ra < 0) ra += 360;
-
-  return { ra, dec };
-}
-
-/**
- * Calculate the angular separation between Sun and Moon for eclipse detection.
- * @param bodyPositions Map of body positions from the engine
- * @returns Angular separation in degrees, or null if positions unavailable
- */
-function calculateSunMoonSeparation(bodyPositions: BodyPositions): number | null {
-  const sunPos = bodyPositions.get("Sun");
-  const moonPos = bodyPositions.get("Moon");
-
-  if (!sunPos || !moonPos) return null;
-
-  const sunRaDec = positionToRaDec(sunPos);
-  const moonRaDec = positionToRaDec(moonPos);
-
-  return getSunMoonSeparation(sunRaDec.ra, sunRaDec.dec, moonRaDec.ra, moonRaDec.dec);
-}
-
-/**
- * URL parameter state for shareable links.
- */
-interface UrlState {
-  ra?: number;
-  dec?: number;
-  fov?: number;
-  t?: string; // ISO 8601 datetime
-  mag?: number;
-  lat?: number; // Observer latitude
-  lon?: number; // Observer longitude
-}
-
-/**
- * Read state from URL parameters.
- */
-function readUrlState(): UrlState {
-  const params = new URLSearchParams(window.location.search);
-  const state: UrlState = {};
-
-  const ra = params.get('ra');
-  if (ra !== null) {
-    const val = parseFloat(ra);
-    if (!isNaN(val) && val >= 0 && val < 360) state.ra = val;
-  }
-
-  const dec = params.get('dec');
-  if (dec !== null) {
-    const val = parseFloat(dec);
-    if (!isNaN(val) && val >= -90 && val <= 90) state.dec = val;
-  }
-
-  const fov = params.get('fov');
-  if (fov !== null) {
-    const val = parseFloat(fov);
-    if (!isNaN(val) && val >= 0.5 && val <= 100) state.fov = val;
-  }
-
-  const t = params.get('t');
-  if (t !== null) {
-    const date = new Date(t);
-    if (!isNaN(date.getTime())) state.t = t;
-  }
-
-  const mag = params.get('mag');
-  if (mag !== null) {
-    const val = parseFloat(mag);
-    if (!isNaN(val) && val >= -1 && val <= 12) state.mag = val;
-  }
-
-  return state;
-}
-
-/**
- * Update URL parameters without creating history entries.
- * Debounced to avoid "too many calls to History API" errors.
- */
-let urlUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
-let pendingUrlState: UrlState | null = null;
-
-function updateUrlState(state: UrlState): void {
-  // Store the latest state
-  pendingUrlState = { ...pendingUrlState, ...state };
-
-  // Debounce: only update URL after 500ms of inactivity
-  if (urlUpdateTimeout) {
-    clearTimeout(urlUpdateTimeout);
-  }
-
-  urlUpdateTimeout = setTimeout(() => {
-    if (!pendingUrlState) return;
-
-    const params = new URLSearchParams(window.location.search);
-
-    // Update or remove each parameter
-    if (pendingUrlState.ra !== undefined) {
-      params.set('ra', pendingUrlState.ra.toFixed(2));
-    }
-    if (pendingUrlState.dec !== undefined) {
-      params.set('dec', pendingUrlState.dec.toFixed(2));
-    }
-    if (pendingUrlState.fov !== undefined) {
-      params.set('fov', pendingUrlState.fov.toFixed(1));
-    }
-    if (pendingUrlState.t !== undefined) {
-      params.set('t', pendingUrlState.t);
-    }
-    if (pendingUrlState.mag !== undefined) {
-      params.set('mag', pendingUrlState.mag.toFixed(1));
-    }
-    if (pendingUrlState.lat !== undefined) {
-      params.set('lat', pendingUrlState.lat.toFixed(4));
-    }
-    if (pendingUrlState.lon !== undefined) {
-      params.set('lon', pendingUrlState.lon.toFixed(4));
-    }
-
-    const newUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState(null, '', newUrl);
-
-    pendingUrlState = null;
-  }, 500);
+// Helper to get body positions from engine
+function getBodyPositionsFromEngine(engine: SkyEngine): BodyPositions {
+  return getBodyPositions({
+    bodies: getBodiesPositionBuffer(engine),
+    minorBodies: getMinorBodiesBuffer(engine),
+    comets: getCometsBuffer(engine),
+  });
 }
 
 async function main(): Promise<void> {
@@ -294,6 +115,7 @@ async function main(): Promise<void> {
 
   // Read URL state (takes precedence over localStorage)
   const urlState = readUrlState();
+  const updateUrlState = createUrlStateUpdater();
   const hasUrlState = urlState.ra !== undefined || urlState.dec !== undefined;
 
   // Restore camera state from settings or URL
@@ -349,7 +171,7 @@ async function main(): Promise<void> {
     }
 
     // Update eclipse rendering
-    const bodyPos = getBodyPositions(engine);
+    const bodyPos = getBodyPositionsFromEngine(engine);
     const sunMoonSep = calculateSunMoonSeparation(bodyPos);
     if (sunMoonSep !== null) {
       renderer.updateEclipse(sunMoonSep);
@@ -388,7 +210,7 @@ async function main(): Promise<void> {
 
       // Get body position by name (works for both planets and comets)
       const bodyName = TARGET_TO_NAME[target];
-      const bodyPos = getBodyPositions(engine);
+      const bodyPos = getBodyPositionsFromEngine(engine);
       const pos = bodyPos.get(bodyName);
 
       // Restore original time
@@ -569,7 +391,7 @@ async function main(): Promise<void> {
     applyTimeToEngine: (date) => applyTimeToEngine(engine, date),
     recomputeEngine: () => engine.recompute(),
     updateRenderer: () => renderer.updateFromEngine(engine),
-    getBodyPositions: () => getBodyPositions(engine),
+    getBodyPositions: () => getBodyPositionsFromEngine(engine),
     positionToRaDec,
     calculateSunMoonSeparation,
     updateEclipseRendering: (sep) => renderer.updateEclipse(sep),
@@ -587,6 +409,9 @@ async function main(): Promise<void> {
   // Reference to video markers layer (set later after creation)
   let videoMarkersRef: { updateMovingPositions: (bodyPositions: BodyPositions) => void } | null = null;
 
+  // Orbit focus handler (set later, used by checkbox handler)
+  let orbitFocus: { resetFocus: () => void } | null = null;
+
   // Setup UI
   setupUI(engine, {
     onTimeChange: (date: Date) => {
@@ -602,7 +427,7 @@ async function main(): Promise<void> {
         void renderer.computeOrbits(engine, currentDate);
       }
       // Update moving video markers (planets)
-      const bodyPos = getBodyPositions(engine);
+      const bodyPos = getBodyPositionsFromEngine(engine);
       if (videoMarkersRef) {
         videoMarkersRef.updateMovingPositions(bodyPos);
       }
@@ -667,7 +492,7 @@ async function main(): Promise<void> {
   const videoPopup = createVideoPopup();
 
   // Get current body positions for matching moving object videos to planets
-  const bodyPositions = getBodyPositions(engine);
+  const bodyPositions = getBodyPositionsFromEngine(engine);
 
   const videoMarkers = await createVideoMarkersLayer(
     renderer.scene,
@@ -714,7 +539,7 @@ async function main(): Promise<void> {
         void renderer.computeOrbits(engine, currentDate);
       }
       // Clear any focused orbit when toggling
-      focusedOrbitBody = null;
+      orbitFocus?.resetFocus();
       settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
     });
   }
@@ -879,103 +704,17 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   let searchIndex: SearchItem[] = [];
 
-  // Build search index from all available data
-  async function buildSearchIndex(): Promise<SearchItem[]> {
-    const items: SearchItem[] = [];
-
-    // Add planets (get current positions)
-    const currentBodyPositions = getBodyPositions(engine);
-    for (const name of BODY_NAMES) {
-      const pos = currentBodyPositions.get(name);
-      if (pos) {
-        const { ra, dec } = positionToRaDec(pos);
-        items.push({ name, type: 'planet', ra, dec });
-      }
-    }
-
-    // Add named stars
-    for (const [_hr, star] of Object.entries(STAR_DATA)) {
-      items.push({
-        name: star.name,
-        type: 'star',
-        ra: star.ra,
-        dec: star.dec,
-        subtitle: star.designation,
-      });
-    }
-
-    // Add constellations
-    for (const [name, info] of Object.entries(CONSTELLATION_DATA)) {
-      const center = CONSTELLATION_CENTERS[name];
-      if (center) {
-        items.push({
-          name: info.name,
-          type: 'constellation',
-          ra: center.ra,
-          dec: center.dec,
-          subtitle: info.meaning,
-        });
-      }
-    }
-
-    // Add deep sky objects
-    for (const dso of DSO_DATA) {
-      items.push({
-        name: dso.name,
-        type: 'dso',
-        ra: dso.ra,
-        dec: dso.dec,
-        subtitle: dso.id,
-      });
-      // Also add by catalog ID for search
-      if (dso.id !== dso.name) {
-        items.push({
-          name: dso.id,
-          type: 'dso',
-          ra: dso.ra,
-          dec: dso.dec,
-          subtitle: dso.name,
-        });
-      }
-    }
-
-    // Add comets (positions from engine)
-    for (const name of COMET_NAMES) {
-      const pos = currentBodyPositions.get(name);
-      if (pos) {
-        const { ra, dec } = positionToRaDec(pos);
-        items.push({
-          name,
-          type: 'comet',
-          ra,
-          dec,
-          subtitle: 'Comet',
-        });
-      }
-    }
-
-    // Add videos
-    try {
-      const response = await fetch("/videos.json");
-      const videos: VideoPlacement[] = await response.json();
-      for (const video of videos) {
-        items.push({
-          name: video.object,
-          type: 'video',
-          ra: video.ra,
-          dec: video.dec,
-          subtitle: video.title,
-        });
-      }
-    } catch (e) {
-      console.warn("Failed to load videos for search index:", e);
-    }
-
-    return items;
-  }
-
   // Initialize search index
-  buildSearchIndex().then(index => {
+  buildSearchIndex({
+    bodyNames: BODY_NAMES,
+    cometNames: COMET_NAMES,
+    starData: STAR_DATA,
+    constellationData: CONSTELLATION_DATA,
+    constellationCenters: CONSTELLATION_CENTERS,
+    dsoData: DSO_DATA,
+    getBodyPositions: () => getBodyPositionsFromEngine(engine),
+    positionToRaDec,
+  }).then(index => {
     searchIndex = index;
     console.log(`Search index built: ${index.length} items`);
   });
@@ -987,7 +726,7 @@ async function main(): Promise<void> {
       controls.animateToRaDec(result.ra, result.dec, 1000);
     },
     getPlanetPosition: (name) => {
-      const pos = getBodyPositions(engine).get(name);
+      const pos = getBodyPositionsFromEngine(engine).get(name);
       return pos ? positionToRaDec(pos) : null;
     },
   });
@@ -1024,42 +763,15 @@ async function main(): Promise<void> {
   setupInfoModals();
 
   // Handle clicks on planet labels to focus orbit
-  // Track which planet is focused (null = show all, body index = focused)
-  let focusedOrbitBody: number | null = null;
-
-  document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    if (target.classList.contains("planet-label") && target.dataset.body) {
-      const bodyIndex = parseInt(target.dataset.body, 10);
-      if (!isNaN(bodyIndex)) {
-        // Only handle planets with orbits (indices 2-8: Mercury through Neptune)
-        // Sun (0) and Moon (1) don't have orbit lines
-        if (bodyIndex >= 2 && bodyIndex <= 8) {
-          // If orbits are visible, toggle focus
-          if (orbitsCheckbox?.checked) {
-            if (focusedOrbitBody === bodyIndex) {
-              // Clicking the same planet again: show all orbits
-              focusedOrbitBody = null;
-              renderer.focusOrbit(null);
-            } else {
-              // Focus on this planet's orbit
-              focusedOrbitBody = bodyIndex;
-              renderer.focusOrbit(bodyIndex);
-            }
-          } else {
-            // Orbits not visible: turn them on and focus on this planet
-            if (orbitsCheckbox) {
-              orbitsCheckbox.checked = true;
-              renderer.setOrbitsVisible(true);
-              void renderer.computeOrbits(engine, currentDate);
-              focusedOrbitBody = bodyIndex;
-              renderer.focusOrbit(bodyIndex);
-              settingsSaver.save({ orbitsVisible: true });
-            }
-          }
-        }
-      }
-    }
+  orbitFocus = setupOrbitFocus({
+    isOrbitsVisible: () => orbitsCheckbox?.checked ?? false,
+    setOrbitsVisible: (visible) => {
+      if (orbitsCheckbox) orbitsCheckbox.checked = visible;
+      renderer.setOrbitsVisible(visible);
+    },
+    focusOrbit: (bodyIndex) => renderer.focusOrbit(bodyIndex),
+    computeOrbits: () => void renderer.computeOrbits(engine, currentDate),
+    saveOrbitsVisible: (visible) => settingsSaver.save({ orbitsVisible: visible }),
   });
 
   // Click and hover handling for video markers
@@ -1107,7 +819,7 @@ async function main(): Promise<void> {
         if (orbitsCheckbox.checked) {
           void renderer.computeOrbits(engine, currentDate);
         }
-        focusedOrbitBody = null;
+        orbitFocus?.resetFocus();
         settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
       }
     },
@@ -1202,7 +914,7 @@ async function main(): Promise<void> {
     updateRenderedStars();
 
     // Initial eclipse detection
-    const initialBodyPos = getBodyPositions(engine);
+    const initialBodyPos = getBodyPositionsFromEngine(engine);
     const initialSunMoonSep = calculateSunMoonSeparation(initialBodyPos);
     if (initialSunMoonSep !== null) {
       renderer.updateEclipse(initialSunMoonSep);
