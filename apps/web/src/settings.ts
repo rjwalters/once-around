@@ -10,6 +10,8 @@ const DEBOUNCE_MS = 500;
 // to invalidate old saved camera quaternions
 const SETTINGS_VERSION = 3;
 
+export type ViewMode = 'geocentric' | 'topocentric';
+
 export interface Settings {
   // Settings schema version (for migration)
   version: number;
@@ -32,6 +34,9 @@ export interface Settings {
   arModeEnabled: boolean;
   horizonVisible: boolean;
 
+  // View mode
+  viewMode: ViewMode;
+
   // Observer location
   observerLatitude: number;
   observerLongitude: number;
@@ -52,6 +57,7 @@ const DEFAULT_SETTINGS: Settings = {
   nightVisionEnabled: false,
   arModeEnabled: false,
   horizonVisible: false,
+  viewMode: 'geocentric',
 
   // Default: San Francisco
   observerLatitude: 37.7749,

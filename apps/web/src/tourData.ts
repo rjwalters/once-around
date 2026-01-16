@@ -210,11 +210,335 @@ export const JUPITER_MOONS_TOUR: TourDefinition = {
 };
 
 /**
+ * Comet NEOWISE Tour (July 2020)
+ *
+ * C/2020 F3 NEOWISE was one of the brightest comets in decades.
+ * Discovered March 27, 2020 by the NEOWISE space telescope.
+ * Perihelion: July 3, 2020 (0.29 AU from Sun)
+ * Peak brightness: magnitude ~1 in mid-July 2020
+ * Orbital period: ~6,800 years - returns around year 8800!
+ */
+export const NEOWISE_2020_TOUR: TourDefinition = {
+  id: 'neowise-2020',
+  name: 'Comet NEOWISE (2020)',
+  description: 'Witness the brightest comet in decades',
+  keyframes: [
+    {
+      // Start: Wide view showing the comet in the pre-dawn sky
+      target: 'neowise',
+      fov: 40,
+      datetime: '2020-07-10T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'July 2020: Comet NEOWISE blazes in the pre-dawn sky at magnitude 1',
+    },
+    {
+      // Zoom in to see the comet structure
+      target: 'neowise',
+      fov: 15,
+      datetime: '2020-07-10T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'Discovered by NASA\'s NEOWISE space telescope on March 27, 2020',
+    },
+    {
+      // Close-up view
+      target: 'neowise',
+      fov: 8,
+      datetime: '2020-07-15T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'The comet passed just 0.29 AU from the Sun on July 3rd',
+    },
+    {
+      // Peak visibility mid-July
+      target: 'neowise',
+      fov: 10,
+      datetime: '2020-07-18T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Mid-July: Now visible in evening skies, the comet\'s twin tails stretch across the sky',
+    },
+    {
+      // Late July as it fades
+      target: 'neowise',
+      fov: 15,
+      datetime: '2020-07-23T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'NEOWISE was visible to the naked eye for over a month',
+    },
+    {
+      // Final view with context
+      target: 'neowise',
+      fov: 30,
+      datetime: '2020-07-30T21:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'With a 6,800-year orbit, NEOWISE won\'t return until around year 8800',
+    },
+  ],
+};
+
+/**
+ * Comet Hale-Bopp Tour (1997)
+ *
+ * C/1995 O1 Hale-Bopp was the "Great Comet of 1997".
+ * Discovered July 23, 1995 by Alan Hale and Thomas Bopp.
+ * Perihelion: April 1, 1997 (0.91 AU from Sun)
+ * Peak brightness: magnitude -1.8 (brighter than any star except Sirius)
+ * Visible to naked eye for 18 months - a record!
+ * Orbital period: ~2,533 years - returns around year 4530
+ */
+export const HALE_BOPP_1997_TOUR: TourDefinition = {
+  id: 'hale-bopp-1997',
+  name: 'Comet Hale-Bopp (1997)',
+  description: 'The Great Comet of 1997',
+  keyframes: [
+    {
+      // Early 1997 - comet approaching
+      target: 'hale-bopp',
+      fov: 40,
+      datetime: '1997-02-15T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'February 1997: Hale-Bopp approaches, already visible to the naked eye',
+    },
+    {
+      // Zoom in
+      target: 'hale-bopp',
+      fov: 15,
+      datetime: '1997-03-01T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Discovered in 1995 when still beyond Jupiter - unusually far for a comet discovery',
+    },
+    {
+      // Approaching perihelion
+      target: 'hale-bopp',
+      fov: 10,
+      datetime: '1997-03-20T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'March 1997: Hale-Bopp brightens as it nears the Sun',
+    },
+    {
+      // Perihelion - maximum brightness
+      target: 'hale-bopp',
+      fov: 8,
+      datetime: '1997-04-01T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'April 1, 1997: Perihelion! At magnitude -1.8, brighter than any star except Sirius',
+    },
+    {
+      // Post-perihelion
+      target: 'hale-bopp',
+      fov: 12,
+      datetime: '1997-04-15T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'The comet displayed spectacular twin dust and ion tails',
+    },
+    {
+      // Wide view with context
+      target: 'hale-bopp',
+      fov: 30,
+      datetime: '1997-05-01T21:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Visible to the naked eye for 18 months - a record! Returns around year 4530',
+    },
+  ],
+};
+
+/**
+ * Halley's Comet Tour (1986)
+ *
+ * 1P/Halley is the most famous periodic comet.
+ * First recognized as periodic by Edmond Halley in 1705.
+ * Perihelion: February 9, 1986 (0.59 AU from Sun)
+ * The 1986 apparition was unfavorable - Earth was on opposite side of Sun
+ * Peak brightness: magnitude ~2.1 (fainter than usual due to geometry)
+ * Orbital period: ~76 years - returns in 2061!
+ */
+export const HALLEY_1986_TOUR: TourDefinition = {
+  id: 'halley-1986',
+  name: 'Halley\'s Comet (1986)',
+  description: 'The most famous comet returns every 76 years',
+  keyframes: [
+    {
+      // Approaching Earth
+      target: 'halley',
+      fov: 40,
+      datetime: '1985-12-01T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'December 1985: Halley\'s Comet approaches for its 30th recorded visit',
+    },
+    {
+      // Historical context
+      target: 'halley',
+      fov: 20,
+      datetime: '1986-01-15T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Observed since 240 BC, Edmond Halley predicted its return in 1705',
+    },
+    {
+      // Perihelion
+      target: 'halley',
+      fov: 12,
+      datetime: '1986-02-09T12:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'February 9, 1986: Perihelion at 0.59 AU from the Sun',
+    },
+    {
+      // Close approach context
+      target: 'halley',
+      fov: 15,
+      datetime: '1986-03-15T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: '1986 was an unfavorable apparition - Earth was on the opposite side of the Sun',
+    },
+    {
+      // Space probes
+      target: 'halley',
+      fov: 10,
+      datetime: '1986-03-14T00:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'March 14: ESA\'s Giotto spacecraft flew within 596 km of Halley\'s nucleus',
+    },
+    {
+      // Final view
+      target: 'halley',
+      fov: 30,
+      datetime: '1986-04-15T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Halley returns in July 2061 - mark your calendar!',
+    },
+  ],
+};
+
+/**
+ * Halley's Comet Tour (2061)
+ *
+ * 1P/Halley's next apparition will be much more favorable than 1986!
+ * Perihelion: July 28, 2061 (0.59 AU from Sun)
+ * The geometry is excellent - Earth will be on the same side as the comet
+ * Expected peak brightness: magnitude ~0 (as bright as Vega!)
+ * This will be the best Halley apparition since 1986
+ */
+export const HALLEY_2061_TOUR: TourDefinition = {
+  id: 'halley-2061',
+  name: 'Halley\'s Comet (2061)',
+  description: 'Preview the next return of history\'s most famous comet',
+  keyframes: [
+    {
+      // Early approach
+      target: 'halley',
+      fov: 40,
+      datetime: '2061-05-01T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'May 2061: Halley\'s Comet returns for its 31st recorded apparition',
+    },
+    {
+      // Building anticipation
+      target: 'halley',
+      fov: 20,
+      datetime: '2061-06-15T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Unlike 1986, this will be a spectacular apparition - Earth is well-positioned',
+    },
+    {
+      // Approaching perihelion
+      target: 'halley',
+      fov: 12,
+      datetime: '2061-07-15T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'The comet brightens rapidly as it approaches the Sun',
+    },
+    {
+      // Perihelion
+      target: 'halley',
+      fov: 8,
+      datetime: '2061-07-28T12:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'July 28, 2061: Perihelion! Expected to reach magnitude 0 - as bright as Vega',
+    },
+    {
+      // Post-perihelion spectacle
+      target: 'halley',
+      fov: 10,
+      datetime: '2061-08-15T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'August 2061: The tail stretches magnificently across the sky',
+    },
+    {
+      // Historical perspective
+      target: 'halley',
+      fov: 15,
+      datetime: '2061-09-01T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Halley has inspired humanity for over 2,000 years of recorded history',
+    },
+    {
+      // Final view
+      target: 'halley',
+      fov: 30,
+      datetime: '2061-10-01T21:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'After 2061, Halley won\'t return until 2134. Will you be there to see it?',
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
   ECLIPSE_2024_TOUR,
   JUPITER_MOONS_TOUR,
+  NEOWISE_2020_TOUR,
+  HALE_BOPP_1997_TOUR,
+  HALLEY_1986_TOUR,
+  HALLEY_2061_TOUR,
 ];
 
 /**

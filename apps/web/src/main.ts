@@ -1014,11 +1014,15 @@ async function main(): Promise<void> {
       coordRaDecGroup.style.display = mode === 'geocentric' ? 'inline' : 'none';
     }
 
-    // Auto-enable horizon in topocentric mode
+    // Auto-enable horizon in topocentric mode, auto-disable in geocentric mode
     if (mode === 'topocentric' && horizonCheckbox && !horizonCheckbox.checked) {
       horizonCheckbox.checked = true;
       renderer.setGroundPlaneVisible(true);
       settingsSaver.save({ horizonVisible: true });
+    } else if (mode === 'geocentric' && horizonCheckbox && horizonCheckbox.checked) {
+      horizonCheckbox.checked = false;
+      renderer.setGroundPlaneVisible(false);
+      settingsSaver.save({ horizonVisible: false });
     }
   }
 
@@ -1159,6 +1163,13 @@ async function main(): Promise<void> {
         engine.set_observer_location(location.latitude, location.longitude);
         // Update ground plane orientation for topocentric view
         renderer.updateGroundPlaneOrientation(location.latitude, location.longitude);
+        // Update in-memory settings for topocentric calculations
+        settings.observerLatitude = location.latitude;
+        settings.observerLongitude = location.longitude;
+        // Update topocentric camera if in that mode
+        if (currentViewMode === 'topocentric') {
+          updateTopocentricParams();
+        }
         // Save to settings
         settingsSaver.save({
           observerLatitude: location.latitude,

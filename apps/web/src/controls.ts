@@ -9,10 +9,18 @@ export interface CameraState {
 }
 
 /**
+ * View mode type.
+ * - geocentric: Observer at Earth's center, RA/Dec navigation, stars fixed
+ * - topocentric: Observer on Earth's surface, Alt/Az navigation, horizon fixed
+ */
+export type ViewMode = 'geocentric' | 'topocentric';
+
+/**
  * Celestial camera controls - simple drag-to-rotate model.
  *
  * Dragging the mouse rotates the view proportionally to the drag distance.
- * Uses quaternion-based rotation to avoid pole singularities.
+ * Uses quaternion-based rotation to avoid pole singularities in geocentric mode.
+ * In topocentric mode, navigation is in Alt/Az coordinates with horizon always level.
  */
 export interface CelestialControls {
   update(): void;
@@ -24,6 +32,11 @@ export interface CelestialControls {
   getRaDec(): { ra: number; dec: number };
   setQuaternion(quaternion: THREE.Quaternion): void;
   setEnabled(enabled: boolean): void;
+  // Topocentric mode methods
+  setViewMode(mode: ViewMode): void;
+  getViewMode(): ViewMode;
+  setTopocentricParams(latitudeRad: number, lstRad: number): void;
+  getAltAz(): { altitude: number; azimuth: number } | null;
   onFovChange?: (fov: number) => void;
   onCameraChange?: () => void;
 }
@@ -96,6 +109,15 @@ export function createCelestialControls(
   let apiReady = false;
   let animStartQuaternion = new THREE.Quaternion();
   let animTargetQuaternion = new THREE.Quaternion();
+
+  // View mode state
+  let viewMode: ViewMode = 'geocentric';
+
+  // Topocentric mode state
+  let topoLatitude = 0; // Observer latitude in radians
+  let topoLST = 0; // Local Sidereal Time in radians
+  let topoAzimuth = 0; // Azimuth in radians, 0 = North, increasing eastward
+  let topoAltitude = (30 * Math.PI) / 180; // Altitude in radians, default +30° (looking up)
 
   /**
    * Convert pixel delta to angular delta based on FOV.
@@ -173,25 +195,40 @@ export function createCelestialControls(
 
   /**
    * Apply incremental rotation from mouse/keyboard delta.
-   * dx rotates around camera's local up axis (left/right)
-   * dy rotates around camera's local right axis (up/down)
+   * In geocentric mode: dx/dy rotate around camera's local axes
+   * In topocentric mode: dx changes azimuth, dy changes altitude
    */
   function applyRotation(angleX: number, angleY: number): void {
-    // Rotate around camera's local up axis for horizontal movement
-    const up = getCameraUp();
-    const yawQuat = new THREE.Quaternion();
-    yawQuat.setFromAxisAngle(up, angleX);
+    if (viewMode === 'topocentric') {
+      // In topocentric mode, horizontal drag changes azimuth
+      // Drag left = look left (decrease azimuth), drag right = look right (increase azimuth)
+      topoAzimuth = (topoAzimuth + angleX + 2 * Math.PI) % (2 * Math.PI);
 
-    // Rotate around camera's local right axis for vertical movement
-    const right = getCameraRight();
-    const pitchQuat = new THREE.Quaternion();
-    pitchQuat.setFromAxisAngle(right, angleY);
+      // Vertical drag changes altitude, clamped to valid range
+      topoAltitude = Math.max(
+        -Math.PI / 2,
+        Math.min(Math.PI / 2, topoAltitude + angleY)
+      );
 
-    // Apply rotations: first yaw, then pitch
-    viewQuaternion.premultiply(yawQuat);
-    viewQuaternion.premultiply(pitchQuat);
+      updateTopocentricCamera();
+    } else {
+      // Geocentric mode: quaternion-based rotation
+      // Rotate around camera's local up axis for horizontal movement
+      const up = getCameraUp();
+      const yawQuat = new THREE.Quaternion();
+      yawQuat.setFromAxisAngle(up, angleX);
 
-    updateCameraDirection();
+      // Rotate around camera's local right axis for vertical movement
+      const right = getCameraRight();
+      const pitchQuat = new THREE.Quaternion();
+      pitchQuat.setFromAxisAngle(right, angleY);
+
+      // Apply rotations: first yaw, then pitch
+      viewQuaternion.premultiply(yawQuat);
+      viewQuaternion.premultiply(pitchQuat);
+
+      updateCameraDirection();
+    }
   }
 
   /**
@@ -255,7 +292,12 @@ export function createCelestialControls(
     if (newFov !== camera.fov) {
       camera.fov = newFov;
       camera.updateProjectionMatrix();
-      updateCameraDirection();
+      // Update camera based on view mode
+      if (viewMode === 'topocentric') {
+        updateTopocentricCamera();
+      } else {
+        updateCameraDirection();
+      }
       controlsApi.onFovChange?.(camera.fov);
     }
   }
@@ -306,7 +348,12 @@ export function createCelestialControls(
       if (newFov !== camera.fov) {
         camera.fov = newFov;
         camera.updateProjectionMatrix();
-        updateCameraDirection();
+        // Update camera based on view mode
+        if (viewMode === 'topocentric') {
+          updateTopocentricCamera();
+        } else {
+          updateCameraDirection();
+        }
         controlsApi.onFovChange?.(camera.fov);
       }
     }
@@ -417,6 +464,151 @@ export function createCelestialControls(
     return quat;
   }
 
+  // ---------------------------------------------------------------------------
+  // Coordinate conversion functions for topocentric mode
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Convert RA/Dec (degrees) to direction vector in Three.js coordinates.
+   */
+  function raDecToDirection(raDeg: number, decDeg: number): THREE.Vector3 {
+    const raRad = (raDeg * Math.PI) / 180;
+    const decRad = (decDeg * Math.PI) / 180;
+    const cosDec = Math.cos(decRad);
+    return new THREE.Vector3(
+      -cosDec * Math.cos(raRad),
+      Math.sin(decRad),
+      cosDec * Math.sin(raRad)
+    );
+  }
+
+  /**
+   * Convert equatorial (RA/Dec) to horizontal (Alt/Az) coordinates.
+   * All inputs and outputs in degrees.
+   */
+  function equatorialToHorizontal(
+    raDeg: number,
+    decDeg: number,
+    lstDeg: number,
+    latDeg: number
+  ): { altitude: number; azimuth: number } {
+    const raRad = (raDeg * Math.PI) / 180;
+    const decRad = (decDeg * Math.PI) / 180;
+    const lstRad = (lstDeg * Math.PI) / 180;
+    const latRad = (latDeg * Math.PI) / 180;
+
+    const ha = lstRad - raRad; // Hour angle
+
+    const sinAlt =
+      Math.sin(decRad) * Math.sin(latRad) +
+      Math.cos(decRad) * Math.cos(latRad) * Math.cos(ha);
+    const altitude = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+
+    const cosAlt = Math.cos(altitude);
+    // Avoid division by zero at zenith
+    if (Math.abs(cosAlt) < 1e-10) {
+      return { altitude: (altitude * 180) / Math.PI, azimuth: 0 };
+    }
+
+    const cosAz =
+      (Math.sin(decRad) - Math.sin(altitude) * Math.sin(latRad)) /
+      (cosAlt * Math.cos(latRad));
+    const sinAz = (-Math.cos(decRad) * Math.sin(ha)) / cosAlt;
+    let azimuth = Math.atan2(sinAz, cosAz);
+    if (azimuth < 0) azimuth += 2 * Math.PI;
+
+    return {
+      altitude: (altitude * 180) / Math.PI,
+      azimuth: (azimuth * 180) / Math.PI,
+    };
+  }
+
+  /**
+   * Convert horizontal (Alt/Az) to equatorial (RA/Dec) coordinates.
+   * All inputs and outputs in degrees.
+   */
+  function horizontalToEquatorial(
+    azDeg: number,
+    altDeg: number,
+    lstDeg: number,
+    latDeg: number
+  ): { ra: number; dec: number } {
+    const azRad = (azDeg * Math.PI) / 180;
+    const altRad = (altDeg * Math.PI) / 180;
+    const latRad = (latDeg * Math.PI) / 180;
+
+    const sinDec =
+      Math.sin(altRad) * Math.sin(latRad) +
+      Math.cos(altRad) * Math.cos(latRad) * Math.cos(azRad);
+    const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+
+    const cosDec = Math.cos(dec);
+    // Avoid division by zero near poles
+    if (Math.abs(cosDec) < 1e-10 || Math.abs(Math.cos(latRad)) < 1e-10) {
+      return { ra: lstDeg, dec: (dec * 180) / Math.PI };
+    }
+
+    const cosHA =
+      (Math.sin(altRad) - Math.sin(dec) * Math.sin(latRad)) /
+      (cosDec * Math.cos(latRad));
+    const sinHA = (-Math.cos(altRad) * Math.sin(azRad)) / cosDec;
+    const ha = Math.atan2(sinHA, Math.max(-1, Math.min(1, cosHA)));
+
+    let ra = lstDeg - (ha * 180) / Math.PI;
+    if (ra < 0) ra += 360;
+    if (ra >= 360) ra -= 360;
+
+    return { ra, dec: (dec * 180) / Math.PI };
+  }
+
+  /**
+   * Update camera orientation for topocentric mode based on current Alt/Az.
+   * Horizon is always level in this mode.
+   */
+  function updateTopocentricCamera(): void {
+    // Zenith direction in equatorial coords: Dec = latitude, RA = LST
+    const lstDeg = (topoLST * 180) / Math.PI;
+    const latDeg = (topoLatitude * 180) / Math.PI;
+    const zenith = raDecToDirection(lstDeg, latDeg);
+
+    // North celestial pole
+    const northPole = new THREE.Vector3(0, 1, 0);
+
+    // North direction on horizon = north pole projected to horizon plane
+    // (perpendicular to zenith)
+    const north = northPole
+      .clone()
+      .sub(zenith.clone().multiplyScalar(northPole.dot(zenith)))
+      .normalize();
+
+    // East = zenith × north (right-hand rule)
+    const east = new THREE.Vector3().crossVectors(zenith, north).normalize();
+
+    // View direction from Alt/Az
+    const cosAlt = Math.cos(topoAltitude);
+    const sinAlt = Math.sin(topoAltitude);
+    const cosAz = Math.cos(topoAzimuth);
+    const sinAz = Math.sin(topoAzimuth);
+
+    const viewDir = new THREE.Vector3()
+      .addScaledVector(north, cosAlt * cosAz)
+      .addScaledVector(east, cosAlt * sinAz)
+      .addScaledVector(zenith, sinAlt)
+      .normalize();
+
+    // Camera up is always toward zenith (horizon stays level)
+    camera.up.copy(zenith);
+    camera.lookAt(viewDir.x * 100, viewDir.y * 100, viewDir.z * 100);
+
+    // Update debug display
+    updateDebug({ fov: camera.fov });
+
+    // Notify listeners
+    if (apiReady) {
+      controlsApi.onCameraChange?.();
+    }
+  }
+
   /**
    * Center the camera on a celestial object given its RA/Dec coordinates.
    * @param ra Right Ascension in degrees (0-360)
@@ -513,6 +705,81 @@ export function createCelestialControls(
     domElement.style.cursor = enabled ? "grab" : "default";
   }
 
+  /**
+   * Set the view mode (geocentric or topocentric).
+   * When switching modes, converts the current view direction to preserve
+   * the same sky region being centered.
+   */
+  function setViewMode(mode: ViewMode): void {
+    if (mode === viewMode) return;
+
+    if (mode === 'topocentric') {
+      // Convert current RA/Dec to Alt/Az
+      const { ra, dec } = getRaDec();
+      const lstDeg = (topoLST * 180) / Math.PI;
+      const latDeg = (topoLatitude * 180) / Math.PI;
+      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      topoAzimuth = (altAz.azimuth * Math.PI) / 180;
+      topoAltitude = (altAz.altitude * Math.PI) / 180;
+      viewMode = mode;
+      updateTopocentricCamera();
+    } else {
+      // Convert current Alt/Az to RA/Dec
+      const altDeg = (topoAltitude * 180) / Math.PI;
+      const azDeg = (topoAzimuth * 180) / Math.PI;
+      const lstDeg = (topoLST * 180) / Math.PI;
+      const latDeg = (topoLatitude * 180) / Math.PI;
+      const raDec = horizontalToEquatorial(azDeg, altDeg, lstDeg, latDeg);
+      viewMode = mode;
+      lookAtRaDec(raDec.ra, raDec.dec);
+    }
+
+    isAnimating = false;
+  }
+
+  /**
+   * Get the current view mode.
+   */
+  function getViewMode(): ViewMode {
+    return viewMode;
+  }
+
+  /**
+   * Set the topocentric parameters (observer latitude and local sidereal time).
+   * Call this when time changes to keep the horizon correctly positioned.
+   * @param latitudeRad Observer latitude in radians
+   * @param lstRad Local Sidereal Time in radians
+   */
+  function setTopocentricParams(latitudeRad: number, lstRad: number): void {
+    topoLatitude = latitudeRad;
+    topoLST = lstRad;
+
+    // If in topocentric mode, update the camera to reflect new LST
+    if (viewMode === 'topocentric') {
+      updateTopocentricCamera();
+    }
+  }
+
+  /**
+   * Get the current view center as Alt/Az coordinates.
+   * Only valid in topocentric mode.
+   * @returns Altitude in degrees (-90 to +90), Azimuth in degrees (0 to 360)
+   */
+  function getAltAz(): { altitude: number; azimuth: number } | null {
+    if (viewMode !== 'topocentric') {
+      // In geocentric mode, compute Alt/Az from current RA/Dec
+      const { ra, dec } = getRaDec();
+      const lstDeg = (topoLST * 180) / Math.PI;
+      const latDeg = (topoLatitude * 180) / Math.PI;
+      return equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+    }
+
+    return {
+      altitude: (topoAltitude * 180) / Math.PI,
+      azimuth: (topoAzimuth * 180) / Math.PI,
+    };
+  }
+
   const controlsApi: CelestialControls = {
     update,
     dispose,
@@ -523,6 +790,10 @@ export function createCelestialControls(
     getRaDec,
     setQuaternion,
     setEnabled,
+    setViewMode,
+    getViewMode,
+    setTopocentricParams,
+    getAltAz,
     onFovChange: undefined,
     onCameraChange: undefined,
   };

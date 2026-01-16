@@ -23,6 +23,12 @@ impl SkyTime {
         }
     }
 
+    /// Create a SkyTime from a Julian Date (UTC).
+    pub fn from_jd(jd: f64) -> Self {
+        let epoch = Epoch::from_jde_utc(jd);
+        Self { epoch }
+    }
+
     /// Get the underlying hifitime Epoch.
     pub fn epoch(&self) -> Epoch {
         self.epoch

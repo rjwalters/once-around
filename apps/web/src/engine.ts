@@ -210,3 +210,15 @@ export function getMinorBodiesBuffer(engine: SkyEngine): Float32Array {
   const len = engine.minor_bodies_pos_len();
   return new Float32Array(memory.buffer, ptr, len);
 }
+
+/**
+ * Create a Float32Array view into the comets position buffer.
+ * N comets * 4 floats (x, y, z, magnitude).
+ * Order: Halley, Encke, C-G, Wirtanen, NEOWISE, Tsuchinshan-ATLAS, Hale-Bopp
+ */
+export function getCometsBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.comets_pos_ptr();
+  const len = engine.comets_pos_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}

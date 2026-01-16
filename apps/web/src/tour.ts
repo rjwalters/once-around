@@ -22,7 +22,15 @@ export type TargetBody =
   | 'jupiter'
   | 'saturn'
   | 'uranus'
-  | 'neptune';
+  | 'neptune'
+  // Comets
+  | 'halley'
+  | 'encke'
+  | 'churyumov-gerasimenko'
+  | 'wirtanen'
+  | 'neowise'
+  | 'tsuchinshan-atlas'
+  | 'hale-bopp';
 
 /**
  * Observer location for a keyframe.

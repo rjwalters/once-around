@@ -1,5 +1,6 @@
 use sky_engine_core::{
     catalog::StarCatalog,
+    comets::{compute_all_comet_positions, Comet},
     coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, ra_dec_to_cartesian},
     minor_bodies::{compute_all_minor_body_positions, MinorBody},
     planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
@@ -28,6 +29,7 @@ pub struct SkyEngine {
     bodies_angular_diameters: Vec<f32>, // 9 angular diameters in radians
     planetary_moons_pos: Vec<f32>, // 18 moons * 4 floats (x, y, z, angular_diam) = 72
     minor_bodies_pos: Vec<f32>, // N minor bodies * 4 floats (x, y, z, angular_diam)
+    comets_pos: Vec<f32>, // N comets * 4 floats (x, y, z, magnitude)
 
     // All star positions for constellation line drawing (not magnitude-filtered)
     all_stars_pos: Vec<f32>,  // x,y,z for ALL stars in catalog
@@ -68,6 +70,7 @@ impl SkyEngine {
             bodies_angular_diameters: vec![0.0; 9], // Angular diameters for each body
             planetary_moons_pos: vec![0.0; PlanetaryMoon::ALL.len() * 4], // 18 moons total
             minor_bodies_pos: vec![0.0; MinorBody::ALL.len() * 4], // Pluto (dwarf planets)
+            comets_pos: vec![0.0; Comet::ALL.len() * 4], // 7 comets * 4 floats (x, y, z, magnitude)
             all_stars_pos: vec![0.0; star_count * 3],
             all_stars_meta: vec![0.0; star_count * 4],
             visible_count: 0,
@@ -141,6 +144,7 @@ impl SkyEngine {
         self.recompute_bodies();
         self.recompute_planetary_moons();
         self.recompute_minor_bodies();
+        self.recompute_comets();
     }
 
     /// Add more stars to the catalog from binary data.
@@ -257,6 +261,19 @@ impl SkyEngine {
             self.minor_bodies_pos[idx + 1] = y;
             self.minor_bodies_pos[idx + 2] = z;
             self.minor_bodies_pos[idx + 3] = body_pos.angular_diameter_rad as f32;
+        }
+    }
+
+    fn recompute_comets(&mut self) {
+        let positions = compute_all_comet_positions(&self.time);
+        for (i, comet_pos) in positions.iter().enumerate() {
+            let (x, y, z) = comet_pos.direction.to_f32();
+            let idx = i * 4;
+            self.comets_pos[idx] = x;
+            self.comets_pos[idx + 1] = y;
+            self.comets_pos[idx + 2] = z;
+            // Store magnitude instead of angular diameter (comets don't have meaningful sizes)
+            self.comets_pos[idx + 3] = comet_pos.magnitude as f32;
         }
     }
 
@@ -400,6 +417,38 @@ impl SkyEngine {
     /// Currently: 0 = Pluto
     pub fn minor_body_name(&self, index: usize) -> Option<String> {
         MinorBody::ALL.get(index).map(|b| b.name().to_string())
+    }
+
+    // --- Comets buffer accessors ---
+
+    /// Get pointer to comets position buffer.
+    /// N comets * 4 floats (x, y, z, magnitude).
+    pub fn comets_pos_ptr(&self) -> *const f32 {
+        self.comets_pos.as_ptr()
+    }
+
+    /// Get length of comets position buffer.
+    pub fn comets_pos_len(&self) -> usize {
+        self.comets_pos.len()
+    }
+
+    /// Get the total number of comets.
+    pub fn comets_count(&self) -> usize {
+        Comet::ALL.len()
+    }
+
+    /// Get comet name by index.
+    /// 0: 1P/Halley, 1: 2P/Encke, 2: 67P/C-G, 3: 46P/Wirtanen,
+    /// 4: C/2020 F3 NEOWISE, 5: C/2023 A3 Tsuchinshan-ATLAS, 6: C/1995 O1 Hale-Bopp
+    pub fn comet_name(&self, index: usize) -> Option<String> {
+        Comet::ALL.get(index).map(|c| c.name().to_string())
+    }
+
+    /// Get comet magnitude by index.
+    /// Returns estimated visual magnitude (lower = brighter).
+    pub fn comet_magnitude(&self, index: usize) -> f32 {
+        let idx = index * 4 + 3;
+        self.comets_pos.get(idx).copied().unwrap_or(99.0)
     }
 
     // --- All stars buffer accessors (for constellation drawing, not magnitude-filtered) ---

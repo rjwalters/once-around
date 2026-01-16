@@ -1,4 +1,5 @@
 pub mod catalog;
+pub mod comets;
 pub mod coords;
 pub mod minor_bodies;
 pub mod planetary_moons;
@@ -6,6 +7,10 @@ pub mod planets;
 pub mod time;
 
 pub use catalog::{Star, StarCatalog};
+pub use comets::{
+    compute_all_comet_positions, compute_comet_position,
+    Comet, CometElements, CometPosition,
+};
 pub use coords::{ra_dec_to_cartesian, CartesianCoord};
 pub use minor_bodies::{
     compute_all_minor_body_positions, compute_minor_body_position,

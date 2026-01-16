@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { SkyEngine } from "./wasm/sky_engine";
-import { getStarsPositionBuffer, getStarsMetaBuffer, getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getPlanetaryMoonsBuffer, getAllStarsPositionBuffer, getAllStarsMetaBuffer } from "./engine";
+import { getStarsPositionBuffer, getStarsMetaBuffer, getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getPlanetaryMoonsBuffer, getAllStarsPositionBuffer, getAllStarsMetaBuffer, getCometsBuffer } from "./engine";
 import { getAllConstellationLines, CONSTELLATIONS } from "./constellations";
 import { applyTimeToEngine } from "./ui";
 import { DSO_DATA, DSO_COLORS, getVisibleDSOs, type DSOType } from "./dsoData";
@@ -152,6 +152,15 @@ const PLANETARY_MOON_MAGNITUDES = [
 ];
 
 const PLANETARY_MOON_NAMES = ["Io", "Europa", "Ganymede", "Callisto", "Titan"];
+
+// Comet names in order from WASM buffer
+const COMET_NAMES = [
+  "1P/Halley", "2P/Encke", "67P/C-G", "46P/Wirtanen",
+  "C/2020 F3 NEOWISE", "C/2023 A3 T-ATLAS", "C/1995 O1 Hale-Bopp"
+];
+
+// Comet color - cyan-green to reflect their icy composition and coma glow
+const COMET_COLOR = new THREE.Color(0.5, 0.9, 0.8);
 
 // FOV threshold for showing planetary moons (degrees) - only show when zoomed in
 const PLANETARY_MOONS_FOV_THRESHOLD = 30;
@@ -386,6 +395,53 @@ void main() {
   if (alpha < 0.01) discard;
 
   gl_FragColor = vec4(vColor, alpha * 0.6);
+}
+`;
+
+// -----------------------------------------------------------------------------
+// Comet tail shaders - renders elongated glowing tail pointing away from Sun
+// -----------------------------------------------------------------------------
+
+// Comet tail vertex shader - receives tail geometry
+const cometTailVertexShader = `
+varying vec2 vUv;
+
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+// Comet tail fragment shader - creates diffuse glowing tail
+const cometTailFragmentShader = `
+uniform vec3 uColor;
+uniform float uIntensity;
+
+varying vec2 vUv;
+
+void main() {
+  // UV: x goes along tail length (0 = head, 1 = end), y is across (-0.5 to 0.5)
+  float x = vUv.x;
+  float y = vUv.y - 0.5;
+
+  // Tail brightness falls off along length (exponential decay)
+  float lengthFalloff = exp(-x * 3.0);
+
+  // Tail gets narrower toward the end
+  float tailWidth = 0.5 * (1.0 - x * 0.7);
+
+  // Gaussian falloff across the tail width
+  float crossFalloff = exp(-y * y / (tailWidth * tailWidth) * 8.0);
+
+  // Combine for final alpha
+  float alpha = lengthFalloff * crossFalloff * uIntensity;
+
+  // Add slight color variation - bluer at edges (ion tail), yellower in center (dust tail)
+  vec3 color = mix(uColor, vec3(0.6, 0.8, 1.0), abs(y) * 2.0);
+
+  if (alpha < 0.005) discard;
+
+  gl_FragColor = vec4(color, alpha);
 }
 `;
 
@@ -1192,6 +1248,50 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     labelsGroup.add(label);
   }
 
+  // Comet labels
+  const cometLabels: CSS2DObject[] = [];
+  for (let i = 0; i < COMET_NAMES.length; i++) {
+    const div = document.createElement("div");
+    div.className = "sky-label comet-label";
+    div.textContent = COMET_NAMES[i];
+    div.dataset.comet = String(i); // Store comet index for click handler
+    const label = new CSS2DObject(div);
+    label.visible = false; // Hidden by default, shown based on magnitude
+    cometLabels.push(label);
+    labelsGroup.add(label);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Comet tails layer - glowing tails pointing away from Sun
+  // ---------------------------------------------------------------------------
+  const cometTailMeshes: THREE.Mesh[] = [];
+  const cometTailMaterials: THREE.ShaderMaterial[] = [];
+
+  // Create a plane geometry for each comet tail
+  // PlaneGeometry(width, height) - we'll make it elongated
+  const tailGeometry = new THREE.PlaneGeometry(1, 0.3, 1, 1);
+
+  for (let i = 0; i < COMET_NAMES.length; i++) {
+    const material = new THREE.ShaderMaterial({
+      vertexShader: cometTailVertexShader,
+      fragmentShader: cometTailFragmentShader,
+      uniforms: {
+        uColor: { value: new THREE.Color(COMET_COLOR) },
+        uIntensity: { value: 0.5 },
+      },
+      transparent: true,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    cometTailMaterials.push(material);
+
+    const mesh = new THREE.Mesh(tailGeometry, material);
+    mesh.visible = false;
+    cometTailMeshes.push(mesh);
+    scene.add(mesh);
+  }
+
   // Deep Sky Object labels (clickable for info popup)
   const dsoLabels: Map<string, CSS2DObject> = new Map();
   for (const dso of DSO_DATA) {
@@ -1718,6 +1818,86 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     moonFlagLines.visible = labelsGroup.visible;
   }
 
+  // Magnitude threshold for showing comets (show comets brighter than this)
+  const COMET_VISIBILITY_MAG = 12.0;
+  // Magnitude threshold for showing comet tails (need to be reasonably bright)
+  const COMET_TAIL_MAG = 10.0;
+
+  /**
+   * Update comet labels and tails based on their positions and magnitudes.
+   * Only shows comets brighter than COMET_VISIBILITY_MAG.
+   * Tails point away from the Sun.
+   */
+  function updateComets(engine: SkyEngine, sunPos: THREE.Vector3): void {
+    const cometsBuffer = getCometsBuffer(engine);
+    const radius = SKY_RADIUS - 0.5; // Slightly in front of sky sphere
+
+    for (let i = 0; i < COMET_NAMES.length; i++) {
+      const idx = i * 4;
+      // Comets buffer has 4 components per comet: x, y, z, magnitude
+      const magnitude = cometsBuffer[idx + 3];
+
+      // Only show comets brighter (lower magnitude) than threshold
+      if (magnitude < COMET_VISIBILITY_MAG && labelsGroup.visible) {
+        const cometPos = rustToThreeJS(cometsBuffer[idx], cometsBuffer[idx + 1], cometsBuffer[idx + 2], radius);
+        const labelPos = calculateLabelOffset(cometPos, LABEL_OFFSET);
+        cometLabels[i].position.copy(labelPos);
+        cometLabels[i].visible = true;
+
+        // Update label text with magnitude info
+        const labelDiv = cometLabels[i].element as HTMLDivElement;
+        labelDiv.textContent = `${COMET_NAMES[i]} (${magnitude.toFixed(1)})`;
+
+        // Update comet tail if bright enough
+        if (magnitude < COMET_TAIL_MAG) {
+          // Calculate anti-solar direction (tail points AWAY from Sun)
+          const antiSolar = new THREE.Vector3().subVectors(cometPos, sunPos).normalize();
+
+          // Position tail mesh at comet location
+          cometTailMeshes[i].position.copy(cometPos);
+
+          // Scale tail based on magnitude (brighter = longer tail)
+          // Mag 0 = very long tail, Mag 10 = small tail
+          const tailLength = Math.max(0.5, (10 - magnitude) * 0.4);
+          const tailWidth = tailLength * 0.3;
+          cometTailMeshes[i].scale.set(tailLength, tailWidth, 1);
+
+          // Orient the tail to point away from Sun
+          // The plane's +X axis should align with antiSolar direction
+          // We need to rotate the mesh so its local X points along antiSolar
+          const up = new THREE.Vector3(0, 1, 0);
+          // Create a quaternion that aligns the plane with antiSolar direction
+          // The plane's normal is Z, we want X to point along antiSolar
+          const targetMatrix = new THREE.Matrix4();
+          const perpendicular = new THREE.Vector3().crossVectors(antiSolar, cometPos.clone().normalize());
+          if (perpendicular.lengthSq() < 0.001) {
+            perpendicular.set(0, 1, 0);
+          }
+          perpendicular.normalize();
+          const normal = new THREE.Vector3().crossVectors(antiSolar, perpendicular).normalize();
+
+          targetMatrix.makeBasis(antiSolar, perpendicular, normal);
+          cometTailMeshes[i].setRotationFromMatrix(targetMatrix);
+
+          // Offset the tail so it starts at the comet head
+          // Move the mesh along the anti-solar direction by half its length
+          cometTailMeshes[i].position.addScaledVector(antiSolar, tailLength * 0.5);
+
+          // Set intensity based on magnitude
+          const intensity = Math.max(0.1, Math.min(1.0, (10 - magnitude) * 0.15));
+          cometTailMaterials[i].uniforms.uIntensity.value = intensity;
+
+          cometTailMeshes[i].visible = true;
+        } else {
+          cometTailMeshes[i].visible = false;
+        }
+      } else {
+        cometLabels[i].visible = false;
+        cometTailMeshes[i].visible = false;
+      }
+    }
+  }
+
   // Track whether constellation star map has been initialized
   let constellationStarMapInitialized = false;
 
@@ -1733,6 +1913,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     updateConstellations();
     updateBodies(engine);
     updatePlanetaryMoons(engine, effectiveFov);
+
+    // Get Sun position for comet tail orientation (index 0 in bodies buffer)
+    const bodyPositions = getBodiesPositionBuffer(engine);
+    const sunPos = readPositionFromBuffer(bodyPositions, 0, SKY_RADIUS - 1);
+    updateComets(engine, sunPos);
   }
 
   function setConstellationsVisible(visible: boolean): void {
