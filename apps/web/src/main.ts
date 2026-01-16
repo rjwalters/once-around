@@ -1604,6 +1604,29 @@ async function main(): Promise<void> {
     });
   }
 
+  // Help modal (keyboard shortcuts)
+  const helpModal = document.getElementById("help-modal");
+  const helpClose = document.getElementById("help-modal-close");
+
+  if (helpModal && helpClose) {
+    helpClose.addEventListener("click", () => {
+      helpModal.classList.add("hidden");
+    });
+
+    helpModal.addEventListener("click", (e) => {
+      if (e.target === helpModal) {
+        helpModal.classList.add("hidden");
+      }
+    });
+
+    // Close on Escape key
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !helpModal.classList.contains("hidden")) {
+        helpModal.classList.add("hidden");
+      }
+    });
+  }
+
   // Populate build info
   const buildInfo = document.getElementById("build-info");
   if (buildInfo) {
@@ -2173,6 +2196,14 @@ async function main(): Promise<void> {
         event.preventDefault();
         if (searchInput) {
           searchInput.focus();
+        }
+        break;
+      case "?":
+        // Show keyboard shortcuts help
+        event.preventDefault();
+        const helpModal = document.getElementById("help-modal");
+        if (helpModal) {
+          helpModal.classList.remove("hidden");
         }
         break;
     }

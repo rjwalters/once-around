@@ -227,6 +227,30 @@
     transition: color 0.15s, text-shadow 0.15s;
   }
 
+  .cardinal-label {
+    color: #7a9a7a;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 12px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    user-select: none;
+    letter-spacing: 1px;
+  }
+
+  /* Primary cardinal directions (N, E, S, W) - larger and brighter */
+  .cardinal-primary {
+    font-size: 14px;
+    font-weight: 700;
+    color: #9fbc9f;
+    letter-spacing: 2px;
+  }
+
+  /* North is special - red/orange for easy identification */
+  .cardinal-label-n {
+    color: #ff6b6b !important;
+    font-size: 15px !important;
+  }
+
   .comet-label:hover {
     color: var(--color-comet-hover);
     text-shadow: 0 0 8px rgba(128, 230, 212, 0.6);
@@ -2181,4 +2205,168 @@ canvas {
 
 .view-mode-btn .mode-icon {
   font-size: 16px;
+}
+
+/* Help/Keyboard Shortcuts Modal */
+.help-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: opacity 0.2s ease;
+}
+
+.help-modal.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.help-modal-content {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 480px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(74, 158, 255, 0.2);
+  border: 1px solid #333;
+}
+
+.help-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.help-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.help-modal-title {
+  color: #4a9eff;
+  font-size: 20px;
+  margin-bottom: 20px;
+  padding-right: 40px;
+}
+
+.help-section {
+  margin-bottom: 16px;
+}
+
+.help-section:last-child {
+  margin-bottom: 0;
+}
+
+.help-section h3 {
+  color: #888;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #333;
+}
+
+.help-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.help-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.help-shortcut kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 4px 8px;
+  background: rgba(74, 158, 255, 0.15);
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  border-radius: 4px;
+  color: #4a9eff;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.help-shortcut .help-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 4px 8px;
+  background: rgba(179, 102, 255, 0.15);
+  border: 1px solid rgba(179, 102, 255, 0.3);
+  border-radius: 4px;
+  color: #b366ff;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.help-shortcut span:last-child {
+  color: #ccc;
+  font-size: 13px;
+}
+
+/* Inline kbd in info bar */
+#info kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+@media (max-width: 600px) {
+  .help-modal-content {
+    padding: 16px;
+    max-height: 80vh;
+  }
+
+  .help-modal-title {
+    font-size: 18px;
+  }
+
+  .help-shortcut {
+    gap: 8px;
+  }
+
+  .help-shortcut kbd,
+  .help-shortcut .help-action {
+    min-width: 24px;
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+
+  .help-shortcut span:last-child {
+    font-size: 12px;
+  }
 }

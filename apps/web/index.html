@@ -325,7 +325,58 @@
       </div>
     </div>
 
-    <div id="info">Drag to look around | Scroll to zoom | ←/→ = step time | P = play/pause | E = eclipse | R = night vision | Space = galactic center</div>
+    <div id="info">Drag to look around | Scroll to zoom | Press <kbd>?</kbd> for keyboard shortcuts</div>
+
+    <!-- Keyboard Shortcuts Help Modal -->
+    <div class="help-modal hidden" id="help-modal">
+      <div class="help-modal-content">
+        <button class="help-modal-close" id="help-modal-close">&times;</button>
+        <h2 class="help-modal-title">Keyboard Shortcuts</h2>
+
+        <div class="help-section">
+          <h3>View Controls</h3>
+          <div class="help-shortcuts">
+            <div class="help-shortcut"><kbd>L</kbd><span>Toggle labels</span></div>
+            <div class="help-shortcut"><kbd>C</kbd><span>Toggle constellations</span></div>
+            <div class="help-shortcut"><kbd>V</kbd><span>Toggle videos</span></div>
+            <div class="help-shortcut"><kbd>O</kbd><span>Toggle orbits</span></div>
+            <div class="help-shortcut"><kbd>D</kbd><span>Toggle deep sky objects</span></div>
+            <div class="help-shortcut"><kbd>H</kbd><span>Toggle horizon/ground</span></div>
+            <div class="help-shortcut"><kbd>R</kbd><span>Night vision mode</span></div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>Time & Navigation</h3>
+          <div class="help-shortcuts">
+            <div class="help-shortcut"><kbd>N</kbd><span>Jump to current time</span></div>
+            <div class="help-shortcut"><kbd>P</kbd><span>Play/pause time</span></div>
+            <div class="help-shortcut"><kbd>←</kbd><span>Step time backward</span></div>
+            <div class="help-shortcut"><kbd>→</kbd><span>Step time forward</span></div>
+            <div class="help-shortcut"><kbd>E</kbd><span>Next total eclipse</span></div>
+            <div class="help-shortcut"><kbd>Space</kbd><span>Go to galactic center</span></div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>Other</h3>
+          <div class="help-shortcuts">
+            <div class="help-shortcut"><kbd>/</kbd><span>Focus search</span></div>
+            <div class="help-shortcut"><kbd>Esc</kbd><span>Stop tour / close modal</span></div>
+            <div class="help-shortcut"><kbd>?</kbd><span>Show this help</span></div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>Mouse & Touch</h3>
+          <div class="help-shortcuts">
+            <div class="help-shortcut"><span class="help-action">Drag</span><span>Look around</span></div>
+            <div class="help-shortcut"><span class="help-action">Scroll</span><span>Zoom in/out</span></div>
+            <div class="help-shortcut"><span class="help-action">Click</span><span>Select object</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div id="ar-mode-status" class="ar-mode-status"></div>
 

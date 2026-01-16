@@ -849,6 +849,62 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   horizonRing.renderOrder = 1000;
   groundPlaneGroup.add(horizonRing);
 
+  // Cardinal direction labels (N, E, S, W) on the horizon
+  // These are placed in a separate group that handles azimuthal alignment
+  const cardinalLabelsGroup = new THREE.Group();
+  groundPlaneGroup.add(cardinalLabelsGroup);
+
+  function createCardinalLabel(text: string, isPrimary: boolean = true, isNorth: boolean = false): CSS2DObject {
+    const div = document.createElement("div");
+    let className = "cardinal-label";
+    if (isPrimary) className += " cardinal-primary";
+    if (isNorth) className += " cardinal-label-n";
+    div.className = className;
+    div.textContent = text;
+    const label = new CSS2DObject(div);
+    return label;
+  }
+
+  const horizonRadius = SKY_RADIUS - 0.05;
+  const labelHeight = 0.3; // Slightly above horizon
+
+  // Create labels - positioned in local coords where +X is initial "north"
+  // These will be rotated by cardinalLabelsGroup to align with true north
+  const labelN = createCardinalLabel("N", true, true);
+  labelN.position.set(horizonRadius, labelHeight, 0);
+  cardinalLabelsGroup.add(labelN);
+
+  const labelE = createCardinalLabel("E");
+  labelE.position.set(0, labelHeight, horizonRadius);
+  cardinalLabelsGroup.add(labelE);
+
+  const labelS = createCardinalLabel("S");
+  labelS.position.set(-horizonRadius, labelHeight, 0);
+  cardinalLabelsGroup.add(labelS);
+
+  const labelW = createCardinalLabel("W");
+  labelW.position.set(0, labelHeight, -horizonRadius);
+  cardinalLabelsGroup.add(labelW);
+
+  // Intercardinal directions (NE, SE, SW, NW) - smaller, less prominent
+  const diagOffset = horizonRadius * Math.SQRT1_2; // cos(45°) = sin(45°) = 1/√2
+
+  const labelNE = createCardinalLabel("NE", false);
+  labelNE.position.set(diagOffset, labelHeight, diagOffset);
+  cardinalLabelsGroup.add(labelNE);
+
+  const labelSE = createCardinalLabel("SE", false);
+  labelSE.position.set(-diagOffset, labelHeight, diagOffset);
+  cardinalLabelsGroup.add(labelSE);
+
+  const labelSW = createCardinalLabel("SW", false);
+  labelSW.position.set(-diagOffset, labelHeight, -diagOffset);
+  cardinalLabelsGroup.add(labelSW);
+
+  const labelNW = createCardinalLabel("NW", false);
+  labelNW.position.set(diagOffset, labelHeight, -diagOffset);
+  cardinalLabelsGroup.add(labelNW);
+
   const camera = new THREE.PerspectiveCamera(
     60,
     container.clientWidth / container.clientHeight,
@@ -2021,6 +2077,30 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     // Apply rotation to the group (hemisphere is at origin, camera is at origin)
     groundPlaneGroup.position.set(0, 0, 0);
     groundPlaneGroup.quaternion.copy(quaternion);
+
+    // Align cardinal direction labels so North points toward celestial north pole
+    // The celestial north pole in Three.js coords is (0, 1, 0)
+    const celestialNorth = new THREE.Vector3(0, 1, 0);
+
+    // Transform celestial north into the ground plane's local coordinate system
+    const inverseQuat = quaternion.clone().invert();
+    const northInLocal = celestialNorth.clone().applyQuaternion(inverseQuat);
+
+    // Project onto the local horizon plane (XZ plane, set Y to 0)
+    northInLocal.y = 0;
+
+    // If we're at the north pole, north direction is undefined (all directions are south)
+    // Handle this edge case by keeping default orientation
+    if (northInLocal.lengthSq() > 0.001) {
+      northInLocal.normalize();
+
+      // Compute angle from +X axis (where we placed the "N" label initially)
+      // atan2(z, x) gives the angle in the XZ plane
+      const angle = Math.atan2(northInLocal.z, northInLocal.x);
+
+      // Rotate cardinalLabelsGroup around local Y axis to align N with true north
+      cardinalLabelsGroup.rotation.y = -angle;
+    }
   }
 
   /**
