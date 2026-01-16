@@ -54,7 +54,28 @@
         padding: 16px;
         border-radius: 8px;
         min-width: 240px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
         z-index: 100;
+        scrollbar-width: thin;
+        scrollbar-color: #444 transparent;
+      }
+
+      #controls::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      #controls::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      #controls::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 3px;
+      }
+
+      #controls::-webkit-scrollbar-thumb:hover {
+        background: #555;
       }
 
       #controls h2 {
