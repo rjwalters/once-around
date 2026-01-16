@@ -13,7 +13,7 @@ import { createLocationManager, formatLatitude, formatLongitude, type ObserverLo
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
 import { getNextTotalSolarEclipse, getSunMoonSeparation, type TotalSolarEclipse } from "./eclipseData";
 import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tour";
-import { getTourById } from "./tourData";
+import { getTourById, PREDEFINED_TOURS } from "./tourData";
 import type { SkyEngine } from "./wasm/sky_engine";
 
 // Build-time constants injected by Vite
@@ -468,15 +468,6 @@ async function main(): Promise<void> {
     });
   };
 
-  // Update rendered star count display
-  const renderedStarsEl = document.getElementById("rendered-stars");
-  function updateRenderedStars(): void {
-    if (renderedStarsEl) {
-      renderedStarsEl.textContent = renderer.getRenderedStarCount().toLocaleString();
-    }
-  }
-  updateRenderedStars();
-
   // Debounced star LOD update for zooming (updateFromEngine is expensive)
   let fovUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
   let pendingFov: number | null = null;
@@ -487,7 +478,6 @@ async function main(): Promise<void> {
       fovUpdateTimeout = setTimeout(() => {
         if (pendingFov !== null) {
           renderer.updateFromEngine(engine, pendingFov);
-          updateRenderedStars();
           // Update DSO sizes based on new FOV
           const magInput = document.getElementById("magnitude") as HTMLInputElement | null;
           const mag = magInput ? parseFloat(magInput.value) : 6.5;
@@ -666,94 +656,91 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------
-  // Next Total Eclipse button
+  // Next Total Eclipse handler (used by dynamically generated button)
   // ---------------------------------------------------------------------------
-  const nextEclipseBtn = document.getElementById("next-eclipse");
-  if (nextEclipseBtn) {
-    nextEclipseBtn.addEventListener("click", () => {
-      stopPlayback(); // Stop any time playback
+  function handleNextEclipseClick(): void {
+    stopPlayback(); // Stop any time playback
 
-      // Get current date from datetime input or use now
-      // Add 1 minute buffer to avoid re-selecting the same eclipse
-      // (datetime-local input truncates seconds, so we need this offset)
-      const currentTime = datetimeInput?.value ? new Date(datetimeInput.value) : new Date();
-      const searchTime = new Date(currentTime.getTime() + 60 * 1000); // +1 minute
-      const nextEclipse = getNextTotalSolarEclipse(searchTime);
+    // Get current date from datetime input or use now
+    // Add 1 minute buffer to avoid re-selecting the same eclipse
+    // (datetime-local input truncates seconds, so we need this offset)
+    const currentTime = datetimeInput?.value ? new Date(datetimeInput.value) : new Date();
+    const searchTime = new Date(currentTime.getTime() + 60 * 1000); // +1 minute
+    const nextEclipse = getNextTotalSolarEclipse(searchTime);
 
-      if (nextEclipse) {
-        const eclipseDate = new Date(nextEclipse.datetime);
+    if (nextEclipse) {
+      const eclipseDate = new Date(nextEclipse.datetime);
 
-        // Update the datetime input
-        if (datetimeInput) {
-          const year = eclipseDate.getFullYear();
-          const month = String(eclipseDate.getMonth() + 1).padStart(2, "0");
-          const day = String(eclipseDate.getDate()).padStart(2, "0");
-          const hours = String(eclipseDate.getHours()).padStart(2, "0");
-          const minutes = String(eclipseDate.getMinutes()).padStart(2, "0");
-          datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-        }
+      // Update the datetime input
+      if (datetimeInput) {
+        const year = eclipseDate.getFullYear();
+        const month = String(eclipseDate.getMonth() + 1).padStart(2, "0");
+        const day = String(eclipseDate.getDate()).padStart(2, "0");
+        const hours = String(eclipseDate.getHours()).padStart(2, "0");
+        const minutes = String(eclipseDate.getMinutes()).padStart(2, "0");
+        datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+      }
 
-        // Update the engine directly (don't rely on change event timing)
-        applyTimeToEngine(engine, eclipseDate);
-        engine.recompute();
+      // Update the engine directly (don't rely on change event timing)
+      applyTimeToEngine(engine, eclipseDate);
+      engine.recompute();
 
-        // Update renderer with new positions
-        renderer.updateFromEngine(engine);
+      // Update renderer with new positions
+      renderer.updateFromEngine(engine);
 
-        // Get updated body positions and animate to sun
-        const bodyPos = getBodyPositions(engine);
+      // Get updated body positions and animate to sun
+      const bodyPos = getBodyPositions(engine);
 
-        // Update eclipse rendering (shows corona)
-        const sunMoonSep = calculateSunMoonSeparation(bodyPos);
-        if (sunMoonSep !== null) {
-          renderer.updateEclipse(sunMoonSep);
-        }
-        const sunPos = bodyPos.get("Sun");
-        const moonPos = bodyPos.get("Moon");
+      // Update eclipse rendering (shows corona)
+      const sunMoonSep = calculateSunMoonSeparation(bodyPos);
+      if (sunMoonSep !== null) {
+        renderer.updateEclipse(sunMoonSep);
+      }
+      const sunPos = bodyPos.get("Sun");
+      const moonPos = bodyPos.get("Moon");
 
-        // Update video markers with new body positions
-        if (videoMarkersRef) {
-          videoMarkersRef.updateMovingPositions(bodyPos);
-        }
+      // Update video markers with new body positions
+      if (videoMarkersRef) {
+        videoMarkersRef.updateMovingPositions(bodyPos);
+      }
 
-        if (sunPos) {
-          const sunRaDec = positionToRaDec(sunPos);
-          controls.animateToRaDec(sunRaDec.ra, sunRaDec.dec, 1000);
+      if (sunPos) {
+        const sunRaDec = positionToRaDec(sunPos);
+        controls.animateToRaDec(sunRaDec.ra, sunRaDec.dec, 1000);
 
-          // Update eclipse banner with separation
-          if (moonPos) {
-            const separation = calculateSunMoonSeparation(bodyPos);
-            const sepEl = document.getElementById("eclipse-banner-sep");
-            if (sepEl && separation !== null) {
-              sepEl.textContent = separation.toFixed(2);
-            }
+        // Update eclipse banner with separation
+        if (moonPos) {
+          const separation = calculateSunMoonSeparation(bodyPos);
+          const sepEl = document.getElementById("eclipse-banner-sep");
+          if (sepEl && separation !== null) {
+            sepEl.textContent = separation.toFixed(2);
           }
         }
-
-        // Show eclipse info banner
-        const eclipseBanner = document.getElementById("eclipse-banner");
-        const dateEl = document.getElementById("eclipse-banner-date");
-        const pathEl = document.getElementById("eclipse-banner-path");
-        const durationEl = document.getElementById("eclipse-banner-duration");
-
-        if (eclipseBanner) {
-          const eclipseDate = new Date(nextEclipse.datetime);
-          if (dateEl) dateEl.textContent = eclipseDate.toLocaleDateString("en-US", {
-            year: "numeric", month: "short", day: "numeric",
-            hour: "2-digit", minute: "2-digit", timeZone: "UTC"
-          }) + " UTC";
-          if (pathEl) pathEl.textContent = nextEclipse.path;
-          if (durationEl) durationEl.textContent = String(nextEclipse.durationSec);
-          eclipseBanner.classList.remove("hidden");
-        }
-
-        console.log(`Next total solar eclipse: ${nextEclipse.datetime}`);
-        console.log(`Path: ${nextEclipse.path}`);
-        console.log(`Duration: ${nextEclipse.durationSec}s`);
-      } else {
-        console.log("No more total solar eclipses in the catalog (extends to 2045)");
       }
-    });
+
+      // Show eclipse info banner
+      const eclipseBanner = document.getElementById("eclipse-banner");
+      const dateEl = document.getElementById("eclipse-banner-date");
+      const pathEl = document.getElementById("eclipse-banner-path");
+      const durationEl = document.getElementById("eclipse-banner-duration");
+
+      if (eclipseBanner) {
+        const eclipseDate = new Date(nextEclipse.datetime);
+        if (dateEl) dateEl.textContent = eclipseDate.toLocaleDateString("en-US", {
+          year: "numeric", month: "short", day: "numeric",
+          hour: "2-digit", minute: "2-digit", timeZone: "UTC"
+        }) + " UTC";
+        if (pathEl) pathEl.textContent = nextEclipse.path;
+        if (durationEl) durationEl.textContent = String(nextEclipse.durationSec);
+        eclipseBanner.classList.remove("hidden");
+      }
+
+      console.log(`Next total solar eclipse: ${nextEclipse.datetime}`);
+      console.log(`Path: ${nextEclipse.path}`);
+      console.log(`Duration: ${nextEclipse.durationSec}s`);
+    } else {
+      console.log("No more total solar eclipses in the catalog (extends to 2045)");
+    }
   }
 
   // Update display after restoring settings (pass saved FOV for consistent LOD)
@@ -1709,6 +1696,145 @@ async function main(): Promise<void> {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // Comet info popup
+  // ---------------------------------------------------------------------------
+  interface CometInfo {
+    name: string;
+    commonName: string;
+    type: string;
+    period: string;
+    perihelion: string;
+    lastVisit: string;
+    nextReturn: string;
+    description: string;
+  }
+
+  const COMET_INFO: Record<string, CometInfo> = {
+    "1P/Halley": {
+      name: "1P/Halley",
+      commonName: "Halley's Comet",
+      type: "Periodic",
+      period: "~76 years",
+      perihelion: "0.59 AU",
+      lastVisit: "Feb 9, 1986",
+      nextReturn: "Jul 28, 2061",
+      description: "The most famous comet in history, observed for over 2,000 years. Edmond Halley predicted its return in 1705, proving comets follow orbits. In 1986, the Giotto spacecraft flew within 596 km of its nucleus, revealing a potato-shaped body 15 km long."
+    },
+    "2P/Encke": {
+      name: "2P/Encke",
+      commonName: "Encke's Comet",
+      type: "Periodic",
+      period: "3.3 years",
+      perihelion: "0.34 AU",
+      lastVisit: "Oct 2023",
+      nextReturn: "Jan 2027",
+      description: "Has the shortest orbital period of any known comet. Named after Johann Franz Encke who calculated its orbit in 1819. The parent body of the Taurid meteor stream, which produces fireballs in October-November."
+    },
+    "67P/C-G": {
+      name: "67P/Churyumov-Gerasimenko",
+      commonName: "Comet 67P",
+      type: "Periodic",
+      period: "6.4 years",
+      perihelion: "1.24 AU",
+      lastVisit: "Nov 2021",
+      nextReturn: "Mar 2028",
+      description: "Target of ESA's Rosetta mission, which orbited the comet from 2014-2016. The Philae lander made the first soft landing on a comet in November 2014. Its distinctive duck-shaped nucleus is about 4 km across."
+    },
+    "46P/Wirtanen": {
+      name: "46P/Wirtanen",
+      commonName: "Comet Wirtanen",
+      type: "Periodic",
+      period: "5.4 years",
+      perihelion: "1.06 AU",
+      lastVisit: "Dec 2018",
+      nextReturn: "May 2024",
+      description: "In December 2018, it passed within 11.6 million km of Earth—one of the closest comet approaches in centuries. Originally the target for ESA's Rosetta mission before a launch delay forced a target change."
+    },
+    "C/2020 F3 NEOWISE": {
+      name: "C/2020 F3 NEOWISE",
+      commonName: "Comet NEOWISE",
+      type: "Long-period",
+      period: "~6,800 years",
+      perihelion: "0.29 AU",
+      lastVisit: "Jul 3, 2020",
+      nextReturn: "~Year 8800",
+      description: "The brightest comet visible from the Northern Hemisphere since Hale-Bopp in 1997. Discovered by NASA's NEOWISE space telescope on March 27, 2020. At peak brightness it reached magnitude 1, visible to the naked eye with a spectacular dual tail."
+    },
+    "C/2023 A3 T-ATLAS": {
+      name: "C/2023 A3 Tsuchinshan-ATLAS",
+      commonName: "Comet Tsuchinshan-ATLAS",
+      type: "Long-period",
+      period: "~26,000 years",
+      perihelion: "0.39 AU",
+      lastVisit: "Sep 27, 2024",
+      nextReturn: "~Year 28000",
+      description: "Discovered independently in 2023 by observatories in China (Purple Mountain) and South Africa (ATLAS). Became a spectacular naked-eye comet in October 2024, with early estimates suggesting it could reach magnitude -3."
+    },
+    "C/1995 O1 Hale-Bopp": {
+      name: "C/1995 O1 Hale-Bopp",
+      commonName: "Comet Hale-Bopp",
+      type: "Long-period",
+      period: "~2,533 years",
+      perihelion: "0.91 AU",
+      lastVisit: "Apr 1, 1997",
+      nextReturn: "~Year 4530",
+      description: "The 'Great Comet of 1997' was visible to the naked eye for a record 18 months. Independently discovered by Alan Hale and Thomas Bopp in 1995 when it was still beyond Jupiter. Reached magnitude -1.8 at perihelion, brighter than any star except Sirius."
+    }
+  };
+
+  const cometModal = document.getElementById("comet-modal");
+  const cometModalClose = document.getElementById("comet-modal-close");
+  const cometModalName = document.getElementById("comet-modal-name");
+  const cometModalCommonName = document.getElementById("comet-modal-common-name");
+  const cometModalTypeBadge = document.getElementById("comet-modal-type-badge");
+  const cometModalPeriod = document.getElementById("comet-modal-period");
+  const cometModalPerihelion = document.getElementById("comet-modal-perihelion");
+  const cometModalLastVisit = document.getElementById("comet-modal-last-visit");
+  const cometModalNextReturn = document.getElementById("comet-modal-next-return");
+  const cometModalDescription = document.getElementById("comet-modal-description");
+
+  function showCometInfo(cometIndex: number): void {
+    const cometName = COMET_NAMES[cometIndex];
+    const info = COMET_INFO[cometName];
+    if (!info || !cometModal) return;
+
+    if (cometModalName) cometModalName.textContent = info.name;
+    if (cometModalCommonName) cometModalCommonName.textContent = info.commonName;
+    if (cometModalTypeBadge) cometModalTypeBadge.textContent = info.type;
+    if (cometModalPeriod) cometModalPeriod.textContent = info.period;
+    if (cometModalPerihelion) cometModalPerihelion.textContent = info.perihelion;
+    if (cometModalLastVisit) cometModalLastVisit.textContent = info.lastVisit;
+    if (cometModalNextReturn) cometModalNextReturn.textContent = info.nextReturn;
+    if (cometModalDescription) cometModalDescription.textContent = info.description;
+
+    cometModal.classList.remove("hidden");
+  }
+
+  // Close comet modal
+  if (cometModal && cometModalClose) {
+    cometModalClose.addEventListener("click", () => {
+      cometModal.classList.add("hidden");
+    });
+
+    cometModal.addEventListener("click", (e) => {
+      if (e.target === cometModal) {
+        cometModal.classList.add("hidden");
+      }
+    });
+  }
+
+  // Handle clicks on comet labels (using event delegation)
+  document.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains("comet-label") && target.dataset.comet) {
+      const cometIndex = parseInt(target.dataset.comet, 10);
+      if (!isNaN(cometIndex)) {
+        showCometInfo(cometIndex);
+      }
+    }
+  });
+
   // Handle clicks on planet labels to focus orbit
   // Track which planet is focused (null = show all, body index = focused)
   let focusedOrbitBody: number | null = null;
@@ -1898,9 +2024,7 @@ async function main(): Promise<void> {
         break;
       case "e":
         // Next Total Eclipse
-        if (nextEclipseBtn) {
-          nextEclipseBtn.click();
-        }
+        handleNextEclipseClick();
         break;
       case "n":
         // Jump to now
@@ -1946,7 +2070,57 @@ async function main(): Promise<void> {
   // Tour UI Event Handlers
   // ============================================================================
 
-  // Tour selection buttons
+  // Helper to get tour icon based on tour id
+  function getTourIcon(tourId: string): string {
+    if (tourId.includes('eclipse')) return '☀';
+    if (tourId.includes('jupiter') || tourId.includes('saturn')) return '♃';
+    if (tourId.includes('halley') || tourId.includes('neowise') || tourId.includes('hale-bopp') || tourId.includes('comet')) return '☄';
+    return '✦';
+  }
+
+  // Generate tour list dynamically
+  const tourList = document.getElementById('tour-list');
+  const tourCount = document.getElementById('tour-count');
+
+  if (tourList) {
+    // Add "Next Eclipse" special item first
+    const nextEclipseItem = document.createElement('button');
+    nextEclipseItem.className = 'tour-item';
+    nextEclipseItem.id = 'next-eclipse';
+    nextEclipseItem.title = 'Jump to next total solar eclipse (E)';
+    nextEclipseItem.innerHTML = `
+      <span class="tour-item-icon">☀</span>
+      <div class="tour-item-content">
+        <span class="tour-item-name">Next Total Eclipse <span class="shortcut">(E)</span></span>
+        <span class="tour-item-desc">Jump to upcoming eclipse</span>
+      </div>
+    `;
+    nextEclipseItem.addEventListener('click', handleNextEclipseClick);
+    tourList.appendChild(nextEclipseItem);
+
+    // Add predefined tours
+    PREDEFINED_TOURS.forEach(tour => {
+      const item = document.createElement('button');
+      item.className = 'tour-item';
+      item.dataset.tour = tour.id;
+      item.title = tour.description;
+      item.innerHTML = `
+        <span class="tour-item-icon">${getTourIcon(tour.id)}</span>
+        <div class="tour-item-content">
+          <span class="tour-item-name">${tour.name}</span>
+          <span class="tour-item-desc">${tour.description}</span>
+        </div>
+      `;
+      tourList.appendChild(item);
+    });
+
+    // Update tour count
+    if (tourCount) {
+      tourCount.textContent = `${PREDEFINED_TOURS.length + 1} tours`;
+    }
+  }
+
+  // Tour selection buttons (handles dynamically generated buttons)
   document.querySelectorAll("[data-tour]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tourId = (btn as HTMLElement).dataset.tour;

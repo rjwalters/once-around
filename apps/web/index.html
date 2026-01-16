@@ -1284,43 +1284,109 @@
         border-top: 1px solid #333;
       }
 
-      .tour-section-label {
+      .tour-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .tour-label {
         font-size: 11px;
         color: #666;
-        margin-bottom: 6px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
 
-      .tour-buttons {
-        display: flex;
-        gap: 6px;
+      .tour-count {
+        font-size: 10px;
+        color: #555;
       }
 
-      .tour-btn {
-        flex: 1;
-        padding: 8px 6px;
-        background: linear-gradient(135deg, #2a2a4a 0%, #3a2a4a 100%);
-        border: 1px solid #554477;
-        color: #aaaaff;
-        border-radius: 6px;
-        cursor: pointer;
+      .tour-list {
+        max-height: 220px;
+        overflow-y: auto;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        transition: all 0.15s;
-        font-size: 10px;
+        gap: 4px;
+        scrollbar-width: thin;
+        scrollbar-color: #444 #1a1a2e;
       }
 
-      .tour-btn:hover {
+      .tour-list::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .tour-list::-webkit-scrollbar-track {
+        background: #1a1a2e;
+        border-radius: 3px;
+      }
+
+      .tour-list::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 3px;
+      }
+
+      .tour-list::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+
+      .tour-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        background: linear-gradient(135deg, #2a2a4a 0%, #3a2a4a 100%);
+        border: 1px solid #554477;
+        border-radius: 6px;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.15s;
+        flex-shrink: 0;
+      }
+
+      .tour-item:hover {
         background: linear-gradient(135deg, #3a3a5a 0%, #4a3a5a 100%);
         border-color: #7755aa;
-        color: #ccccff;
       }
 
-      .tour-btn .tour-icon {
+      .tour-item:active {
+        transform: scale(0.98);
+      }
+
+      .tour-item-icon {
         font-size: 18px;
+        width: 24px;
+        text-align: center;
+        flex-shrink: 0;
+      }
+
+      .tour-item-content {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .tour-item-name {
+        font-size: 12px;
+        color: #aaaaff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .tour-item-desc {
+        font-size: 10px;
+        color: #777;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .tour-item .shortcut {
+        font-size: 9px;
+        color: #666;
       }
 
       /* Tour playback bar */
@@ -1918,38 +1984,12 @@
       </div>
 
       <div class="tour-section">
-        <div class="tour-section-label">Guided Tours</div>
-        <div class="tour-buttons">
-          <button class="tour-btn" id="next-eclipse" title="Jump to next total solar eclipse (E)">
-            <span class="tour-icon">☀</span>
-            <span>Next Eclipse <span class="shortcut">(E)</span></span>
-          </button>
-          <button class="tour-btn" data-tour="eclipse-2024" title="Watch the 2024 total solar eclipse">
-            <span class="tour-icon">☀</span>
-            <span>2024 Eclipse</span>
-          </button>
-          <button class="tour-btn" data-tour="jupiter-moons" title="Watch Jupiter's Galilean moons">
-            <span class="tour-icon">♃</span>
-            <span>Jupiter Moons</span>
-          </button>
+        <div class="tour-header">
+          <span class="tour-label">Guided Tours</span>
+          <span class="tour-count" id="tour-count"></span>
         </div>
-        <div class="tour-buttons" style="margin-top: 6px;">
-          <button class="tour-btn" data-tour="neowise-2020" title="Witness the brightest comet in decades">
-            <span class="tour-icon">☄</span>
-            <span>NEOWISE 2020</span>
-          </button>
-          <button class="tour-btn" data-tour="hale-bopp-1997" title="The Great Comet of 1997">
-            <span class="tour-icon">☄</span>
-            <span>Hale-Bopp</span>
-          </button>
-          <button class="tour-btn" data-tour="halley-1986" title="Halley's Comet 1986 apparition">
-            <span class="tour-icon">☄</span>
-            <span>Halley 1986</span>
-          </button>
-          <button class="tour-btn" data-tour="halley-2061" title="Preview Halley's next return">
-            <span class="tour-icon">☄</span>
-            <span>Halley 2061</span>
-          </button>
+        <div class="tour-list" id="tour-list">
+          <!-- Tour items generated dynamically from tourData.ts -->
         </div>
       </div>
 
