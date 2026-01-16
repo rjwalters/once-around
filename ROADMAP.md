@@ -584,25 +584,20 @@ Refactored from vanilla CSS to Tailwind CSS v4 with modern utility-first styling
 
 ## Low Priority
 
-### Nebula Rendering & Overrides
-Render nebulae as textured sprites or procedural effects, with support for tour-based overrides.
+### Tour-Based Nebula Overrides
+Extend the existing DSO rendering with tour-based overrides for dynamic effects.
+
+**Current state:** Basic DSO rendering is complete with 28 objects (galaxies, nebulae, clusters) rendered as elliptical sprites with labels, info modals, and flag lines.
+
+**Remaining work - tour overrides:**
+- Nebula override system similar to star overrides
+- Tours can dynamically spawn/scale nebulae (e.g., Betelgeuse remnant grows over time)
+- Textured sprites or procedural shaders for enhanced visuals
 
 **Use cases:**
 - Betelgeuse nova tour: Show expanding supernova remnant in later keyframes
-- Famous nebulae: Orion Nebula (M42), Horsehead Nebula, Crab Nebula (M1), Ring Nebula (M57)
 - Historical supernovae: Crab Nebula from SN 1054, Tycho's SNR, Kepler's SNR
-
-**Implementation approach:**
-- Nebula override system similar to star overrides
-- Each nebula: position (RA/Dec), angular size, texture/color, opacity
-- Tours can dynamically spawn/scale nebulae (e.g., Betelgeuse remnant grows over time)
-- Consider: Billboard sprites vs procedural shaders vs pre-rendered images
-
-**Potential nebulae to include:**
-- Emission: Orion (M42), Lagoon (M8), Eagle (M16), Carina
-- Reflection: Witch Head, IC 2118
-- Planetary: Ring (M57), Helix, Cat's Eye, Dumbbell (M27)
-- Supernova remnants: Crab (M1), Veil, Cassiopeia A
+- Enhanced textures for famous objects: Orion Nebula (M42), Horsehead, Crab (M1)
 
 ### ~~Stellar Scintillation (Twinkling)~~ (Done)
 
@@ -743,9 +738,12 @@ Manual task, not a code feature.
 - [x] Comet tracking: Halley, Encke, 67P/C-G, Wirtanen, NEOWISE, Tsuchinshan-ATLAS, Hale-Bopp
 - [x] Comet tail rendering with anti-solar orientation
 - [x] Comet guided tours (NEOWISE 2020, Hale-Bopp 1997, Halley 1986, Halley 2061)
+- [x] Deep sky objects: 28 DSOs including Messier objects, galaxies, nebulae, and clusters
+- [x] DSO elliptical sprite rendering with position angle and axis ratio
+- [x] DSO labels and info modals with descriptions
+- [x] DSO flag lines connecting labels to objects (color-coded by type)
 
 ## Not Planned
 
-- Extended object catalogs (Messier, NGC) — videos are the content
 - User accounts / cloud sync — unnecessary complexity
-- Atmospheric simulation — academic rather than practical
+- Atmospheric simulation (refraction, extinction) — academic rather than practical
