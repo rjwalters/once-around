@@ -856,7 +856,7 @@ async function main(): Promise<void> {
       timeControls?.stepTime(1);
     },
     togglePlayback: () => timeControls?.togglePlayback(),
-    focusSearch: () => searchInput?.focus(),
+    focusSearch: () => document.getElementById("search")?.focus(),
     showHelp: () => {
       const helpModal = document.getElementById("help-modal");
       if (helpModal) {
