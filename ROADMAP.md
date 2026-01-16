@@ -24,11 +24,329 @@ Add orbital elements for periodic comets:
 
 Requires: parabolic/hyperbolic orbit solver (e ≥ 1)
 
-### Observer Location & Topocentric View (Major Feature)
+### ~~Observer Location & Topocentric Corrections~~ (Partially Done)
 
-Transform from geocentric (Earth-center) view to topocentric (Earth-surface) view.
-Critical for accurate eclipse visualization - the Moon's parallax (~1°) determines
-whether you see totality or a partial eclipse from a given location.
+Basic observer location selection and topocentric Moon parallax correction.
+
+**Completed:**
+- [x] Location selection UI with city search (~100 cities)
+- [x] Manual lat/lon input
+- [x] "Use my location" geolocation
+- [x] Settings persistence and URL params
+- [x] GMST computation in Rust engine
+- [x] Topocentric Moon parallax correction (~1° shift)
+- [x] Ground plane rendering (toggleable)
+
+**Remaining (see View Mode System below):**
+- [ ] Alt/Az coordinate display
+- [ ] Cardinal direction markers on horizon
+- [ ] Eclipse path integration
+
+---
+
+### View Mode System: Geocentric vs Topocentric (Major Feature)
+
+Two distinct viewing perspectives with fundamentally different navigation models.
+
+#### Conceptual Model
+
+**Geocentric Mode** (current default):
+- Observer conceptually at Earth's center
+- Celestial sphere is the fixed reference frame
+- RA/Dec coordinates are primary
+- No horizon (meaningless from Earth's center)
+- Observer location controls hidden
+- Time changes move Sun/Moon/planets; stars stay fixed
+- Use case: "Explore the celestial sphere"
+
+**Topocentric Mode** (new):
+- Observer standing on Earth's surface
+- Local horizon is the fixed reference frame (always horizontal on screen)
+- Alt/Az coordinates are primary, RA/Dec secondary
+- Horizon visible with ground plane
+- Observer location controls visible and affect the view
+- Time changes rotate the entire sky around the celestial pole
+- Use case: "What's in my sky tonight?"
+
+#### Key Differences
+
+| Aspect | Geocentric | Topocentric |
+|--------|------------|-------------|
+| Reference frame | Celestial sphere | Local horizon |
+| Primary coords | RA / Dec | Altitude / Azimuth |
+| Camera "up" | Toward celestial north | Toward local zenith |
+| Navigation | Pan around sphere | Azimuth + Altitude |
+| Horizon | Not shown | Always horizontal |
+| Location panel | Hidden | Visible |
+| Time scrub effect | Bodies move, stars fixed | Entire sky rotates |
+| Moon position | Geocentric | Parallax-corrected |
+
+#### Phase 1: Mode Infrastructure & UI Reorganization
+
+**Settings:**
+```typescript
+interface Settings {
+  viewMode: 'geocentric' | 'topocentric';
+  // ... existing fields
+}
+```
+
+**UI Changes:**
+- Add prominent mode toggle at top of controls
+- Reorganize location panel:
+  - Move "Show horizon" toggle into location section
+  - Only show location section in topocentric mode
+  - Add LST display in topocentric mode
+
+```
+┌─────────────────────────────────────────────┐
+│ View Mode                                   │
+│ [🌐 Geocentric] [🧭 Topocentric]            │
+└─────────────────────────────────────────────┘
+
+When Topocentric selected:
+┌─────────────────────────────────────────────┐
+│ 📍 Observer Location                        │
+│ San Francisco, USA                          │
+│ 37.77°N, 122.42°W                           │
+│ [Search cities...] [📍 Use location]        │
+│                                             │
+│ ☑ Show horizon                              │
+│ ☐ Cardinal directions (N/E/S/W)             │
+│                                             │
+│ Local Sidereal Time: 14h 23m                │
+└─────────────────────────────────────────────┘
+```
+
+#### Phase 2: Scene Transformation
+
+In topocentric mode, transform the scene so the horizon is horizontal.
+
+**Key insight:** Keep stars in equatorial coordinates, apply a transformation matrix.
+
+```typescript
+// Scene transformation for topocentric mode:
+// 1. Rotate by -LST around Y (celestial pole) to align local meridian
+// 2. Rotate by (90° - latitude) around X to tilt pole to correct altitude
+
+function computeTopocentricTransform(
+  latitude: number,           // radians
+  localSiderealTime: number   // radians
+): THREE.Matrix4 {
+  // After transformation:
+  // - Horizon plane is at Y = 0
+  // - Zenith is +Y
+  // - North is +Z (or -Z)
+  // - East is +X
+
+  const coLatitude = Math.PI / 2 - latitude;
+
+  const rotLST = new THREE.Matrix4().makeRotationY(-localSiderealTime);
+  const rotLat = new THREE.Matrix4().makeRotationX(coLatitude);
+
+  return rotLat.multiply(rotLST);
+}
+```
+
+**Celestial pole position:**
+- North celestial pole appears at: Azimuth = 0° (north), Altitude = observer latitude
+- At latitude 40°N, Polaris is 40° above northern horizon
+- At equator, both poles are on the horizon
+- In southern hemisphere, south celestial pole is visible
+
+#### Phase 3: Horizon-Locked Camera Controls
+
+New control mode for topocentric view:
+
+```typescript
+interface TopocentricCameraState {
+  azimuth: number;    // 0-360°, 0 = North, 90 = East
+  altitude: number;   // -90 to +90°, 0 = horizon, 90 = zenith
+  fov: number;
+}
+
+// Control behavior:
+// - Horizontal drag → change azimuth
+// - Vertical drag → change altitude
+// - Camera "up" vector always points to zenith
+// - No roll allowed (horizon always level)
+```
+
+**Modify `controls.ts`:**
+- Add `setViewMode(mode: 'geocentric' | 'topocentric')`
+- In topocentric mode:
+  - Track azimuth/altitude instead of quaternion
+  - Constrain camera orientation to horizon-level
+  - Convert to/from equatorial for compatibility
+
+**Edge cases:**
+- Zenith (alt = 90°): Azimuth is undefined, any value works
+- Nadir (alt = -90°): Blocked by ground plane
+- Wrap azimuth at 0°/360° boundary
+
+#### Phase 4: Coordinate Display
+
+**Geocentric mode:**
+```
+RA 12h 34m  Dec +45° 30'  FOV 60°
+```
+
+**Topocentric mode:**
+```
+Az 135° (SE)  Alt 45°  FOV 60°
+RA 12h 34m  Dec +45° 30'
+```
+
+**New UI elements for topocentric:**
+- Local Sidereal Time display
+- Compass direction abbreviation (N, NE, E, SE, S, SW, W, NW)
+- Sun altitude indicator (day/twilight/night)
+
+#### Phase 5: Time Animation Behavior
+
+**Geocentric (current):**
+- Stars stay fixed in view
+- Sun/Moon/planets move along their paths
+- Camera position unchanged
+
+**Topocentric (new):**
+- Camera stays fixed relative to ground (azimuth/altitude constant)
+- Entire sky rotates around celestial pole at 15°/hour
+- Stars rise in east, transit meridian, set in west
+- Dramatic visual effect when scrubbing time
+
+**Implementation:**
+- Time change updates LST
+- LST change updates scene transformation
+- Camera azimuth/altitude stay constant
+- Visual effect: stars appear to drift westward
+
+**Optional enhancement:** "Track object" mode
+- Lock camera to a specific star/planet
+- As time changes, camera follows the object
+- Useful for watching a star rise/set
+
+#### Phase 6: Feature Integration
+
+**Tours:**
+- Tours specify RA/Dec targets (or use `target: 'jupiter'` etc.)
+- In topocentric mode, convert RA/Dec to Alt/Az at runtime
+- Tours work in both modes without modification
+
+**Search:**
+- Search results show both coordinate systems
+- In topocentric mode, show "Above horizon" / "Below horizon"
+- Future: show rise/set times
+
+**Mode switching:**
+- When switching modes, keep the same celestial object centered
+- Convert current RA/Dec to Alt/Az (or vice versa)
+- Smooth transition if possible
+
+**AR Mode:**
+- Works in both modes
+- In topocentric mode, device compass could provide true azimuth
+- Enhanced "point your phone at the sky" experience
+
+#### Phase 7: Polish
+
+**Cardinal direction markers:**
+- N/E/S/W labels on horizon
+- Optional compass rose at nadir
+- Intermediate directions (NE, SE, SW, NW)
+
+**Atmospheric effects (optional):**
+- Stars dim near horizon (airmass extinction)
+- ~0.5 magnitude dimmer at 10° altitude
+- Atmospheric refraction (~0.5° at horizon)
+
+**Twilight indication (optional):**
+- Sky background color based on sun altitude
+- Civil/nautical/astronomical twilight zones
+
+#### Data Structures
+
+```typescript
+type ViewMode = 'geocentric' | 'topocentric';
+
+interface TopocentricState {
+  azimuth: number;           // degrees, 0 = north
+  altitude: number;          // degrees, 0 = horizon
+  localSiderealTime: number; // degrees (or hours)
+}
+
+interface ViewCoordinates {
+  // Equatorial (always computed)
+  ra: number;
+  dec: number;
+
+  // Horizontal (computed in topocentric mode)
+  azimuth?: number;
+  altitude?: number;
+}
+
+// Coordinate conversion
+function equatorialToHorizontal(
+  ra: number, dec: number,           // degrees
+  lst: number,                        // local sidereal time, degrees
+  latitude: number                    // observer latitude, degrees
+): { azimuth: number; altitude: number };
+
+function horizontalToEquatorial(
+  azimuth: number, altitude: number,  // degrees
+  lst: number,                        // local sidereal time, degrees
+  latitude: number                    // observer latitude, degrees
+): { ra: number; dec: number };
+```
+
+#### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `settings.ts` | Add `viewMode` field |
+| `controls.ts` | Add topocentric navigation mode (az/alt) |
+| `renderer.ts` | Scene transformation matrix for topocentric |
+| `main.ts` | Mode toggle logic, coordinate display, LST computation |
+| `index.html` | Mode toggle UI, reorganized location panel |
+| `ui.ts` | Alt/Az formatting, compass directions |
+| `tour.ts` | Convert tour targets based on view mode |
+
+#### Implementation Order
+
+1. **UI reorganization** - Mode toggle, move horizon into location panel
+2. **Scene transformation** - Apply rotation matrix in topocentric mode
+3. **Camera controls** - Horizon-locked navigation (az/alt)
+4. **Coordinate display** - Show Alt/Az in topocentric mode
+5. **Time behavior** - Sky rotation around pole
+6. **Feature integration** - Tours, search, mode switching
+7. **Polish** - Cardinal markers, atmospheric effects
+
+#### Verification
+
+1. **Pole altitude:** At latitude 40°N, Polaris should be at altitude ~40°
+2. **Cardinal directions:** Az = 0° should face celestial north pole
+3. **Horizon level:** Horizon always horizontal regardless of where you look
+4. **Time scrub:** Stars move westward at 15°/hour
+5. **Mode switch:** Same object stays centered when switching modes
+6. **Tours:** Jupiter moons tour works in both modes
+7. **Ground plane:** Objects below horizon hidden by ground
+8. **Southern hemisphere:** At -40° lat, south celestial pole at alt 40° (south)
+
+#### Edge Cases
+
+- **Zenith view:** At alt = 90°, azimuth is undefined (singularity)
+- **Nadir view:** Should be blocked by ground plane
+- **Equator:** Both celestial poles on horizon
+- **Poles:** Celestial pole at zenith, all stars circumpolar (or never rise)
+- **Circumpolar objects:** Never set at high latitudes
+- **Date line crossing:** LST computation handles longitude correctly
+
+---
+
+### Legacy: Original Observer Location Plan
+
+<details>
+<summary>Original detailed plan (kept for reference)</summary>
 
 #### Phase 1: Location Selection Core
 **New file:** `apps/web/src/location.ts`
@@ -210,6 +528,100 @@ Alt +67°  Az 180° (S)
 5. Horizon should show North star at altitude = latitude (Northern hemisphere)
 6. Objects should rise in East, set in West
 7. Circumpolar objects (Dec > 90° - lat) should never set
+
+</details>
+
+---
+
+### UI Framework: Tailwind CSS + shadcn/ui
+
+Refactor from vanilla CSS to modern utility-first styling with component library.
+
+#### Current State
+- ~2000 lines of vanilla CSS embedded in `index.html`
+- Manual dark theme implementation
+- Custom component styling (buttons, modals, inputs, etc.)
+- No design system consistency
+
+#### Target Stack
+- **Tailwind CSS** - Utility-first CSS framework
+- **shadcn/ui** - Accessible component primitives (built on Radix UI)
+- **CSS Variables** - For theme customization
+
+#### Benefits
+- **Consistency**: Design tokens enforce uniform spacing, colors, typography
+- **Accessibility**: shadcn components are ARIA-compliant out of the box
+- **Dark mode**: Built-in dark mode support with `dark:` variants
+- **Responsive**: Mobile-first utilities (`sm:`, `md:`, `lg:`)
+- **Maintenance**: Easier to modify and extend styles
+- **Bundle size**: Tailwind purges unused CSS in production
+
+#### Implementation Phases
+
+**Phase 1: Setup & Infrastructure**
+- Install Tailwind CSS and configure `tailwind.config.js`
+- Set up PostCSS pipeline
+- Define color palette matching current dark theme
+- Configure shadcn/ui with custom theme
+
+**Phase 2: Core Components**
+- Migrate buttons (tour buttons, playback controls, etc.)
+- Migrate inputs (datetime, search, location)
+- Migrate checkboxes and toggles
+- Migrate modals (star info, about, video popup)
+
+**Phase 3: Layout & Sections**
+- Control panel layout
+- Tour list (already card-based, easy migration)
+- Eclipse banner
+- Tour playback bar
+- Stats display
+
+**Phase 4: Polish**
+- Remove legacy CSS from index.html
+- Verify all responsive breakpoints
+- Test accessibility (keyboard nav, screen readers)
+- Performance audit
+
+#### Key Components to Use from shadcn/ui
+- `Button` - All interactive buttons
+- `Input` - Text/number inputs
+- `Checkbox` - Toggle options
+- `Dialog` - Modals
+- `ScrollArea` - Tour list scrolling
+- `Tooltip` - Hover hints
+- `Popover` - Search results dropdown
+- `Slider` - Potential FOV/magnitude controls
+
+#### Theme Configuration
+```javascript
+// tailwind.config.js (sketch)
+module.exports = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        // Match current dark theme
+        background: '#0a0a1a',
+        foreground: '#e0e0e0',
+        primary: '#aaaaff',
+        accent: '#554477',
+        muted: '#666666',
+      },
+    },
+  },
+}
+```
+
+#### Files to Modify
+| File | Changes |
+|------|---------|
+| `package.json` | Add tailwindcss, postcss, autoprefixer, shadcn deps |
+| `tailwind.config.js` | New file - theme configuration |
+| `postcss.config.js` | New file - PostCSS setup |
+| `index.html` | Remove inline styles, add Tailwind classes |
+| `src/main.ts` | Update any dynamic class manipulation |
+| `components/ui/*` | New shadcn component files |
 
 ## Low Priority
 
