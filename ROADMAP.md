@@ -584,6 +584,26 @@ Refactored from vanilla CSS to Tailwind CSS v4 with modern utility-first styling
 
 ## Low Priority
 
+### Nebula Rendering & Overrides
+Render nebulae as textured sprites or procedural effects, with support for tour-based overrides.
+
+**Use cases:**
+- Betelgeuse nova tour: Show expanding supernova remnant in later keyframes
+- Famous nebulae: Orion Nebula (M42), Horsehead Nebula, Crab Nebula (M1), Ring Nebula (M57)
+- Historical supernovae: Crab Nebula from SN 1054, Tycho's SNR, Kepler's SNR
+
+**Implementation approach:**
+- Nebula override system similar to star overrides
+- Each nebula: position (RA/Dec), angular size, texture/color, opacity
+- Tours can dynamically spawn/scale nebulae (e.g., Betelgeuse remnant grows over time)
+- Consider: Billboard sprites vs procedural shaders vs pre-rendered images
+
+**Potential nebulae to include:**
+- Emission: Orion (M42), Lagoon (M8), Eagle (M16), Carina
+- Reflection: Witch Head, IC 2118
+- Planetary: Ring (M57), Helix, Cat's Eye, Dumbbell (M27)
+- Supernova remnants: Crab (M1), Veil, Cassiopeia A
+
 ### Keyboard Shortcut Help
 Press `?` to show overlay listing all keyboard shortcuts.
 

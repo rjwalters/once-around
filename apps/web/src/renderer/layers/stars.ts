@@ -158,11 +158,12 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
     overrideStarsPoints.visible = true;
 
-    // Use the actual scale from the tour, with a small minimum to keep star visible
+    // Use the actual scale from the tour, with a minimum to keep star visible
     const maxScale = Math.max(...scales);
     const baseSize = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, canvasHeight);
-    // Minimum scale of 1.5 ensures override stars are visible but can still fade
-    const finalSize = baseSize * Math.max(maxScale, 1.5);
+    // Minimum scale of 3 ensures override stars are always visible while still allowing
+    // visual fading (peak scale 8 → dim scale 3 = 2.67x size difference)
+    const finalSize = baseSize * Math.max(maxScale, 3);
     overrideStarsMaterial.size = finalSize;
 
     const posAttr = new THREE.BufferAttribute(new Float32Array(positions), 3);
