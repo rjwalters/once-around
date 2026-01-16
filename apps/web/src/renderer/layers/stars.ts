@@ -34,8 +34,8 @@ export interface StarOverrideData {
 export interface StarsLayer {
   /** The main stars points mesh */
   points: THREE.Points;
-  /** Override stars points mesh (for special effects) */
-  overridePoints: THREE.Points;
+  /** Override stars group (billboard sprites for special effects) */
+  overrideStarsGroup: THREE.Group;
   /** Star labels (HR number -> label) */
   labels: Map<number, CSS2DObject>;
   /** Flag lines connecting labels to stars */
@@ -64,6 +64,37 @@ export interface StarsLayer {
  * @param labelsGroup - The group to add star labels to
  * @returns StarsLayer interface
  */
+/**
+ * Create a radial glow texture for bright star rendering.
+ * Uses a Gaussian-like falloff for a natural glow appearance.
+ */
+function createGlowTexture(size = 128): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  // Create radial gradient with soft falloff
+  const center = size / 2;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+
+  // Bright core with soft gaussian-like falloff
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.05, 'rgba(255,255,255,0.95)');
+  gradient.addColorStop(0.1, 'rgba(255,255,255,0.8)');
+  gradient.addColorStop(0.2, 'rgba(255,255,255,0.5)');
+  gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
+  gradient.addColorStop(0.6, 'rgba(255,255,255,0.08)');
+  gradient.addColorStop(0.8, 'rgba(255,255,255,0.02)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): StarsLayer {
   // Main stars geometry and material
   const starsGeometry = new THREE.BufferGeometry();
@@ -77,19 +108,15 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   const starsPoints = new THREE.Points(starsGeometry, starsMaterial);
   scene.add(starsPoints);
 
-  // Override stars (for special effects like supernovae)
-  const overrideStarsGeometry = new THREE.BufferGeometry();
-  const overrideStarsMaterial = new THREE.PointsMaterial({
-    size: 8,
-    sizeAttenuation: false,
-    vertexColors: true,
-    transparent: true,
-    opacity: 1.0,
-    depthTest: false,
-  });
-  const overrideStarsPoints = new THREE.Points(overrideStarsGeometry, overrideStarsMaterial);
-  overrideStarsPoints.renderOrder = 100;
-  scene.add(overrideStarsPoints);
+  // Override stars use billboard sprites for better appearance at large sizes
+  const glowTexture = createGlowTexture();
+  const overrideStarsGroup = new THREE.Group();
+  overrideStarsGroup.renderOrder = 100;
+  scene.add(overrideStarsGroup);
+
+  // Pool of sprites for override stars (reused to avoid allocation)
+  const spritePool: THREE.Sprite[] = [];
+  let activeSpriteCount = 0;
 
   // Star labels
   const starLabels: Map<number, CSS2DObject> = new Map();
@@ -149,30 +176,64 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     fov: number,
     canvasHeight: number
   ): void {
-    if (positions.length === 0) {
-      overrideStarsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
-      overrideStarsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
-      overrideStarsPoints.visible = false;
+    const starCount = positions.length / 3;
+
+    // Hide unused sprites
+    for (let i = starCount; i < activeSpriteCount; i++) {
+      spritePool[i].visible = false;
+    }
+
+    if (starCount === 0) {
+      activeSpriteCount = 0;
       return;
     }
 
-    overrideStarsPoints.visible = true;
-
-    // Use the actual scale from the tour, with a minimum to keep star visible
-    const maxScale = Math.max(...scales);
+    // Base size for scaling (in world units, adjusted for SKY_RADIUS)
     const baseSize = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, canvasHeight);
-    // Minimum scale of 3 ensures override stars are always visible while still allowing
-    // visual fading (peak scale 8 → dim scale 3 = 2.67x size difference)
-    const finalSize = baseSize * Math.max(maxScale, 3);
-    overrideStarsMaterial.size = finalSize;
+    // Scale factor to convert pixel size to world units at SKY_RADIUS distance
+    // The glow extends beyond the core, so multiply by a factor for the full effect
+    const worldScaleFactor = (SKY_RADIUS / canvasHeight) * 4;
 
-    const posAttr = new THREE.BufferAttribute(new Float32Array(positions), 3);
-    const colorAttr = new THREE.BufferAttribute(new Float32Array(colors), 3);
-    overrideStarsGeometry.setAttribute("position", posAttr);
-    overrideStarsGeometry.setAttribute("color", colorAttr);
-    posAttr.needsUpdate = true;
-    colorAttr.needsUpdate = true;
-    overrideStarsGeometry.computeBoundingSphere();
+    for (let i = 0; i < starCount; i++) {
+      // Get or create sprite
+      let sprite: THREE.Sprite;
+      if (i < spritePool.length) {
+        sprite = spritePool[i];
+      } else {
+        const material = new THREE.SpriteMaterial({
+          map: glowTexture,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+        });
+        sprite = new THREE.Sprite(material);
+        spritePool.push(sprite);
+        overrideStarsGroup.add(sprite);
+      }
+
+      // Position
+      const px = positions[i * 3];
+      const py = positions[i * 3 + 1];
+      const pz = positions[i * 3 + 2];
+      sprite.position.set(px, py, pz);
+
+      // Color - apply to sprite material
+      const r = colors[i * 3];
+      const g = colors[i * 3 + 1];
+      const b = colors[i * 3 + 2];
+      const material = sprite.material as THREE.SpriteMaterial;
+      material.color.setRGB(r, g, b);
+
+      // Scale based on override scale (minimum of 3 for visibility)
+      const scale = Math.max(scales[i], 3);
+      const worldSize = baseSize * scale * worldScaleFactor;
+      sprite.scale.set(worldSize, worldSize, 1);
+
+      sprite.visible = true;
+    }
+
+    activeSpriteCount = starCount;
   }
 
   function update(engine: SkyEngine, fov: number, canvasHeight: number): void {
@@ -372,7 +433,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
   return {
     points: starsPoints,
-    overridePoints: overrideStarsPoints,
+    overrideStarsGroup,
     labels: starLabels,
     flagLines: starFlagLines,
     getStarPositionMap: () => starPositionMap,

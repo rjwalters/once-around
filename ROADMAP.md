@@ -604,6 +604,106 @@ Render nebulae as textured sprites or procedural effects, with support for tour-
 - Planetary: Ring (M57), Helix, Cat's Eye, Dumbbell (M27)
 - Supernova remnants: Crab (M1), Veil, Cassiopeia A
 
+### Stellar Scintillation (Twinkling)
+
+Simulate atmospheric scintillation for bright stars in topocentric view mode.
+
+#### The Physics
+
+Scintillation ("twinkling") is caused by atmospheric turbulence bending starlight through pockets of air with varying temperature and density. The effect has several components:
+
+1. **Intensity scintillation** - rapid brightness fluctuations (5-20 Hz)
+2. **Chromatic scintillation** - color flashes (red/blue/green) from wavelength-dependent refraction
+3. **Position scintillation** - tiny apparent position shifts (usually sub-arcsecond)
+
+#### Factors Affecting Scintillation
+
+| Factor | Effect |
+|--------|--------|
+| **Altitude** | Stars near horizon twinkle dramatically (38× more atmosphere than zenith) |
+| **Brightness** | Brighter stars show more noticeable color flashes (Sirius is famous for this) |
+| **Angular size** | Point sources twinkle; planets (with disk) barely twinkle; Moon/Sun don't |
+| **Seeing conditions** | Varies night-to-night based on atmospheric stability |
+| **Wavelength** | Blue light scintillates more than red (causes chromatic effect) |
+
+**Airmass by altitude:**
+- Zenith (90°): 1.0 airmass
+- 30° altitude: ~2.0 airmasses
+- 10° altitude: ~5.6 airmasses
+- Horizon (0°): ~38 airmasses
+
+#### Implementation Approach
+
+```typescript
+interface ScintillationParams {
+  enabled: boolean;           // Auto-enabled in topocentric mode
+  intensity: number;          // 0-1, "atmospheric turbulence" level
+  brightnessThreshold: number; // Only apply to stars brighter than this (mag ~3)
+}
+
+function computeScintillation(
+  starId: number,        // For deterministic pseudo-random phase
+  altitude: number,      // Degrees above horizon
+  magnitude: number,     // Visual magnitude
+  time: number           // Current time in ms
+): { brightness: number; color: THREE.Color } {
+  // Airmass approximation (simplified Kasten-Young)
+  const airmass = 1 / Math.sin(altitude * DEG_TO_RAD);
+
+  // Amplitude scales with airmass and inverse magnitude
+  const amplitude = Math.min(airmass / 10, 0.5) * Math.max(0, (3 - magnitude) / 4);
+
+  // Multi-frequency oscillation for natural randomness
+  const phase = (starId * 1234.5678) % (2 * Math.PI);
+  const freq1 = 8 + (starId % 7);   // 8-15 Hz
+  const freq2 = 13 + (starId % 11); // 13-24 Hz
+  const t = time / 1000;
+
+  // Brightness modulation
+  const brightness = 1.0 + amplitude * 0.4 * (
+    Math.sin(freq1 * t + phase) +
+    0.5 * Math.sin(freq2 * t + phase * 1.7)
+  );
+
+  // Chromatic modulation (R/G/B at slightly different frequencies)
+  const colorAmp = amplitude * 0.2;
+  const r = 1.0 + colorAmp * Math.sin(freq1 * 0.9 * t + phase);
+  const g = 1.0 + colorAmp * Math.sin(freq1 * t + phase + 0.5);
+  const b = 1.0 + colorAmp * Math.sin(freq1 * 1.1 * t + phase + 1.0);
+
+  return { brightness, color: new THREE.Color(r, g, b) };
+}
+```
+
+#### Integration
+
+1. **Topocentric mode only** - scintillation requires atmosphere (meaningless in geocentric)
+2. **Compute altitude** for each bright star using observer location + LST
+3. **Apply to bright stars** (mag < 3-4) for performance
+4. **Shader-based** for best performance with many stars
+5. **User control** - "Atmospheric conditions" slider or presets:
+   - "Excellent seeing" - minimal twinkling
+   - "Average" - moderate effect
+   - "Poor seeing" - dramatic twinkling (like Sirius near horizon)
+
+#### Visual Priority
+
+Stars to prioritize for scintillation (brightest, most often observed at low altitude):
+- **Sirius** (α CMa, mag -1.46) - the classic "twinkling star"
+- **Canopus** (α Car, mag -0.72) - southern observers
+- **Arcturus** (α Boo, mag -0.05)
+- **Vega** (α Lyr, mag 0.03)
+- **Capella** (α Aur, mag 0.08)
+- **Rigel** (β Ori, mag 0.13)
+
+#### Why This Enhances Topocentric Mode
+
+Scintillation is one of the most distinctive visual experiences of stargazing from Earth's surface. Adding it to topocentric mode:
+- Reinforces the "I'm standing on Earth looking up" experience
+- Explains why stars twinkle but planets don't (educational)
+- Makes Sirius near the horizon appropriately dramatic
+- Adds life and dynamism to the night sky
+
 ### Keyboard Shortcut Help
 Press `?` to show overlay listing all keyboard shortcuts.
 
