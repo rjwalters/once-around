@@ -188,7 +188,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
     starPositionMap = new Map();
 
-    if (totalStars === 0) {
+    if (totalStars === 0 && starOverrideMap.size === 0) {
       starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
       starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
       renderedStarCount = 0;
@@ -222,6 +222,9 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     const faintTarget = Math.max(0, targetStars - brightCount);
     const faintProbability = faintCount > 0 ? Math.min(1.0, faintTarget / faintCount) : 1.0;
 
+    // Track which override stars we've found
+    const foundOverrideStars = new Set<number>();
+
     // Second pass: build arrays with LOD sampling
     const scaledPositions: number[] = [];
     const colors: number[] = [];
@@ -239,9 +242,10 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
       const hasOverride = override !== undefined;
 
       if (hasOverride) {
+        foundOverrideStars.add(id);
         if (override.magnitude !== undefined) vmag = override.magnitude;
         if (override.bvColor !== undefined) bv = override.bvColor;
-        console.log('Found override star', id, 'vmag:', vmag, 'bv:', bv, 'scale:', override.scale);
+        console.log('Found override star in visible list', id, 'vmag:', vmag, 'bv:', bv, 'scale:', override.scale);
       }
 
       const isBright = vmag < LOD_BRIGHT_MAG_THRESHOLD;
@@ -260,6 +264,50 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
           overrideColors.push(color.r, color.g, color.b);
           overrideScales.push(override.scale ?? 1);
         }
+      }
+    }
+
+    // Look up any override stars that weren't in the visible list
+    // This ensures stars with overrides always render, even if they're
+    // not currently in the engine's visible_stars() list
+    if (foundOverrideStars.size < starOverrideMap.size) {
+      const allPositions = getAllStarsPositionBuffer(engine);
+      const allMeta = getAllStarsMetaBuffer(engine);
+      const allStarsCount = engine.total_stars();
+
+      for (let i = 0; i < allStarsCount; i++) {
+        const id = Math.round(allMeta[i * 4 + 2]);
+
+        // Skip if we already found this star
+        if (foundOverrideStars.has(id)) continue;
+
+        const override = starOverrideMap.get(id);
+        if (!override) continue;
+
+        // Found an override star that wasn't in visible list
+        foundOverrideStars.add(id);
+
+        let vmag = allMeta[i * 4];
+        let bv = allMeta[i * 4 + 1];
+
+        if (override.magnitude !== undefined) vmag = override.magnitude;
+        if (override.bvColor !== undefined) bv = override.bvColor;
+
+        console.log('Found override star in full catalog', id, 'vmag:', vmag, 'bv:', bv, 'scale:', override.scale);
+
+        const pos = readPositionFromBuffer(allPositions, i, SKY_RADIUS);
+        starPositionMap.set(id, pos);
+
+        scaledPositions.push(pos.x, pos.y, pos.z);
+        const color = bvToColor(bv);
+        colors.push(color.r, color.g, color.b);
+
+        overridePositions.push(pos.x, pos.y, pos.z);
+        overrideColors.push(color.r, color.g, color.b);
+        overrideScales.push(override.scale ?? 1);
+
+        // Stop early if we found all override stars
+        if (foundOverrideStars.size >= starOverrideMap.size) break;
       }
     }
 
