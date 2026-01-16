@@ -16,6 +16,8 @@ import { calculateLabelOffset } from "../utils/labels";
 export interface DSOLayer {
   /** The DSO points mesh */
   points: THREE.Points;
+  /** Flag lines connecting labels to DSOs */
+  flagLines: THREE.LineSegments;
   /** Map of DSO ID to label */
   labels: Map<string, CSS2DObject>;
   /** Set DSO visibility on/off */
@@ -81,6 +83,23 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
   points.visible = false; // Hidden by default
   scene.add(points);
 
+  // Flag lines connecting labels to DSOs
+  const flagGeometry = new THREE.BufferGeometry();
+  const flagPositions = new Float32Array(dsoCount * 2 * 3);
+  const flagColors = new Float32Array(dsoCount * 2 * 3);
+  flagGeometry.setAttribute("position", new THREE.BufferAttribute(flagPositions, 3));
+  flagGeometry.setAttribute("color", new THREE.BufferAttribute(flagColors, 3));
+
+  const flagMaterial = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.5,
+  });
+
+  const flagLines = new THREE.LineSegments(flagGeometry, flagMaterial);
+  flagLines.visible = false;
+  scene.add(flagLines);
+
   // Track visibility state
   let visible = false;
 
@@ -101,8 +120,9 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
     visible = isVisible;
     points.visible = isVisible;
 
-    // Hide all DSO labels when DSOs are hidden
+    // Hide all DSO labels and flag lines when DSOs are hidden
     if (!isVisible) {
+      flagLines.visible = false;
       for (const label of labels.values()) {
         label.visible = false;
       }
@@ -113,10 +133,12 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
     if (!visible) return;
 
     const sizeAttr = geometry.getAttribute("size") as THREE.BufferAttribute;
+    const flagPosAttr = flagGeometry.getAttribute("position") as THREE.BufferAttribute;
+    const flagColorAttr = flagGeometry.getAttribute("color") as THREE.BufferAttribute;
     const visibleDSOs = getVisibleDSOs(magLimit);
     const visibleIds = new Set(visibleDSOs.map(d => d.id));
 
-    // Update sizes and label visibility
+    // Update sizes, labels, and flag lines
     for (let i = 0; i < DSO_DATA.length; i++) {
       const dso = DSO_DATA[i];
       const isVisible = visibleIds.has(dso.id);
@@ -127,27 +149,43 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
         const sizePixels = Math.max(4, dsoSizeToPixels(dso.sizeArcmin[0], fov, canvasHeight));
         sizeAttr.setX(i, sizePixels);
 
+        const pos = raDecToPosition(dso.ra, dso.dec, SKY_RADIUS);
+        const labelPos = calculateLabelOffset(pos, LABEL_OFFSET * 0.8);
+
         // Update label position and visibility
         const label = labels.get(dso.id);
         if (label) {
-          const pos = raDecToPosition(dso.ra, dso.dec, SKY_RADIUS);
-          const labelPos = calculateLabelOffset(pos, LABEL_OFFSET * 0.8);
           label.position.copy(labelPos);
           label.visible = labelsVisible;
         }
+
+        // Update flag line
+        const color = getDSOColor(dso.type);
+        flagPosAttr.setXYZ(i * 2, pos.x, pos.y, pos.z);
+        flagPosAttr.setXYZ(i * 2 + 1, labelPos.x, labelPos.y, labelPos.z);
+        flagColorAttr.setXYZ(i * 2, color.r, color.g, color.b);
+        flagColorAttr.setXYZ(i * 2 + 1, color.r, color.g, color.b);
       } else {
         // Hide DSOs that shouldn't be visible at current mag limit
         sizeAttr.setX(i, 0);
         const label = labels.get(dso.id);
         if (label) label.visible = false;
+
+        // Hide flag line by setting both vertices to same point (zero-length line)
+        flagPosAttr.setXYZ(i * 2, 0, 0, 0);
+        flagPosAttr.setXYZ(i * 2 + 1, 0, 0, 0);
       }
     }
 
     sizeAttr.needsUpdate = true;
+    flagPosAttr.needsUpdate = true;
+    flagColorAttr.needsUpdate = true;
+    flagLines.visible = labelsVisible;
   }
 
   return {
     points,
+    flagLines,
     labels,
     setVisible,
     update,
