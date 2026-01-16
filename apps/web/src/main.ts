@@ -23,17 +23,25 @@ declare const __GIT_COMMIT__: string;
 // Body names in the order they appear in the position buffer
 const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
 
-// Map from tour target names to body indices (must match BODY_NAMES order)
-const TARGET_BODY_INDEX: Record<TargetBody, number> = {
-  sun: 0,
-  moon: 1,
-  mercury: 2,
-  venus: 3,
-  mars: 4,
-  jupiter: 5,
-  saturn: 6,
-  uranus: 7,
-  neptune: 8,
+// Map from tour target names to body/comet names in the position buffer
+const TARGET_TO_NAME: Record<TargetBody, string> = {
+  sun: 'Sun',
+  moon: 'Moon',
+  mercury: 'Mercury',
+  venus: 'Venus',
+  mars: 'Mars',
+  jupiter: 'Jupiter',
+  saturn: 'Saturn',
+  uranus: 'Uranus',
+  neptune: 'Neptune',
+  // Comets (names must match COMET_NAMES)
+  halley: '1P/Halley',
+  encke: '2P/Encke',
+  'churyumov-gerasimenko': '67P/C-G',
+  wirtanen: '46P/Wirtanen',
+  neowise: 'C/2020 F3 NEOWISE',
+  'tsuchinshan-atlas': 'C/2023 A3 T-ATLAS',
+  'hale-bopp': 'C/1995 O1 Hale-Bopp',
 };
 // Minor body names in the order they appear in the minor bodies buffer
 const MINOR_BODY_NAMES = [
@@ -358,10 +366,9 @@ async function main(): Promise<void> {
       );
       engine.recompute();
 
-      // Get body position
-      const bodyIndex = TARGET_BODY_INDEX[target];
+      // Get body position by name (works for both planets and comets)
+      const bodyName = TARGET_TO_NAME[target];
       const bodyPos = getBodyPositions(engine);
-      const bodyName = BODY_NAMES[bodyIndex];
       const pos = bodyPos.get(bodyName);
 
       // Restore original time
@@ -1043,7 +1050,6 @@ async function main(): Promise<void> {
   const locationLonInput = document.getElementById("location-lon") as HTMLInputElement | null;
   const locationGeolocateBtn = document.getElementById("location-geolocate");
   const locationNameEl = document.getElementById("location-name");
-  const locationCoordsDisplayEl = document.getElementById("location-coords-display");
 
   // Create location manager with initial location from settings
   const locationManager = createLocationManager(
@@ -1081,9 +1087,6 @@ async function main(): Promise<void> {
   function updateLocationDisplay(location: ObserverLocation): void {
     if (locationNameEl) {
       locationNameEl.textContent = location.name ?? "Custom Location";
-    }
-    if (locationCoordsDisplayEl) {
-      locationCoordsDisplayEl.textContent = `${formatLatitude(location.latitude)}, ${formatLongitude(location.longitude)}`;
     }
     if (locationLatInput) {
       locationLatInput.value = location.latitude.toFixed(4);
@@ -1313,6 +1316,21 @@ async function main(): Promise<void> {
           ra: dso.ra,
           dec: dso.dec,
           subtitle: dso.name,
+        });
+      }
+    }
+
+    // Add comets (positions from engine)
+    for (const name of COMET_NAMES) {
+      const pos = currentBodyPositions.get(name);
+      if (pos) {
+        const { ra, dec } = positionToRaDec(pos);
+        items.push({
+          name,
+          type: 'comet',
+          ra,
+          dec,
+          subtitle: 'Comet',
         });
       }
     }

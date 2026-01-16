@@ -289,6 +289,21 @@
         text-shadow: 0 0 8px rgba(136, 204, 255, 0.6);
       }
 
+      .comet-label {
+        color: #80e6d4;
+        font-size: 11px;
+        font-weight: 500;
+        text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+        pointer-events: auto !important;
+        cursor: pointer;
+        transition: color 0.15s, text-shadow 0.15s;
+      }
+
+      .comet-label:hover {
+        color: #b3fff0;
+        text-shadow: 0 0 8px rgba(128, 230, 212, 0.6);
+      }
+
       /* Video popup styles */
       .video-popup {
         position: fixed;
@@ -1780,7 +1795,6 @@
         </div>
         <div class="location-current">
           <div class="location-current-name" id="location-name">San Francisco, USA</div>
-          <div class="location-current-coords" id="location-coords-display">37.77° N, 122.42° W</div>
         </div>
       </div>
 
