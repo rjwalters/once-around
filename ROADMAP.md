@@ -17,12 +17,30 @@ Better experience on phones and tablets:
 
 ## Medium Priority
 
-### Comet Tracking
-Add orbital elements for periodic comets:
-- Halley, Encke, Tempel 1 (periodic)
-- Near-parabolic comets (C/2023 A3 Tsuchinshan-ATLAS, etc.)
+### ~~Comet Tracking~~ (Done)
+Full comet ephemeris system with orbital mechanics for all orbit types:
 
-Requires: parabolic/hyperbolic orbit solver (e ≥ 1)
+**Orbital mechanics (Rust/WASM):**
+- Elliptical orbit solver (Kepler equation, e < 1)
+- Parabolic orbit solver (Barker's equation, e = 1)
+- Hyperbolic orbit solver (e > 1)
+- Comet magnitude formula: m = H + 5·log₁₀(Δ) + K·log₁₀(r)
+
+**Comets included:**
+- 1P/Halley (periodic, 76 years)
+- 2P/Encke (shortest period, 3.3 years)
+- 67P/Churyumov-Gerasimenko (Rosetta mission target)
+- 46P/Wirtanen (2018 close approach)
+- C/2020 F3 NEOWISE (spectacular 2020 comet)
+- C/2023 A3 Tsuchinshan-ATLAS (2024 comet)
+- C/1995 O1 Hale-Bopp (Great Comet of 1997)
+
+**Frontend features:**
+- Comet labels with current magnitude
+- Clickable info popups (orbital period, perihelion, next return, history)
+- Comet tails rendering with anti-solar shader (tails point away from Sun)
+- Comets in search index
+- Guided tours: NEOWISE 2020, Hale-Bopp 1997, Halley 1986, Halley 2061
 
 ### ~~Observer Location & Topocentric Corrections~~ (Partially Done)
 
@@ -533,95 +551,36 @@ Alt +67°  Az 180° (S)
 
 ---
 
-### UI Framework: Tailwind CSS + shadcn/ui
+### ~~UI Framework: Tailwind CSS + shadcn/ui~~ (Done)
 
-Refactor from vanilla CSS to modern utility-first styling with component library.
+Refactored from vanilla CSS to Tailwind CSS v4 with modern utility-first styling.
 
-#### Current State
-- ~2000 lines of vanilla CSS embedded in `index.html`
-- Manual dark theme implementation
-- Custom component styling (buttons, modals, inputs, etc.)
-- No design system consistency
+#### Completed
+- **Tailwind CSS v4** installed with `@tailwindcss/postcss`
+- **PostCSS pipeline** configured (`postcss.config.js`)
+- **External stylesheet** (`src/styles.css`) with:
+  - Tailwind imports and custom `@theme` configuration
+  - shadcn/ui compatible CSS variables (HSL colors in `:root`)
+  - All migrated styles from inline CSS (~1900 lines)
+  - shadcn-inspired component classes (buttons, inputs, modals)
+- **Utility function** (`src/lib/utils.ts`) with `cn()` helper
+- **index.html** cleaned (60KB → 17KB, inline CSS removed)
+- **Build output**: CSS bundle 47KB (8KB gzip)
 
-#### Target Stack
-- **Tailwind CSS** - Utility-first CSS framework
-- **shadcn/ui** - Accessible component primitives (built on Radix UI)
-- **CSS Variables** - For theme customization
-
-#### Benefits
-- **Consistency**: Design tokens enforce uniform spacing, colors, typography
-- **Accessibility**: shadcn components are ARIA-compliant out of the box
-- **Dark mode**: Built-in dark mode support with `dark:` variants
-- **Responsive**: Mobile-first utilities (`sm:`, `md:`, `lg:`)
-- **Maintenance**: Easier to modify and extend styles
-- **Bundle size**: Tailwind purges unused CSS in production
-
-#### Implementation Phases
-
-**Phase 1: Setup & Infrastructure**
-- Install Tailwind CSS and configure `tailwind.config.js`
-- Set up PostCSS pipeline
-- Define color palette matching current dark theme
-- Configure shadcn/ui with custom theme
-
-**Phase 2: Core Components**
-- Migrate buttons (tour buttons, playback controls, etc.)
-- Migrate inputs (datetime, search, location)
-- Migrate checkboxes and toggles
-- Migrate modals (star info, about, video popup)
-
-**Phase 3: Layout & Sections**
-- Control panel layout
-- Tour list (already card-based, easy migration)
-- Eclipse banner
-- Tour playback bar
-- Stats display
-
-**Phase 4: Polish**
-- Remove legacy CSS from index.html
-- Verify all responsive breakpoints
-- Test accessibility (keyboard nav, screen readers)
-- Performance audit
-
-#### Key Components to Use from shadcn/ui
-- `Button` - All interactive buttons
-- `Input` - Text/number inputs
-- `Checkbox` - Toggle options
-- `Dialog` - Modals
-- `ScrollArea` - Tour list scrolling
-- `Tooltip` - Hover hints
-- `Popover` - Search results dropdown
-- `Slider` - Potential FOV/magnitude controls
-
-#### Theme Configuration
-```javascript
-// tailwind.config.js (sketch)
-module.exports = {
-  darkMode: 'class',
-  theme: {
-    extend: {
-      colors: {
-        // Match current dark theme
-        background: '#0a0a1a',
-        foreground: '#e0e0e0',
-        primary: '#aaaaff',
-        accent: '#554477',
-        muted: '#666666',
-      },
-    },
-  },
-}
-```
-
-#### Files to Modify
+#### Files Added/Modified
 | File | Changes |
 |------|---------|
-| `package.json` | Add tailwindcss, postcss, autoprefixer, shadcn deps |
-| `tailwind.config.js` | New file - theme configuration |
-| `postcss.config.js` | New file - PostCSS setup |
-| `index.html` | Remove inline styles, add Tailwind classes |
-| `src/main.ts` | Update any dynamic class manipulation |
-| `components/ui/*` | New shadcn component files |
+| `package.json` | Added tailwindcss, @tailwindcss/postcss, autoprefixer, class-variance-authority, clsx, tailwind-merge, lucide-react, @radix-ui/react-slot |
+| `postcss.config.js` | New - PostCSS configuration |
+| `src/styles.css` | New - All styles (2183 lines) |
+| `src/lib/utils.ts` | New - `cn()` utility function |
+| `src/main.ts` | Added CSS import |
+| `index.html` | Removed inline CSS |
+
+#### Future Enhancements (Optional)
+- Add more Tailwind utility classes directly to HTML elements
+- Consider React migration for full shadcn/ui component usage
+- Add dark/light mode toggle (currently always dark)
 
 ## Low Priority
 
@@ -659,6 +618,9 @@ Manual task, not a code feature.
 - [x] Mars moons: Phobos, Deimos
 - [x] Major asteroids: Vesta, Pallas, Hygiea
 - [x] Near-Earth objects: Apophis, Bennu
+- [x] Comet tracking: Halley, Encke, 67P/C-G, Wirtanen, NEOWISE, Tsuchinshan-ATLAS, Hale-Bopp
+- [x] Comet tail rendering with anti-solar orientation
+- [x] Comet guided tours (NEOWISE 2020, Hale-Bopp 1997, Halley 1986, Halley 2061)
 
 ## Not Planned
 
