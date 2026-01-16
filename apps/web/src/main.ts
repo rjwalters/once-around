@@ -1,3 +1,4 @@
+import "./styles.css";
 import * as THREE from "three";
 import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer } from "./engine";
 import { createRenderer } from "./renderer";
@@ -7,7 +8,7 @@ import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement, type Bo
 import { STAR_DATA } from "./starData";
 import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA, type DSOType } from "./dsoData";
-import { loadSettings, createSettingsSaver } from "./settings";
+import { loadSettings, createSettingsSaver, type ViewMode } from "./settings";
 import { createDeviceOrientationManager } from "./deviceOrientation";
 import { createLocationManager, formatLatitude, formatLongitude, type ObserverLocation } from "./location";
 import { search, TYPE_COLORS, CONSTELLATION_CENTERS, type SearchItem, type SearchResult } from "./search";
@@ -761,6 +762,8 @@ async function main(): Promise<void> {
       engine.recompute();
       renderer.updateFromEngine(engine);
       updateRenderedStars();
+      // Update topocentric parameters (LST changes with time)
+      updateTopocentricParamsForTime(date);
       // Recompute orbits if they are visible
       if (orbitsCheckbox?.checked) {
         void renderer.computeOrbits(engine, currentDate);
@@ -947,6 +950,109 @@ async function main(): Promise<void> {
       settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // View Mode Toggle (Geocentric vs Topocentric)
+  // ---------------------------------------------------------------------------
+  const geocentricBtn = document.getElementById("view-geocentric");
+  const topocentricBtn = document.getElementById("view-topocentric");
+  const locationSection = document.getElementById("location-section");
+  const coordAltAzGroup = document.getElementById("coord-altaz-group");
+  const coordRaDecGroup = document.getElementById("coord-radec-group");
+
+  // Track current view mode
+  let currentViewMode: ViewMode = settings.viewMode ?? 'geocentric';
+
+  /**
+   * Compute Greenwich Mean Sidereal Time (GMST) from a Date.
+   * Returns GMST in degrees (0-360).
+   */
+  function computeGMST(date: Date): number {
+    const jd = date.getTime() / 86400000 + 2440587.5;
+    const T = (jd - 2451545.0) / 36525;
+    let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) +
+               T * T * (0.000387933 - T / 38710000);
+    gmst = ((gmst % 360) + 360) % 360;
+    return gmst;
+  }
+
+  /**
+   * Update topocentric parameters based on given time and observer location.
+   * This is called from onTimeChange callback.
+   */
+  function updateTopocentricParamsForTime(date: Date): void {
+    const gmst = computeGMST(date);
+    const lst = gmst + settings.observerLongitude; // LST in degrees
+    const latRad = (settings.observerLatitude * Math.PI) / 180;
+    const lstRad = (lst * Math.PI) / 180;
+    controls.setTopocentricParams(latRad, lstRad);
+  }
+
+  /**
+   * Update topocentric parameters based on current time and observer location.
+   */
+  function updateTopocentricParams(): void {
+    updateTopocentricParamsForTime(currentDate);
+  }
+
+  /**
+   * Update UI to reflect current view mode.
+   */
+  function updateViewModeUI(mode: ViewMode): void {
+    geocentricBtn?.classList.toggle("active", mode === 'geocentric');
+    topocentricBtn?.classList.toggle("active", mode === 'topocentric');
+
+    // Show/hide location section based on mode
+    // (location is relevant in topocentric mode)
+    // Note: We keep it visible in both modes for now so users can change location
+
+    // Show Alt/Az in topocentric mode, RA/Dec in geocentric mode
+    if (coordAltAzGroup) {
+      coordAltAzGroup.style.display = mode === 'topocentric' ? 'inline' : 'none';
+    }
+    if (coordRaDecGroup) {
+      coordRaDecGroup.style.display = mode === 'geocentric' ? 'inline' : 'none';
+    }
+
+    // Auto-enable horizon in topocentric mode
+    if (mode === 'topocentric' && horizonCheckbox && !horizonCheckbox.checked) {
+      horizonCheckbox.checked = true;
+      renderer.setGroundPlaneVisible(true);
+      settingsSaver.save({ horizonVisible: true });
+    }
+  }
+
+  /**
+   * Set the view mode.
+   */
+  function setViewMode(mode: ViewMode): void {
+    if (mode === currentViewMode) return;
+
+    currentViewMode = mode;
+
+    // Update topocentric params before switching mode
+    updateTopocentricParams();
+
+    // Switch the controls to the new mode
+    controls.setViewMode(mode);
+
+    // Update UI
+    updateViewModeUI(mode);
+
+    // Save to settings
+    settingsSaver.save({ viewMode: mode });
+  }
+
+  // Initialize view mode from settings
+  updateTopocentricParams();
+  if (currentViewMode === 'topocentric') {
+    controls.setViewMode('topocentric');
+  }
+  updateViewModeUI(currentViewMode);
+
+  // View mode toggle button handlers
+  geocentricBtn?.addEventListener("click", () => setViewMode('geocentric'));
+  topocentricBtn?.addEventListener("click", () => setViewMode('topocentric'));
 
   // ---------------------------------------------------------------------------
   // AR Mode (Device Orientation)
@@ -2173,6 +2279,8 @@ async function main(): Promise<void> {
   const coordRaEl = document.getElementById("coord-ra");
   const coordDecEl = document.getElementById("coord-dec");
   const coordFovEl = document.getElementById("coord-fov");
+  const coordAltEl = document.getElementById("coord-alt");
+  const coordAzEl = document.getElementById("coord-az");
   const referenceCircle = document.getElementById("reference-circle");
 
   // Reference circle size in arcseconds
@@ -2197,6 +2305,32 @@ async function main(): Promise<void> {
     const d = Math.floor(absDec);
     const m = Math.floor((absDec - d) * 60);
     return `${sign}${d}° ${m.toString().padStart(2, "0")}'`;
+  }
+
+  /**
+   * Format altitude (e.g., "+45°")
+   */
+  function formatAltitude(altDeg: number): string {
+    const sign = altDeg >= 0 ? "+" : "";
+    return `${sign}${Math.round(altDeg)}°`;
+  }
+
+  /**
+   * Get compass direction from azimuth.
+   */
+  function getCompassDirection(azDeg: number): string {
+    const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    const index = Math.round(((azDeg % 360) + 360) % 360 / 45) % 8;
+    return dirs[index];
+  }
+
+  /**
+   * Format azimuth with compass direction (e.g., "135° (SE)")
+   */
+  function formatAzimuth(azDeg: number): string {
+    const az = Math.round(((azDeg % 360) + 360) % 360);
+    const dir = getCompassDirection(azDeg);
+    return `${az}° (${dir})`;
   }
 
   /**
@@ -2249,10 +2383,24 @@ async function main(): Promise<void> {
 
   function updateCoordinatesImmediate(): void {
     lastCoordUpdateTime = performance.now();
-    const { ra, dec } = controls.getRaDec();
     const { fov } = controls.getCameraState();
-    if (coordRaEl) coordRaEl.textContent = formatRA(ra);
-    if (coordDecEl) coordDecEl.textContent = formatDec(dec);
+
+    // Update coordinates based on current view mode
+    if (currentViewMode === 'topocentric') {
+      // Show Alt/Az in topocentric mode
+      const altAz = controls.getAltAz();
+      if (altAz) {
+        if (coordAltEl) coordAltEl.textContent = formatAltitude(altAz.altitude);
+        if (coordAzEl) coordAzEl.textContent = formatAzimuth(altAz.azimuth);
+      }
+    } else {
+      // Show RA/Dec in geocentric mode
+      const { ra, dec } = controls.getRaDec();
+      if (coordRaEl) coordRaEl.textContent = formatRA(ra);
+      if (coordDecEl) coordDecEl.textContent = formatDec(dec);
+    }
+
+    // Update FOV display
     if (coordFovEl) {
       // Show decimal for small FOVs
       if (fov < 1) {
