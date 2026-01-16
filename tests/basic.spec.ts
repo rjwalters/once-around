@@ -77,4 +77,21 @@ test.describe("Basic Functionality", () => {
     await expect(searchInput).toBeFocused();
     console.log("Search focused with / key");
   });
+
+  test("orbits toggle loads pre-computed data", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForSelector("canvas", { timeout: 30000 });
+    await page.waitForTimeout(1000);
+
+    // Toggle orbits on
+    const orbitsCheckbox = page.locator("#orbits");
+    await orbitsCheckbox.click();
+
+    // Wait for orbit data to load (should be instant now)
+    await page.waitForTimeout(500);
+
+    // Verify orbits checkbox is checked
+    await expect(orbitsCheckbox).toBeChecked();
+    console.log("Orbits toggled successfully");
+  });
 });

@@ -1,18 +1,13 @@
 /**
  * Orbits Layer
  *
- * Renders planetary orbit paths by sampling positions over time.
+ * Renders planetary orbit paths using pre-computed static data.
+ * Orbit data is generated at build time and loaded instantly.
  */
 
 import * as THREE from "three";
 import type { SkyEngine } from "../../wasm/sky_engine";
-import { getBodiesPositionBuffer } from "../../engine";
-import { applyTimeToEngine } from "../../ui";
-import { SKY_RADIUS, ORBIT_PLANET_INDICES, ORBIT_NUM_POINTS, ORBIT_PERIODS_DAYS, BODY_COLORS } from "../constants";
-import { readPositionFromBuffer } from "../utils/coordinates";
-
-// Orbit cache - reuse computed orbits when date hasn't changed much
-const ORBIT_CACHE_VALIDITY_DAYS = 60;
+import { ORBIT_PLANET_INDICES, ORBIT_NUM_POINTS, BODY_COLORS } from "../constants";
 
 export interface OrbitsLayer {
   /** The group containing all orbit lines */
@@ -23,7 +18,9 @@ export interface OrbitsLayer {
   setVisible(visible: boolean): void;
   /** Focus on a single planet's orbit, or show all if null */
   focusOrbit(bodyIndex: number | null): void;
-  /** Compute orbital paths (async to avoid UI blocking) */
+  /** Load pre-computed orbital paths */
+  load(): Promise<void>;
+  /** Legacy compute method (now just calls load) */
   compute(engine: SkyEngine, centerDate: Date): Promise<void>;
 }
 
@@ -53,17 +50,9 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
     group.add(line);
   }
 
-  // Cache state
-  let cacheValid = false;
-  let cacheCenterDate: Date | null = null;
-
-  function isOrbitCacheValid(requestedDate: Date): boolean {
-    if (!cacheValid || !cacheCenterDate) return false;
-
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const daysDiff = Math.abs(requestedDate.getTime() - cacheCenterDate.getTime()) / msPerDay;
-    return daysDiff <= ORBIT_CACHE_VALIDITY_DAYS;
-  }
+  // Track if orbits have been loaded
+  let loaded = false;
+  let loadPromise: Promise<void> | null = null;
 
   function setVisible(visible: boolean): void {
     group.visible = visible;
@@ -87,60 +76,57 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
     }
   }
 
-  async function compute(engine: SkyEngine, centerDate: Date): Promise<void> {
-    // Check if we can use cached orbits
-    if (isOrbitCacheValid(centerDate)) {
-      return;
-    }
+  /**
+   * Load pre-computed orbit data from static file.
+   * The data is computed at build time and contains positions for all planets.
+   */
+  async function load(): Promise<void> {
+    if (loaded) return;
+    if (loadPromise) return loadPromise;
 
-    const radius = SKY_RADIUS - 1;
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const CHUNK_SIZE = 20; // Process this many points before yielding
-
-    // For each planet, collect positions over its orbital period
-    for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
-      const bodyIdx = ORBIT_PLANET_INDICES[planetIdx];
-      const orbitPeriod = ORBIT_PERIODS_DAYS[bodyIdx];
-      const halfSpan = orbitPeriod / 2;
-      const positions: number[] = [];
-
-      for (let i = 0; i < ORBIT_NUM_POINTS; i++) {
-        // Calculate date for this sample point (spread across orbital period)
-        const t = i / (ORBIT_NUM_POINTS - 1); // 0 to 1
-        const dayOffset = -halfSpan + t * orbitPeriod;
-        const sampleDate = new Date(centerDate.getTime() + dayOffset * msPerDay);
-
-        // Set engine to this time and recompute
-        applyTimeToEngine(engine, sampleDate);
-        engine.recompute();
-
-        // Get the planet position at this time
-        const bodyPositions = getBodiesPositionBuffer(engine);
-        const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
-        positions.push(pos.x, pos.y, pos.z);
-
-        // Yield to event loop periodically to keep UI responsive
-        if (i % CHUNK_SIZE === 0) {
-          await new Promise(resolve => setTimeout(resolve, 0));
+    loadPromise = (async () => {
+      try {
+        const response = await fetch('/data/orbits.bin');
+        if (!response.ok) {
+          console.warn('Failed to load orbit data, orbits will not be available');
+          return;
         }
+
+        const buffer = await response.arrayBuffer();
+        const orbitData = new Float32Array(buffer);
+
+        // Data format: 7 planets × 120 points × 3 floats, sequential
+        const floatsPerOrbit = ORBIT_NUM_POINTS * 3;
+
+        for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
+          const offset = planetIdx * floatsPerOrbit;
+          const positions = orbitData.slice(offset, offset + floatsPerOrbit);
+
+          // Update this planet's orbit line geometry
+          const geometry = lines[planetIdx].geometry;
+          geometry.setAttribute(
+            "position",
+            new THREE.BufferAttribute(positions, 3)
+          );
+          geometry.computeBoundingSphere();
+        }
+
+        loaded = true;
+        console.log('Loaded pre-computed orbit data');
+      } catch (e) {
+        console.warn('Error loading orbit data:', e);
       }
+    })();
 
-      // Update this planet's orbit line geometry
-      const geometry = lines[planetIdx].geometry;
-      geometry.setAttribute(
-        "position",
-        new THREE.BufferAttribute(new Float32Array(positions), 3)
-      );
-      geometry.computeBoundingSphere();
-    }
+    return loadPromise;
+  }
 
-    // Restore the original time
-    applyTimeToEngine(engine, centerDate);
-    engine.recompute();
-
-    // Update cache
-    cacheCenterDate = new Date(centerDate.getTime());
-    cacheValid = true;
+  /**
+   * Legacy compute method - now just loads pre-computed data.
+   * The engine and date parameters are ignored since we use static data.
+   */
+  async function compute(_engine: SkyEngine, _centerDate: Date): Promise<void> {
+    return load();
   }
 
   return {
@@ -148,6 +134,7 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
     lines,
     setVisible,
     focusOrbit,
+    load,
     compute,
   };
 }

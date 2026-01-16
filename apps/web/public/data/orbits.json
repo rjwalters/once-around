@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "referenceDate": "2000-01-01T12:00:00.000Z",
+  "referenceJD": 2451545.5,
+  "planets": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "pointsPerOrbit": 120,
+  "floatsPerPoint": 3,
+  "totalFloats": 2520,
+  "byteLength": 10080,
+  "generated": "2026-01-16T08:02:11.378Z"
+}
