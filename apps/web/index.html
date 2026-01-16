@@ -900,6 +900,125 @@
         line-height: 1.7;
       }
 
+      /* Comet info modal */
+      .comet-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        transition: opacity 0.2s ease;
+      }
+
+      .comet-modal.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .comet-modal-content {
+        background: linear-gradient(135deg, #1a2e2a 0%, #162e3e 100%);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 520px;
+        width: 90%;
+        max-height: 85vh;
+        overflow-y: auto;
+        position: relative;
+        box-shadow: 0 8px 32px rgba(128, 230, 212, 0.2);
+        border: 1px solid #2a4a4a;
+      }
+
+      .comet-modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #666;
+        font-size: 24px;
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.2s;
+      }
+
+      .comet-modal-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      .comet-modal-header {
+        margin-bottom: 16px;
+        padding-right: 40px;
+      }
+
+      .comet-modal-name {
+        color: #80e6d4;
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+      }
+
+      .comet-modal-subtitle {
+        color: #888;
+        font-size: 13px;
+      }
+
+      .comet-modal-type-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        background: rgba(128, 230, 212, 0.2);
+        border-radius: 4px;
+        font-size: 11px;
+        color: #80e6d4;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-left: 8px;
+      }
+
+      .comet-modal-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+      }
+
+      .comet-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .comet-stat-label {
+        color: #666;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .comet-stat-value {
+        color: #ccc;
+        font-size: 13px;
+      }
+
+      .comet-modal-description {
+        color: #ccc;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
       #info {
         position: fixed;
         bottom: 20px;
@@ -1798,11 +1917,6 @@
         </div>
       </div>
 
-      <div id="stats">
-        Visible: <span id="star-count">0</span> / <span id="total-stars">0</span><br />
-        Rendered: <span id="rendered-stars">0</span>
-      </div>
-
       <div class="tour-section">
         <div class="tour-section-label">Guided Tours</div>
         <div class="tour-buttons">
@@ -1817,6 +1931,24 @@
           <button class="tour-btn" data-tour="jupiter-moons" title="Watch Jupiter's Galilean moons">
             <span class="tour-icon">♃</span>
             <span>Jupiter Moons</span>
+          </button>
+        </div>
+        <div class="tour-buttons" style="margin-top: 6px;">
+          <button class="tour-btn" data-tour="neowise-2020" title="Witness the brightest comet in decades">
+            <span class="tour-icon">☄</span>
+            <span>NEOWISE 2020</span>
+          </button>
+          <button class="tour-btn" data-tour="hale-bopp-1997" title="The Great Comet of 1997">
+            <span class="tour-icon">☄</span>
+            <span>Hale-Bopp</span>
+          </button>
+          <button class="tour-btn" data-tour="halley-1986" title="Halley's Comet 1986 apparition">
+            <span class="tour-icon">☄</span>
+            <span>Halley 1986</span>
+          </button>
+          <button class="tour-btn" data-tour="halley-2061" title="Preview Halley's next return">
+            <span class="tour-icon">☄</span>
+            <span>Halley 2061</span>
           </button>
         </div>
       </div>
@@ -1923,6 +2055,41 @@
         </div>
         <p class="dso-modal-description" id="dso-modal-description">
           The nearest major galaxy to the Milky Way.
+        </p>
+      </div>
+    </div>
+
+    <!-- Comet Info Modal -->
+    <div class="comet-modal hidden" id="comet-modal">
+      <div class="comet-modal-content">
+        <button class="comet-modal-close" id="comet-modal-close">&times;</button>
+        <div class="comet-modal-header">
+          <h2 class="comet-modal-name" id="comet-modal-name">1P/Halley</h2>
+          <div class="comet-modal-subtitle">
+            <span id="comet-modal-common-name">Halley's Comet</span>
+            <span class="comet-modal-type-badge" id="comet-modal-type-badge">Periodic</span>
+          </div>
+        </div>
+        <div class="comet-modal-stats">
+          <div class="comet-stat">
+            <span class="comet-stat-label">Orbital Period</span>
+            <span class="comet-stat-value" id="comet-modal-period">~76 years</span>
+          </div>
+          <div class="comet-stat">
+            <span class="comet-stat-label">Perihelion Distance</span>
+            <span class="comet-stat-value" id="comet-modal-perihelion">0.59 AU</span>
+          </div>
+          <div class="comet-stat">
+            <span class="comet-stat-label">Last Perihelion</span>
+            <span class="comet-stat-value" id="comet-modal-last-visit">Feb 9, 1986</span>
+          </div>
+          <div class="comet-stat">
+            <span class="comet-stat-label">Next Return</span>
+            <span class="comet-stat-value" id="comet-modal-next-return">Jul 28, 2061</span>
+          </div>
+        </div>
+        <p class="comet-modal-description" id="comet-modal-description">
+          The most famous comet in history.
         </p>
       </div>
     </div>
