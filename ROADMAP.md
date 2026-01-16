@@ -604,9 +604,11 @@ Render nebulae as textured sprites or procedural effects, with support for tour-
 - Planetary: Ring (M57), Helix, Cat's Eye, Dumbbell (M27)
 - Supernova remnants: Crab (M1), Veil, Cassiopeia A
 
-### Stellar Scintillation (Twinkling)
+### ~~Stellar Scintillation (Twinkling)~~ (Done)
 
 Simulate atmospheric scintillation for bright stars in topocentric view mode.
+Implemented with custom GLSL shader, altitude-based intensity, chromatic modulation,
+and user-adjustable "Atmospheric seeing" control.
 
 #### The Physics
 
