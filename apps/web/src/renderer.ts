@@ -709,8 +709,6 @@ export interface SkyRenderer {
   getRenderedStarCount(): number;
   /** Update eclipse rendering based on Sun-Moon angular separation */
   updateEclipse(sunMoonSeparationDeg: number): void;
-  /** Enable/disable eclipse alignment mode (snaps Moon to Sun position) */
-  setEclipseAlignment(enabled: boolean): void;
   /** Set ground plane (horizon/Earth) visibility for topocentric mode */
   setGroundPlaneVisible(visible: boolean): void;
   /** Update ground plane orientation based on observer location */
@@ -974,10 +972,6 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   // Track corona animation time
   let coronaTime = 0;
-
-  // Eclipse alignment mode - when enabled, Moon is positioned at Sun location
-  // to compensate for Moon ephemeris error during known eclipses
-  let eclipseAlignmentEnabled = false;
 
   // ---------------------------------------------------------------------------
   // Planetary moons (Io, Europa, Ganymede, Callisto, Titan)
@@ -1604,23 +1598,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setFlagLine(0, sunPos, sunLabelPos);
 
     // Moon position (index 1)
-    let moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
-
-    // During eclipse alignment mode, position Moon in front of Sun
-    // This compensates for Moon ephemeris error (~1°) during known eclipses
-    if (eclipseAlignmentEnabled) {
-      // Position Moon at Sun location but slightly closer to camera
-      // This ensures Moon renders in front of Sun and corona
-      const sunDir = sunPos.clone().normalize();
-      const offset = sunDir.clone().multiplyScalar(0.5);
-      moonPos = sunPos.clone().sub(offset);
-
-      // Enable eclipse mode to render Moon as pure black silhouette
-      moonMaterial.uniforms.eclipseMode.value = 1.0;
-    } else {
-      // Normal rendering mode
-      moonMaterial.uniforms.eclipseMode.value = 0.0;
-    }
+    const moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
 
     // Update Moon mesh position
     moonMesh.position.copy(moonPos);
@@ -1631,11 +1609,14 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     moonMesh.scale.setScalar(moonDisplayScale);
 
     // Update Moon shader uniform - sun direction FROM MOON TO SUN for phase lighting
-    // (only when not in eclipse alignment mode, which handles it above)
-    if (!eclipseAlignmentEnabled) {
-      const sunDirFromMoon = new THREE.Vector3().subVectors(sunPos, moonPos).normalize();
-      moonMaterial.uniforms.sunDirection.value.copy(sunDirFromMoon);
-    }
+    const sunDirFromMoon = new THREE.Vector3().subVectors(sunPos, moonPos).normalize();
+    moonMaterial.uniforms.sunDirection.value.copy(sunDirFromMoon);
+
+    // Enable eclipse mode when Moon is very close to Sun (real eclipse)
+    const moonSunDist = moonPos.distanceTo(sunPos);
+    const eclipseThreshold = sunDisplayScale + moonDisplayScale; // Overlapping
+    moonMaterial.uniforms.eclipseMode.value = moonSunDist < eclipseThreshold ? 1.0 : 0.0;
+
     const moonLabelPos = calculateLabelOffset(moonPos, LABEL_OFFSET);
     bodyLabels[1].position.copy(moonLabelPos);
     setFlagLine(1, moonPos, moonLabelPos);
@@ -2031,19 +2012,15 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
    * @param sunMoonSeparationDeg Angular separation in degrees
    */
   function updateEclipse(sunMoonSeparationDeg: number): void {
-    // When eclipse alignment is enabled, use 0 separation to ensure corona shows
-    // (the Moon ephemeris error is compensated visually, so show full corona)
-    const effectiveSeparation = eclipseAlignmentEnabled ? 0 : sunMoonSeparationDeg;
-
     // Calculate corona intensity based on separation
     let intensity = 0;
 
-    if (effectiveSeparation < ECLIPSE_FULL_VISIBILITY_THRESHOLD) {
+    if (sunMoonSeparationDeg < ECLIPSE_FULL_VISIBILITY_THRESHOLD) {
       // Full totality - maximum corona
       intensity = 1.0;
-    } else if (effectiveSeparation < ECLIPSE_FADE_START_THRESHOLD) {
+    } else if (sunMoonSeparationDeg < ECLIPSE_FADE_START_THRESHOLD) {
       // Partial - fade corona in/out
-      intensity = 1.0 - (effectiveSeparation - ECLIPSE_FULL_VISIBILITY_THRESHOLD) /
+      intensity = 1.0 - (sunMoonSeparationDeg - ECLIPSE_FULL_VISIBILITY_THRESHOLD) /
         (ECLIPSE_FADE_START_THRESHOLD - ECLIPSE_FULL_VISIBILITY_THRESHOLD);
       intensity = Math.max(0, Math.min(1, intensity));
     }
@@ -2065,15 +2042,6 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
       const coronaScale = sunMesh.scale.x * 8;
       coronaMesh.scale.setScalar(coronaScale);
     }
-  }
-
-  /**
-   * Enable or disable eclipse alignment mode.
-   * When enabled, the Moon is positioned at the Sun's location to create
-   * proper eclipse visuals (compensates for Moon ephemeris error).
-   */
-  function setEclipseAlignment(enabled: boolean): void {
-    eclipseAlignmentEnabled = enabled;
   }
 
   function render(): void {
@@ -2107,7 +2075,6 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setDSOsVisible,
     getRenderedStarCount,
     updateEclipse,
-    setEclipseAlignment,
     setGroundPlaneVisible,
     updateGroundPlaneOrientation,
     updateGroundPlaneForTime,

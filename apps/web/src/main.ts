@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer } from "./engine";
+import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
@@ -41,12 +41,18 @@ const MINOR_BODY_NAMES = [
   "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna",
   "Vesta", "Pallas", "Hygiea", "Apophis", "Bennu"
 ];
+// Comet names in the order they appear in the comets buffer
+const COMET_NAMES = [
+  "1P/Halley", "2P/Encke", "67P/C-G", "46P/Wirtanen",
+  "C/2020 F3 NEOWISE", "C/2023 A3 T-ATLAS", "C/1995 O1 Hale-Bopp"
+];
 const SKY_RADIUS = 50;
 
 // Build a map of body names to their current 3D positions
 function getBodyPositions(engine: SkyEngine): BodyPositions {
   const bodyPositions = getBodiesPositionBuffer(engine);
   const minorBodies = getMinorBodiesBuffer(engine);
+  const comets = getCometsBuffer(engine);
   const positions: BodyPositions = new Map();
   // Use SKY_RADIUS - 0.5 to match video marker positioning
   const radius = SKY_RADIUS - 0.5;
@@ -71,6 +77,17 @@ function getBodyPositions(engine: SkyEngine): BodyPositions {
     // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
     const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
     positions.set(MINOR_BODY_NAMES[i], pos);
+  }
+
+  // Add comets
+  // Comets buffer: 4 floats per comet (x, y, z, magnitude)
+  for (let i = 0; i < COMET_NAMES.length; i++) {
+    const rustX = comets[i * 4];
+    const rustY = comets[i * 4 + 1];
+    const rustZ = comets[i * 4 + 2];
+    // Convert to Three.js coords: negate X for east-west fix, swap Y/Z for Y-up
+    const pos = new THREE.Vector3(-rustX, rustZ, rustY).normalize().multiplyScalar(radius);
+    positions.set(COMET_NAMES[i], pos);
   }
 
   return positions;
@@ -556,12 +573,11 @@ async function main(): Promise<void> {
     if (!datetimeInput) return;
     stopPlayback();
 
-    // Hide eclipse banner and disable alignment when jumping to now
+    // Hide eclipse banner when jumping to now
     const eclipseBanner = document.getElementById("eclipse-banner");
     if (eclipseBanner) {
       eclipseBanner.classList.add("hidden");
     }
-    renderer.setEclipseAlignment(false);
 
     const now = new Date();
     const year = now.getFullYear();
@@ -674,9 +690,6 @@ async function main(): Promise<void> {
         applyTimeToEngine(engine, eclipseDate);
         engine.recompute();
 
-        // Enable eclipse alignment mode (snaps Moon to Sun)
-        renderer.setEclipseAlignment(true);
-
         // Update renderer with new positions
         renderer.updateFromEngine(engine);
 
@@ -763,9 +776,6 @@ async function main(): Promise<void> {
       if (videoMarkersRef) {
         videoMarkersRef.updateMovingPositions(bodyPos);
       }
-      // Disable eclipse alignment when user changes time
-      // (alignment is only meant to be active right after clicking "Next Eclipse")
-      renderer.setEclipseAlignment(false);
       const eclipseBanner = document.getElementById("eclipse-banner");
       if (eclipseBanner) {
         eclipseBanner.classList.add("hidden");
