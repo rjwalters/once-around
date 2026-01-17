@@ -73,7 +73,8 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   function updateTopocentricParamsForTime(date: Date): void {
     const location = getObserverLocation();
     const gmst = computeGMST(date);
-    const lst = gmst + location.longitude; // LST in degrees
+    let lst = gmst + location.longitude; // LST in degrees
+    lst = ((lst % 360) + 360) % 360; // Normalize to 0-360
     const latRad = (location.latitude * Math.PI) / 180;
     const lstRad = (lst * Math.PI) / 180;
     setTopocentricParams(latRad, lstRad);

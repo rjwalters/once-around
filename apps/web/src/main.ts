@@ -1034,7 +1034,8 @@ async function main(): Promise<void> {
     // Update scintillation and horizon zenith for topocentric mode
     if (viewModeManager.getMode() === 'topocentric') {
       const gmst = computeGMST(currentDate);
-      const lst = gmst + settings.observerLongitude; // LST in degrees
+      let lst = gmst + settings.observerLongitude; // LST in degrees
+      lst = ((lst % 360) + 360) % 360; // Normalize to 0-360
       renderer.updateScintillation(settings.observerLatitude, lst);
 
       // Update horizon zenith direction for proper horizon culling
