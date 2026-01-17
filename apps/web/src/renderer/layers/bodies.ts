@@ -235,6 +235,13 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const sunPos = readPositionFromBuffer(bodyPositions, 0, radius);
     currentSunPos.copy(sunPos);
     sunMesh.position.copy(sunPos);
+    // Debug: compute RA/Dec from 3D position
+    const sunNorm = sunPos.clone().normalize();
+    const sunDec = Math.asin(sunNorm.y) * (180 / Math.PI);
+    let sunRA = Math.atan2(sunNorm.z, -sunNorm.x) * (180 / Math.PI);
+    if (sunRA < 0) sunRA += 360;
+    console.log('Bodies layer Sun:', 'RA:', sunRA.toFixed(2), 'Dec:', sunDec.toFixed(2),
+      'pos:', sunPos.x.toFixed(2), sunPos.y.toFixed(2), sunPos.z.toFixed(2));
     const sunAngDiam = angularDiameters[0];
     const sunDisplayScale = (sunAngDiam * SKY_RADIUS) / 2;
     sunMesh.scale.setScalar(sunDisplayScale);

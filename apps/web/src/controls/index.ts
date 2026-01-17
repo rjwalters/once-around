@@ -442,6 +442,9 @@ export function createCelestialControls(
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
       const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      console.log('animateToRaDec (topocentric):', 'RA:', ra.toFixed(2), 'Dec:', dec.toFixed(2),
+        'LST:', lstDeg.toFixed(2), 'Lat:', latDeg.toFixed(2),
+        '-> Alt:', altAz.altitude.toFixed(2), 'Az:', altAz.azimuth.toFixed(2));
       animateToAltAz(altAz.altitude, altAz.azimuth, durationMs);
       return;
     }
