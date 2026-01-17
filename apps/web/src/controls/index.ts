@@ -409,6 +409,19 @@ export function createCelestialControls(
   // ---------------------------------------------------------------------------
 
   function lookAtRaDec(ra: number, dec: number): void {
+    if (viewMode === "topocentric") {
+      // In topocentric mode, convert RA/Dec to Alt/Az to keep horizon horizontal
+      const lstDeg = (topoLST * 180) / Math.PI;
+      const latDeg = (topoLatitude * 180) / Math.PI;
+      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      topoAzimuth = (altAz.azimuth * Math.PI) / 180;
+      topoAltitude = (altAz.altitude * Math.PI) / 180;
+      isAnimating = false;
+      altAzIsAnimating = false;
+      updateTopocentricCamera();
+      return;
+    }
+
     viewQuaternion.copy(raDecToQuaternion(ra, dec));
     isAnimating = false;
     updateCameraDirection();
@@ -419,6 +432,16 @@ export function createCelestialControls(
     dec: number,
     durationMs: number = 1000
   ): void {
+    if (viewMode === "topocentric") {
+      // In topocentric mode, convert RA/Dec to Alt/Az and animate there
+      // to keep the horizon horizontal
+      const lstDeg = (topoLST * 180) / Math.PI;
+      const latDeg = (topoLatitude * 180) / Math.PI;
+      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      animateToAltAz(altAz.altitude, altAz.azimuth, durationMs);
+      return;
+    }
+
     animStartQuaternion.copy(viewQuaternion);
     animTargetQuaternion.copy(raDecToQuaternion(ra, dec));
     animDuration = durationMs;
