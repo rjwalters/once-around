@@ -13,6 +13,7 @@ export interface UrlState {
   mag?: number;
   lat?: number; // Observer latitude
   lon?: number; // Observer longitude
+  object?: string; // Object name for deep linking (searches catalog)
 }
 
 /**
@@ -64,6 +65,11 @@ export function readUrlState(): UrlState {
     if (!isNaN(val) && val >= -180 && val <= 180) state.lon = val;
   }
 
+  const object = params.get("object");
+  if (object !== null && object.trim().length > 0) {
+    state.object = object.trim();
+  }
+
   return state;
 }
 
@@ -110,6 +116,13 @@ export function createUrlStateUpdater(): (state: UrlState) => void {
       }
       if (pendingUrlState.lon !== undefined) {
         params.set("lon", pendingUrlState.lon.toFixed(4));
+      }
+      if (pendingUrlState.object !== undefined) {
+        if (pendingUrlState.object) {
+          params.set("object", pendingUrlState.object);
+        } else {
+          params.delete("object");
+        }
       }
 
       const newUrl = `${window.location.pathname}?${params.toString()}`;

@@ -694,6 +694,15 @@ canvas {
   accent-color: #4a9eff;
 }
 
+/* Videos checkbox - purple styling to match video markers */
+.videos-checkbox label {
+  color: #b366ff;
+}
+
+.videos-checkbox input[type="checkbox"] {
+  accent-color: #b366ff;
+}
+
 /* Keyboard shortcut hints */
 .shortcut {
   font-size: 10px;

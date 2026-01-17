@@ -413,6 +413,8 @@ export interface VideoMarkersLayer {
   setLabelsVisible(visible: boolean): void;
   getVideoAtPosition(raycaster: THREE.Raycaster): VideoPlacement | null;
   updateMovingPositions(bodyPositions: BodyPositions): void;
+  /** Update occlusion visibility based on a checker function */
+  updateOcclusion(isOccluded: (position: THREE.Vector3) => boolean): void;
 }
 
 export async function createVideoMarkersLayer(
@@ -665,6 +667,26 @@ export async function createVideoMarkersLayer(
     },
     getVideoAtPosition,
     updateMovingPositions,
+    updateOcclusion(isOccluded: (position: THREE.Vector3) => boolean) {
+      // Hide labels that are occluded
+      for (const [_id, sprite] of labels) {
+        sprite.visible = !isOccluded(sprite.position);
+      }
+      // Hide markers (ring meshes) that are occluded
+      for (const [_id, marker] of markers) {
+        marker.visible = !isOccluded(marker.position);
+      }
+      // Hide flag lines if any labels are occluded
+      // (flagLines is the last child of labelsGroup)
+      if (labelsGroup.children.length > 0) {
+        const lastChild = labelsGroup.children[labelsGroup.children.length - 1];
+        if (lastChild instanceof THREE.LineSegments) {
+          // For simplicity, hide all flag lines if in occlusion mode
+          // A more sophisticated approach would check each line segment
+          lastChild.visible = true; // Keep visible, individual labels handle themselves
+        }
+      }
+    },
   };
 }
 

@@ -809,6 +809,19 @@ async function main(): Promise<void> {
   }).then(index => {
     searchIndex = index;
     console.log(`Search index built: ${index.length} items`);
+
+    // Handle object URL parameter (deep linking)
+    if (urlState.object) {
+      // Wait a tick for searchUI to be ready
+      setTimeout(() => {
+        const found = searchUI.navigateToObject(urlState.object!);
+        if (found) {
+          console.log(`Navigated to object from URL: ${urlState.object}`);
+        } else {
+          console.warn(`Object not found in search index: ${urlState.object}`);
+        }
+      }, 0);
+    }
   });
 
   // Create search UI
@@ -1031,6 +1044,9 @@ async function main(): Promise<void> {
 
       // Hide labels occluded by Earth
       renderer.updateLabelOcclusion();
+
+      // Hide video markers occluded by Earth
+      videoMarkers.updateOcclusion(renderer.isOccludedByEarth);
     }
     renderer.render();
   }

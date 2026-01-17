@@ -2038,5 +2038,20 @@
     "simbadName": null,
     "hasTranscript": true,
     "notes": "Use JPL Horizons for ephemeris"
+  },
+  {
+    "title": "Once Around Lambda Orionis",
+    "objectName": "Lambda Orionis",
+    "url": "https://www.youtube.com/watch?v=QkNMwpANg-4",
+    "videoId": "QkNMwpANg-4",
+    "category": "fixed",
+    "isMoving": false,
+    "ra_sexagesimal": "05 35 08.27761",
+    "dec_sexagesimal": "+09 56 02.9611",
+    "ra_decimal": "83.969494",
+    "dec_decimal": "9.934155",
+    "simbadName": "lam Ori",
+    "hasTranscript": true,
+    "notes": null
   }
 ]

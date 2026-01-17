@@ -58,6 +58,8 @@ export interface SkyRenderer {
   updateEarthRotation(date: Date, longitudeDeg: number): void;
   updateEarthSunDirection(sunPosition: THREE.Vector3): void;
   updateLabelOcclusion(): void;
+  /** Check if a position is occluded by Earth (for external layers) */
+  isOccludedByEarth(position: THREE.Vector3): boolean;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -245,12 +247,17 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   function updateLabelOcclusion(): void {
     if (!orbitalModeEnabled) return;
 
+    // Reusable vector for world position
+    const worldPos = new THREE.Vector3();
+
     // Iterate through all labels in the labelsGroup and hide occluded ones
     labelsGroup.traverse((obj) => {
       // Skip the labelsGroup itself
       if (obj === labelsGroup) return;
 
-      const isOccluded = earthLayer.isOccluded(obj.position);
+      // Get world position (not local position)
+      obj.getWorldPosition(worldPos);
+      const isOccluded = earthLayer.isOccluded(worldPos);
 
       // CSS2DObject has element property
       const css2dObj = obj as THREE.Object3D & { element?: HTMLElement };
@@ -269,6 +276,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
         obj.visible = !isOccluded;
       }
     });
+  }
+
+  function isOccludedByEarth(position: THREE.Vector3): boolean {
+    if (!orbitalModeEnabled) return false;
+    return earthLayer.isOccluded(position);
   }
 
   function render(): void {
@@ -319,6 +331,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     updateEarthRotation,
     updateEarthSunDirection,
     updateLabelOcclusion,
+    isOccludedByEarth,
     render,
     resize,
   };

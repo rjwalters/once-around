@@ -23,6 +23,7 @@ export interface SearchUIOptions {
 
 export interface SearchUI {
   setupEventListeners: () => void;
+  navigateToObject: (objectName: string) => boolean;
 }
 
 /**
@@ -71,7 +72,7 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
     currentResults = [];
   }
 
-  function handleNavigateToResult(result: SearchResult): void {
+  function getUpdatedPosition(result: SearchResult): { ra: number; dec: number } {
     let { ra, dec } = result;
 
     // For planets, get current position (they move with time)
@@ -102,12 +103,35 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
       }
     }
 
+    return { ra, dec };
+  }
+
+  function handleNavigateToResult(result: SearchResult): void {
+    const { ra, dec } = getUpdatedPosition(result);
     navigateToResult({ ...result, ra, dec });
     hideResults();
     if (searchInput) {
       searchInput.value = '';
       searchInput.blur();
     }
+  }
+
+  /**
+   * Navigate to an object by name (for deep linking via URL).
+   * Returns true if object was found and navigation initiated.
+   */
+  function navigateToObjectByName(objectName: string): boolean {
+    const index = getSearchIndex();
+    const results = search(objectName, index, 1);
+
+    if (results.length > 0) {
+      const result = results[0];
+      const { ra, dec } = getUpdatedPosition(result);
+      navigateToResult({ ...result, ra, dec });
+      return true;
+    }
+
+    return false;
   }
 
   function setupEventListeners(): void {
@@ -169,5 +193,6 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
 
   return {
     setupEventListeners,
+    navigateToObject: navigateToObjectByName,
   };
 }
