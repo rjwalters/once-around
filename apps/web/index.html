@@ -30,7 +30,7 @@
       </div>
 
       <div class="control-group">
-        <label>Date & Time (UTC)</label>
+        <label>Date & Time (Local)</label>
         <input type="datetime-local" id="datetime" />
         <div class="time-step-controls">
           <button id="time-now" class="time-step-btn time-now-btn" title="Jump to current time (N)">⊙</button>
@@ -110,12 +110,12 @@
       </div>
 
       <div id="seeing-control" class="control-group seeing-control" style="display: none;">
-        <label for="seeing-select">Atmospheric seeing</label>
+        <label for="seeing-select">Twinkle Level</label>
         <select id="seeing-select">
-          <option value="0">None (space view)</option>
-          <option value="0.4">Excellent</option>
-          <option value="0.7" selected>Average</option>
-          <option value="1.0">Poor (turbulent)</option>
+          <option value="0">None (Space)</option>
+          <option value="0.4">Some (Atacama)</option>
+          <option value="0.7" selected>Average (Palomar)</option>
+          <option value="1.0">Extreme (Greenwich)</option>
         </select>
       </div>
 

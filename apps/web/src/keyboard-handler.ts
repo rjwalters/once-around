@@ -50,6 +50,11 @@ export function setupKeyboardHandler(options: KeyboardHandlerOptions): void {
       return;
     }
 
+    // Don't intercept browser shortcuts (Cmd/Ctrl + key combinations)
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+
     switch (event.key.toLowerCase()) {
       case "l":
         toggleLabels();

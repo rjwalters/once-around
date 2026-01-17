@@ -69,8 +69,8 @@ export function setupUI(engine: SkyEngine, callbacks: UICallbacks): void {
 
   // Datetime change handler
   datetimeInput.addEventListener("change", () => {
-    const date = new Date(datetimeInput.value);
-    if (!isNaN(date.getTime())) {
+    const date = parseDatetimeLocal(datetimeInput.value);
+    if (date) {
       callbacks.onTimeChange(date);
       updateStats();
     }
@@ -96,6 +96,33 @@ function toLocalDatetimeString(date: Date): string {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/**
+ * Parse a datetime-local input value as local time.
+ * The datetime-local input returns "YYYY-MM-DDTHH:MM" without timezone.
+ * Using new Date() on this string can be interpreted as UTC in some browsers,
+ * so we explicitly parse and construct the Date as local time.
+ */
+export function parseDatetimeLocal(value: string): Date | null {
+  // Expected format: "YYYY-MM-DDTHH:MM" or "YYYY-MM-DDTHH:MM:SS"
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1; // JS months are 0-indexed
+  const day = parseInt(match[3], 10);
+  const hours = parseInt(match[4], 10);
+  const minutes = parseInt(match[5], 10);
+  const seconds = match[6] ? parseInt(match[6], 10) : 0;
+
+  // Construct Date using local time components
+  const date = new Date(year, month, day, hours, minutes, seconds);
+
+  // Validate the date is valid
+  if (isNaN(date.getTime())) return null;
+
+  return date;
 }
 
 /**

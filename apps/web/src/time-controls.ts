@@ -2,6 +2,8 @@
  * Time step controls for navigating through time.
  */
 
+import { parseDatetimeLocal } from "./ui";
+
 export interface TimeStepUnit {
   label: string;
   ms: number;
@@ -64,7 +66,10 @@ export function createTimeControls(options: TimeControlsOptions): TimeControls {
 
   function stepTime(direction: 1 | -1): void {
     const currentStep = TIME_STEP_UNITS[currentStepIndex];
-    const currentTime = datetimeInput.value ? new Date(datetimeInput.value) : new Date();
+    // Parse datetime-local value explicitly as local time
+    const currentTime = datetimeInput.value
+      ? (parseDatetimeLocal(datetimeInput.value) ?? new Date())
+      : new Date();
     const newTime = new Date(currentTime.getTime() + direction * currentStep.ms);
 
     datetimeInput.value = formatDatetimeLocal(newTime);

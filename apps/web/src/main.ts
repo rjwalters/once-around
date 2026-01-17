@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadAllSatelliteEphemerides, getSatellitePosition, SATELLITES } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
-import { setupUI, applyTimeToEngine } from "./ui";
+import { setupUI, applyTimeToEngine, parseDatetimeLocal } from "./ui";
 import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement } from "./videos";
 import { STAR_DATA } from "./starData";
 import { CONSTELLATION_DATA } from "./constellationData";
@@ -346,25 +346,33 @@ async function main(): Promise<void> {
   const magnitudeInput = document.getElementById("magnitude") as HTMLInputElement | null;
 
   // Restore datetime from URL or settings (URL takes precedence)
+  // This initialDate will be used for currentDate to ensure consistency
+  let initialDate = new Date(); // Default to now
   const initialDateStr = urlState.t ?? settings.datetime;
-  if (datetimeInput && initialDateStr) {
+  if (initialDateStr) {
     try {
       const savedDate = new Date(initialDateStr);
       if (!isNaN(savedDate.getTime())) {
-        // Convert to local datetime string for input
-        const year = savedDate.getFullYear();
-        const month = String(savedDate.getMonth() + 1).padStart(2, "0");
-        const day = String(savedDate.getDate()).padStart(2, "0");
-        const hours = String(savedDate.getHours()).padStart(2, "0");
-        const minutes = String(savedDate.getMinutes()).padStart(2, "0");
-        datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-        applyTimeToEngine(engine, savedDate);
-        engine.recompute();
+        initialDate = savedDate;
       }
     } catch {
       // Ignore invalid date, use default
     }
   }
+
+  // Set the datetime input to show the initial date in local time
+  if (datetimeInput) {
+    const year = initialDate.getFullYear();
+    const month = String(initialDate.getMonth() + 1).padStart(2, "0");
+    const day = String(initialDate.getDate()).padStart(2, "0");
+    const hours = String(initialDate.getHours()).padStart(2, "0");
+    const minutes = String(initialDate.getMinutes()).padStart(2, "0");
+    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  // Apply the initial date to the engine
+  applyTimeToEngine(engine, initialDate);
+  engine.recompute();
 
   // Restore magnitude from URL or settings (URL takes precedence)
   const initialMag = urlState.mag ?? settings.magnitude;
@@ -410,7 +418,8 @@ async function main(): Promise<void> {
   });
 
   // Track current date for orbit computation (updated in onTimeChange)
-  let currentDate = settings.datetime ? new Date(settings.datetime) : new Date();
+  // Use initialDate from restoration to ensure consistency with engine and UI
+  let currentDate = initialDate;
 
   // Reference to video markers layer (set later after creation)
   let videoMarkersRef: { updateMovingPositions: (bodyPositions: BodyPositions) => void } | null = null;
