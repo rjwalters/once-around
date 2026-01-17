@@ -38,7 +38,7 @@ test.describe("Topocentric Mode", () => {
     await page.waitForTimeout(1500);
 
     // Check console logs
-    const controlsLog = consoleLogs.find((log) => log.includes("[Controls] animateToRaDec:"));
+    const controlsLog = consoleLogs.find((log) => log.includes("[Controls] animateToRaDec (topocentric)"));
     console.log("Controls log:", controlsLog);
 
     expect(controlsLog).toBeTruthy();
@@ -96,7 +96,7 @@ test.describe("Topocentric Mode", () => {
 
     // Check console logs for the navigation
     const searchLog = consoleLogs.find((log) => log.includes("[Search] Navigate to:"));
-    const controlsLog = consoleLogs.find((log) => log.includes("[Controls] animateToRaDec:"));
+    const controlsLog = consoleLogs.find((log) => log.includes("[Controls] animateToRaDec (topocentric)"));
 
     console.log("Search log:", searchLog);
     console.log("Controls log:", controlsLog);
@@ -162,7 +162,7 @@ test.describe("Topocentric Mode", () => {
     console.log("Displayed azimuth:", azText);
 
     // Parse the azimuth from the controls log
-    const controlsLog = consoleLogs.find((log) => log.includes("[Controls] animateToRaDec:"));
+    const controlsLog = consoleLogs.find((log) => log.includes("[Controls] animateToRaDec (topocentric)"));
     const azMatch = controlsLog?.match(/Az:\s*([-\d.]+)/);
 
     if (azMatch) {
