@@ -436,13 +436,14 @@ export function createCelestialControls(
     dec: number,
     durationMs: number = 1000
   ): void {
+    console.log('[Controls] animateToRaDec called, viewMode:', viewMode);
     if (viewMode === "topocentric") {
       // In topocentric mode, convert RA/Dec to Alt/Az and animate there
       // to keep the horizon horizontal
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
       const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
-      console.log('[Controls] animateToRaDec:', 'RA:', ra.toFixed(2), 'Dec:', dec.toFixed(2),
+      console.log('[Controls] animateToRaDec (topocentric):', 'RA:', ra.toFixed(2), 'Dec:', dec.toFixed(2),
         'LST:', lstDeg.toFixed(2), 'Lat:', latDeg.toFixed(2),
         '-> Alt:', altAz.altitude.toFixed(2), 'Az:', altAz.azimuth.toFixed(2));
       animateToAltAz(altAz.altitude, altAz.azimuth, durationMs);
@@ -512,6 +513,7 @@ export function createCelestialControls(
   }
 
   function setViewMode(mode: ViewMode): void {
+    console.log('[Controls] setViewMode:', mode, 'from:', viewMode);
     if (mode === viewMode) return;
 
     const previousMode = viewMode;
@@ -521,6 +523,7 @@ export function createCelestialControls(
       const { ra, dec } = getRaDec();
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
+      console.log('[Controls] setViewMode topocentric with LST:', lstDeg.toFixed(2), 'Lat:', latDeg.toFixed(2));
       const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
       topoAzimuth = (altAz.azimuth * Math.PI) / 180;
       topoAltitude = (altAz.altitude * Math.PI) / 180;
@@ -552,6 +555,8 @@ export function createCelestialControls(
   }
 
   function setTopocentricParams(latitudeRad: number, lstRad: number): void {
+    console.log('[Controls] setTopocentricParams:', 'lat:', (latitudeRad * 180 / Math.PI).toFixed(2),
+      'LST:', (lstRad * 180 / Math.PI).toFixed(2));
     topoLatitude = latitudeRad;
     topoLST = lstRad;
 

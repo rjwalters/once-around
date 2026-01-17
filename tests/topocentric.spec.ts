@@ -1,6 +1,67 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Topocentric Mode", () => {
+  test("search for sun after switching from geocentric", async ({ page }) => {
+    // This replicates the user scenario: start in geocentric, switch to topocentric, then search
+    const consoleLogs: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "log") {
+        consoleLogs.push(msg.text());
+      }
+    });
+
+    await page.goto("/");
+    await page.waitForSelector("canvas", { timeout: 30000 });
+    await page.waitForTimeout(1000);
+
+    // Verify we start in geocentric mode (default)
+    const geoBtn = page.locator("#view-geocentric");
+    await expect(geoBtn).toHaveClass(/active/);
+    console.log("Started in geocentric mode");
+
+    // Switch to topocentric mode
+    const topoBtn = page.locator("#view-topocentric");
+    await topoBtn.click();
+    await page.waitForTimeout(1500); // Wait for mode switch and animation
+    await expect(topoBtn).toHaveClass(/active/);
+    console.log("Switched to topocentric mode");
+
+    // Search for sun
+    const searchInput = page.locator("#search");
+    await searchInput.click();
+    await searchInput.fill("Sun");
+    await page.waitForTimeout(500);
+
+    const firstResult = page.locator(".search-result").first();
+    await expect(firstResult).toBeVisible();
+    await firstResult.click();
+    await page.waitForTimeout(1500);
+
+    // Check console logs
+    const controlsLog = consoleLogs.find((log) => log.includes("[Controls] animateToRaDec:"));
+    console.log("Controls log:", controlsLog);
+
+    expect(controlsLog).toBeTruthy();
+
+    // Parse altitude - it should be positive (above horizon) for daytime
+    const altMatch = controlsLog!.match(/Alt:\s*([-\d.]+)/);
+    expect(altMatch).toBeTruthy();
+
+    const altitude = parseFloat(altMatch![1]);
+    console.log("Altitude:", altitude);
+
+    // Sun should be above horizon during daytime (positive altitude)
+    // If we get a large negative altitude like -38°, something is wrong
+    expect(altitude).toBeGreaterThan(-10); // Allow small negative for edge cases
+
+    // LST should still be valid
+    const lstMatch = controlsLog!.match(/LST:\s*([-\d.]+)/);
+    const lst = parseFloat(lstMatch![1]);
+    console.log("LST:", lst);
+    expect(lst).toBeGreaterThanOrEqual(0);
+    expect(lst).toBeLessThan(360);
+  });
+
   test("search for sun has valid LST (0-360)", async ({ page }) => {
     // Capture console logs
     const consoleLogs: string[] = [];

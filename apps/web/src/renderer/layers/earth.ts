@@ -85,6 +85,29 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
   const atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
   group.add(atmosphereMesh);
 
+  // Terminator line - dashed circle showing day/night boundary
+  const terminatorSegments = 64;
+  const terminatorGeometry = new THREE.BufferGeometry();
+  const terminatorPositions = new Float32Array(terminatorSegments * 3);
+  // Initialize with a unit circle in the XY plane (will be oriented toward Sun)
+  for (let i = 0; i < terminatorSegments; i++) {
+    const angle = (i / terminatorSegments) * Math.PI * 2;
+    terminatorPositions[i * 3] = Math.cos(angle) * EARTH_RADIUS * 1.001;
+    terminatorPositions[i * 3 + 1] = Math.sin(angle) * EARTH_RADIUS * 1.001;
+    terminatorPositions[i * 3 + 2] = 0;
+  }
+  terminatorGeometry.setAttribute("position", new THREE.BufferAttribute(terminatorPositions, 3));
+
+  const terminatorMaterial = new THREE.LineDashedMaterial({
+    color: 0xffff00,
+    dashSize: 1,
+    gapSize: 0.5,
+    linewidth: 2,
+  });
+  const terminatorLine = new THREE.LineLoop(terminatorGeometry, terminatorMaterial);
+  terminatorLine.computeLineDistances(); // Required for dashed lines
+  group.add(terminatorLine);
+
   // Track current rotation state
   let currentRotationY = 0;
   let hasBeenPositioned = false;
@@ -150,6 +173,15 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
 
     // Update shader uniform
     earthMaterial.uniforms.sunDirection.value.copy(sunDir);
+
+    // Orient terminator line perpendicular to Sun direction
+    // The terminator is a great circle whose normal is the Sun direction
+    const terminatorLine = group.children[2] as THREE.LineLoop;
+
+    // Create a quaternion that rotates from +Z (initial normal) to sunDir
+    const up = new THREE.Vector3(0, 0, 1);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(up, sunDir);
+    terminatorLine.quaternion.copy(quaternion);
   }
 
   function isOccluded(position: THREE.Vector3): boolean {
