@@ -174,6 +174,9 @@ export function createGroundLayer(scene: THREE.Scene): GroundLayer {
     const zenith = new THREE.Vector3(-eqX, eqZ, eqY).normalize();
     const nadir = zenith.clone().negate();
 
+    console.log('[Ground] zenith:', zenith.x.toFixed(3), zenith.y.toFixed(3), zenith.z.toFixed(3),
+      'lat:', latitude.toFixed(2), 'lon:', longitude.toFixed(2), 'LST:', lst.toFixed(2));
+
     // Create quaternion to rotate from default pole (-Y) to nadir
     const defaultPole = new THREE.Vector3(0, -1, 0);
     const quaternion = new THREE.Quaternion();

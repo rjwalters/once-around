@@ -726,7 +726,11 @@ async function main(): Promise<void> {
   }
 
   // Show seeing control, LST display, and enable horizon culling if starting in topocentric mode
-  if (settings.viewMode === 'topocentric' || urlState.view === 'topo') {
+  // URL view param takes precedence over saved settings
+  const effectiveViewMode = urlState.view
+    ? (urlState.view === 'topo' ? 'topocentric' : urlState.view === 'geo' ? 'geocentric' : 'orbital')
+    : settings.viewMode;
+  if (effectiveViewMode === 'topocentric') {
     if (seeingControl) {
       seeingControl.style.display = 'block';
     }

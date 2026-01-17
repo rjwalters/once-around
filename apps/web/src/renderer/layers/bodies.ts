@@ -235,6 +235,13 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const sunPos = readPositionFromBuffer(bodyPositions, 0, radius);
     currentSunPos.copy(sunPos);
     sunMesh.position.copy(sunPos);
+
+    // Debug: log sun position and horizon check
+    const sunNorm = sunPos.clone().normalize();
+    const sunDotZenith = sunNorm.dot(zenithDirection);
+    console.log('[Bodies] Sun pos:', sunPos.x.toFixed(2), sunPos.y.toFixed(2), sunPos.z.toFixed(2),
+      'zenith dot:', sunDotZenith.toFixed(3), 'visible:', sunDotZenith > -0.01);
+
     const sunAngDiam = angularDiameters[0];
     const sunDisplayScale = (sunAngDiam * SKY_RADIUS) / 2;
     sunMesh.scale.setScalar(sunDisplayScale);
@@ -324,6 +331,8 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     horizonCullingEnabled = enabled;
     if (zenith) {
       zenithDirection.copy(zenith).normalize();
+      console.log('[Bodies] setHorizonCulling zenith:', zenithDirection.x.toFixed(3),
+        zenithDirection.y.toFixed(3), zenithDirection.z.toFixed(3));
     }
   }
 
