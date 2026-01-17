@@ -79,3 +79,16 @@ export function formatFOV(fov: number): string {
     return `${Math.round(fov)}°`;
   }
 }
+
+/**
+ * Format Local Sidereal Time in hours/minutes (e.g., "14h 23m")
+ * LST is provided in degrees (0-360).
+ */
+export function formatLST(lstDeg: number): string {
+  // Normalize to 0-360
+  const normalized = ((lstDeg % 360) + 360) % 360;
+  const lstHours = normalized / 15; // 360° = 24h
+  const h = Math.floor(lstHours);
+  const m = Math.floor((lstHours - h) * 60);
+  return `${h}h ${m.toString().padStart(2, "0")}m`;
+}

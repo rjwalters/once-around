@@ -16,6 +16,7 @@ import type { SkyEngine } from "./wasm/sky_engine";
 import { createTimeControls } from "./time-controls";
 import { setupSimpleModal, setupModalClose } from "./modal-utils";
 import { createViewModeManager, computeGMST } from "./view-mode";
+import { formatLST } from "./coordinate-utils";
 import { createARModeManager } from "./ar-mode";
 import { createLocationUI } from "./location-ui";
 import { createSearchUI } from "./search-ui";
@@ -637,6 +638,11 @@ async function main(): Promise<void> {
       if (seeingControl) {
         seeingControl.style.display = mode === 'topocentric' ? 'block' : 'none';
       }
+      // Show/hide LST display
+      const lstContainer = document.getElementById("location-lst-container");
+      if (lstContainer) {
+        lstContainer.style.display = mode === 'topocentric' ? 'block' : 'none';
+      }
       settingsSaver.save({ viewMode: mode });
     },
     onHorizonChange: (visible) => {
@@ -646,15 +652,27 @@ async function main(): Promise<void> {
         settingsSaver.save({ horizonVisible: visible });
       }
     },
+    onLSTChange: (lstDeg) => {
+      const lstDisplay = document.getElementById("location-lst");
+      if (lstDisplay) {
+        lstDisplay.textContent = formatLST(lstDeg);
+      }
+    },
     setControlsViewMode: (mode) => controls.setViewMode(mode),
     setTopocentricParams: (latRad, lstRad) => controls.setTopocentricParams(latRad, lstRad),
     animateToAltAz: (alt, az, duration) => controls.animateToAltAz(alt, az, duration),
   });
   viewModeManager.setupEventListeners();
 
-  // Show seeing control if starting in topocentric mode
-  if (settings.viewMode === 'topocentric' && seeingControl) {
-    seeingControl.style.display = 'block';
+  // Show seeing control and LST display if starting in topocentric mode
+  if (settings.viewMode === 'topocentric') {
+    if (seeingControl) {
+      seeingControl.style.display = 'block';
+    }
+    const lstContainer = document.getElementById("location-lst-container");
+    if (lstContainer) {
+      lstContainer.style.display = 'block';
+    }
   }
 
   // Handle seeing control changes

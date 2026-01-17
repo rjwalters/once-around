@@ -42,7 +42,7 @@ Full comet ephemeris system with orbital mechanics for all orbit types:
 - Comets in search index
 - Guided tours: NEOWISE 2020, Hale-Bopp 1997, Halley 1986, Halley 2061
 
-### ~~Observer Location & Topocentric Corrections~~ (Partially Done)
+### ~~Observer Location & Topocentric Corrections~~ (Done)
 
 Basic observer location selection and topocentric Moon parallax correction.
 
@@ -54,17 +54,38 @@ Basic observer location selection and topocentric Moon parallax correction.
 - [x] GMST computation in Rust engine
 - [x] Topocentric Moon parallax correction (~1° shift)
 - [x] Ground plane rendering (toggleable)
+- [x] Alt/Az coordinate display
+- [x] Cardinal direction markers on horizon (N/NE/E/SE/S/SW/W/NW)
 
-**Remaining (see View Mode System below):**
-- [ ] Alt/Az coordinate display
-- [ ] Cardinal direction markers on horizon
-- [ ] Eclipse path integration
+**Remaining:**
+- [ ] Eclipse path integration (show path, local circumstances)
 
 ---
 
-### View Mode System: Geocentric vs Topocentric (Major Feature)
+### ~~View Mode System: Geocentric vs Topocentric~~ (Done)
 
 Two distinct viewing perspectives with fundamentally different navigation models.
+
+**All core features implemented:**
+- [x] View mode toggle (geocentric/topocentric) with settings persistence
+- [x] Horizon-locked camera in topocentric mode (zenith = up)
+- [x] Alt/Az coordinate display with compass directions
+- [x] Cardinal direction markers on horizon (8 directions)
+- [x] Topocentric camera controls (drag for azimuth/altitude)
+- [x] Ground plane rotation with LST
+- [x] Local Sidereal Time (LST) display in location panel
+- [x] Time scrubbing: sky rotates in topocentric, bodies move in geocentric
+- [x] Stellar scintillation (twinkling) in topocentric mode only
+- [x] Coordinate conversion functions (equatorial ↔ horizontal)
+- [x] GMST/LST computation (IAU 2006 formula)
+
+**Optional polish (not implemented):**
+- Atmospheric extinction (stars dim near horizon)
+- Twilight sky color based on sun altitude
+- "Track object" mode (camera follows star as it rises/sets)
+
+<details>
+<summary>Original design documentation (kept for reference)</summary>
 
 #### Conceptual Model
 
@@ -358,6 +379,8 @@ function horizontalToEquatorial(
 - **Poles:** Celestial pole at zenith, all stars circumpolar (or never rise)
 - **Circumpolar objects:** Never set at high latitudes
 - **Date line crossing:** LST computation handles longitude correctly
+
+</details>
 
 ---
 

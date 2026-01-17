@@ -2016,6 +2016,27 @@ canvas {
   margin-top: 2px;
 }
 
+.location-lst {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(74, 158, 255, 0.08);
+  border-radius: 4px;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lst-label {
+  color: #888;
+}
+
+.lst-value {
+  color: #4a9eff;
+  font-family: monospace;
+  font-weight: 500;
+}
+
 /* Mobile Panel Toggle */
 .mobile-panel-toggle {
   display: none;

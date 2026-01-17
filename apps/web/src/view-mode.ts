@@ -23,6 +23,7 @@ export interface ViewModeManagerOptions {
   getCurrentDate: () => Date;
   onModeChange: (mode: ViewMode) => void;
   onHorizonChange: (visible: boolean) => void;
+  onLSTChange: (lstDeg: number) => void;
   setControlsViewMode: (mode: ViewMode) => void;
   setTopocentricParams: (latRad: number, lstRad: number) => void;
   animateToAltAz: (alt: number, az: number, duration: number) => void;
@@ -46,6 +47,7 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     getCurrentDate,
     onModeChange,
     onHorizonChange,
+    onLSTChange,
     setControlsViewMode,
     setTopocentricParams,
     animateToAltAz,
@@ -66,6 +68,7 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     const latRad = (location.latitude * Math.PI) / 180;
     const lstRad = (lst * Math.PI) / 180;
     setTopocentricParams(latRad, lstRad);
+    onLSTChange(lst);
   }
 
   function updateTopocentricParams(): void {
