@@ -54,6 +54,64 @@ Requires rise/set calculation as prerequisite.
 
 ---
 
+## Satellite System & Orbital Perspective
+
+A multi-phase feature to generalize satellite tracking and eventually allow users to "ride" on space telescopes.
+
+### Phase 1: Generalized Satellite Tracking
+
+Refactor ISS-specific code into a flexible multi-satellite system.
+
+- Rename `iss.rs` to `satellites.rs` with support for N satellites
+- Each satellite: name, ephemeris data, visual properties (color, size, icon)
+- Shared interpolation, shadow calculation, and horizon visibility code
+- Add Hubble Space Telescope (Horizons ID: -48)
+- Single frontend renderer handles all satellites
+- All satellites searchable and visible in topocentric mode
+
+### Phase 2: Orbital Perspective Mode ("Hubblecentric")
+
+New view mode: observer rides on a satellite, looking out at the cosmos.
+
+**Concept:** Just as topocentric mode puts you on Earth's surface, orbital mode puts you on a satellite. The sky appears different from 540 km up:
+
+- No atmosphere (no scintillation, no extinction, no horizon haze)
+- Earth visible below as a sphere with day/night terminator
+- Stars appear to rotate as the satellite orbits (~95 min period for Hubble)
+- Sun avoidance zone overlay (~50° for Hubble - can't point near Sun)
+- Different "up" - satellite's orientation vs local vertical
+
+**Technical requirements:**
+- Earth sphere rendering with texture and terminator
+- Satellite orbital position feeds camera position
+- User controls telescope pointing (azimuth/elevation relative to orbit)
+- South Atlantic Anomaly visualization (radiation zone where observations pause)
+
+**Educational value:** Most planetarium apps show the sky from Earth. This lets users experience what Hubble "sees" - a unique perspective that builds intuition about space-based astronomy.
+
+### Phase 3: Guide Star Lock
+
+Simulate how real space telescopes maintain precise pointing.
+
+**The problem:** Space telescopes need arcsecond-level stability. They achieve this by locking Fine Guidance Sensors (FGS) onto "guide stars."
+
+**Implementation:**
+- User selects a star in the field of view to use as guide star
+- Camera locks onto that star, tracking it as the satellite orbits
+- FGS crosshair overlay shows the lock
+- Field of view drifts naturally if no guide star selected
+- Info panel explains: "Guide star: HD 12345 (mag 8.2) - FGS locked"
+
+**Educational value:** Explains a key aspect of how Hubble, JWST, and other space telescopes actually work. Users experience why guide stars matter.
+
+### Future Extensions
+
+- **JWST perspective** - L2 orbit, different constraints, infrared view
+- **ISS cupola view** - Tourist perspective, Earth-watching mode
+- **Historical missions** - Ride on Voyager, see what it saw at Jupiter flyby
+
+---
+
 ## Medium Priority
 
 ### Meteor Showers
@@ -134,7 +192,6 @@ Features that enhance the experience but are not essential:
 - **Atmospheric extinction** - Stars dim near horizon based on airmass
 - **Twilight sky color** - Sky background gradient based on sun altitude
 - **Track object mode** - Camera follows a star/planet as it rises/sets
-- **Satellite tracking** - Starlink, Hubble, other bright satellites (requires TLE/SGP4)
 
 ---
 
@@ -143,7 +200,6 @@ Features that enhance the experience but are not essential:
 Items to address for long-term maintainability:
 
 - **ISS ephemeris date range** - Current tabulated data covers limited period. Need strategy for keeping current (cron regeneration) or switch to TLE propagation. Should show message when date is out of range.
-- **TypeScript strict mode** - Type mismatches (Vector3 vs plain objects, WASM bindings) being worked around. Should clean up.
 - **Test coverage** - Astronomy calculations should have regression tests against known positions (JPL Horizons, etc.)
 
 ---
