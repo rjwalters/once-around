@@ -52,6 +52,7 @@ export interface SkyRenderer {
   isISSVisible(): boolean;
   hasISSData(): boolean;
   setHorizonCulling(enabled: boolean): void;
+  updateHorizonZenith(zenith: THREE.Vector3): void;
   // Orbital mode methods
   setOrbitalMode(enabled: boolean): void;
   updateEarthPosition(nadirDirection: THREE.Vector3): void;
@@ -215,12 +216,33 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     bodiesLayer.setHorizonCulling(enabled);
   }
 
+  function updateHorizonZenith(zenith: THREE.Vector3): void {
+    bodiesLayer.setHorizonCulling(true, zenith);
+  }
+
   function setOrbitalMode(enabled: boolean): void {
     orbitalModeEnabled = enabled;
     earthLayer.setVisible(enabled);
     // Hide ground when in orbital mode
     if (enabled) {
       groundLayer.setVisible(false);
+    } else {
+      // When exiting orbital mode, reset all label visibility that may have been
+      // hidden by Earth occlusion
+      labelsGroup.traverse((obj) => {
+        if (obj === labelsGroup) return;
+        const css2dObj = obj as THREE.Object3D & { element?: HTMLElement };
+        if (css2dObj.element) {
+          css2dObj.element.style.opacity = '';
+          css2dObj.element.style.pointerEvents = '';
+        }
+        if (obj instanceof THREE.Sprite || obj instanceof THREE.Mesh) {
+          obj.visible = true;
+        }
+        if (obj instanceof THREE.LineSegments) {
+          obj.visible = true;
+        }
+      });
     }
     // Enable depth testing on orbits in orbital mode so they're hidden behind Earth
     orbitsLayer.setDepthTest(enabled);
@@ -326,6 +348,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     isISSVisible,
     hasISSData,
     setHorizonCulling,
+    updateHorizonZenith,
     setOrbitalMode,
     updateEarthPosition,
     updateEarthRotation,

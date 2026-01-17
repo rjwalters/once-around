@@ -415,6 +415,8 @@ export interface VideoMarkersLayer {
   updateMovingPositions(bodyPositions: BodyPositions): void;
   /** Update occlusion visibility based on a checker function */
   updateOcclusion(isOccluded: (position: THREE.Vector3) => boolean): void;
+  /** Reset all markers and labels to visible (when leaving orbital mode) */
+  resetOcclusion(): void;
 }
 
 export async function createVideoMarkersLayer(
@@ -685,6 +687,16 @@ export async function createVideoMarkersLayer(
           // A more sophisticated approach would check each line segment
           lastChild.visible = true; // Keep visible, individual labels handle themselves
         }
+      }
+    },
+    resetOcclusion() {
+      // Reset all labels to visible
+      for (const [_id, sprite] of labels) {
+        sprite.visible = true;
+      }
+      // Reset all markers to visible
+      for (const [_id, marker] of markers) {
+        marker.visible = true;
       }
     },
   };

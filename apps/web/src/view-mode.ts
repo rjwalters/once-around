@@ -30,6 +30,7 @@ export interface ViewModeManagerOptions {
   // Orbital mode callbacks
   onOrbitalModeChange?: (enabled: boolean) => void;
   onScintillationChange?: (enabled: boolean) => void;
+  onResetVideoOcclusion?: () => void;
 }
 
 export interface ViewModeManager {
@@ -56,6 +57,7 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     animateToAltAz,
     onOrbitalModeChange,
     onScintillationChange,
+    onResetVideoOcclusion,
   } = options;
 
   let currentMode: ViewMode = initialMode;
@@ -135,6 +137,11 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
 
       // No atmospheric scintillation in space
       onScintillationChange?.(!enteringOrbital);
+
+      // Reset video marker visibility when leaving orbital mode
+      if (leavingOrbital) {
+        onResetVideoOcclusion?.();
+      }
     }
 
     // Notify of mode change (for saving settings)

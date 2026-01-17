@@ -446,6 +446,7 @@ async function main(): Promise<void> {
       if (videoMarkersRef) {
         videoMarkersRef.updateMovingPositions(bodyPos);
       }
+
       const eclipseBanner = document.getElementById("eclipse-banner");
       if (eclipseBanner) {
         eclipseBanner.classList.add("hidden");
@@ -704,6 +705,9 @@ async function main(): Promise<void> {
     },
     onScintillationChange: (enabled) => {
       renderer.setScintillationEnabled(enabled);
+    },
+    onResetVideoOcclusion: () => {
+      videoMarkers.resetOcclusion();
     },
   });
   viewModeManager.setupEventListeners();
@@ -1027,11 +1031,22 @@ async function main(): Promise<void> {
     tourEngine.update();
     // Update ground plane position for current sidereal time
     renderer.updateGroundPlaneForTime(currentDate);
-    // Update scintillation for topocentric mode
+    // Update scintillation and horizon zenith for topocentric mode
     if (viewModeManager.getMode() === 'topocentric') {
       const gmst = computeGMST(currentDate);
       const lst = gmst + settings.observerLongitude; // LST in degrees
       renderer.updateScintillation(settings.observerLatitude, lst);
+
+      // Update horizon zenith direction for proper horizon culling
+      // Zenith in equatorial coords: RA = LST, Dec = latitude
+      const latRad = (settings.observerLatitude * Math.PI) / 180;
+      const lstRad = (lst * Math.PI) / 180;
+      const zenith = new THREE.Vector3(
+        Math.cos(latRad) * Math.sin(lstRad),
+        Math.sin(latRad),
+        Math.cos(latRad) * Math.cos(lstRad)
+      );
+      renderer.updateHorizonZenith(zenith);
     }
     // Update Earth position/rotation for orbital mode
     if (viewModeManager.getMode() === 'orbital') {

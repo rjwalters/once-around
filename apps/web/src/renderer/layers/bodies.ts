@@ -40,7 +40,7 @@ export interface BodiesLayer {
   /** Update body positions and rendering */
   update(engine: SkyEngine): void;
   /** Enable/disable horizon culling (hide objects below horizon) */
-  setHorizonCulling(enabled: boolean): void;
+  setHorizonCulling(enabled: boolean, zenith?: THREE.Vector3): void;
 }
 
 /**
@@ -192,6 +192,18 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   let currentMoonPos = new THREE.Vector3();
   let currentSunMoonSeparationDeg = 180;
   let horizonCullingEnabled = false;
+  // Zenith direction for proper horizon culling (set by setHorizonCulling)
+  const zenithDirection = new THREE.Vector3(0, 1, 0);
+
+  /**
+   * Check if a position is above the horizon.
+   * Uses dot product with zenith - positive means above horizon.
+   */
+  function isAboveHorizon(pos: THREE.Vector3): boolean {
+    if (!horizonCullingEnabled) return true;
+    // Dot product with zenith: positive = above horizon
+    return pos.clone().normalize().dot(zenithDirection) > -0.01; // Small tolerance for objects near horizon
+  }
 
   function update(engine: SkyEngine): void {
     const bodyPositions = getBodiesPositionBuffer(engine);
@@ -230,7 +242,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     bodyLabels[0].position.copy(sunLabelPos);
     setFlagLine(0, sunPos, sunLabelPos);
     // Hide sun if below horizon in topocentric mode
-    const sunAboveHorizon = !horizonCullingEnabled || sunPos.y >= 0;
+    const sunAboveHorizon = isAboveHorizon(sunPos);
     sunMesh.visible = sunAboveHorizon;
     bodyLabels[0].visible = sunAboveHorizon;
 
@@ -261,7 +273,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     bodyLabels[1].position.copy(moonLabelPos);
     setFlagLine(1, moonPos, moonLabelPos);
     // Hide moon if below horizon in topocentric mode
-    const moonAboveHorizon = !horizonCullingEnabled || moonPos.y >= 0;
+    const moonAboveHorizon = isAboveHorizon(moonPos);
     moonMesh.visible = moonAboveHorizon;
     bodyLabels[1].visible = moonAboveHorizon;
 
@@ -285,7 +297,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       setFlagLine(bodyIdx, planetPos, labelPos);
 
       // Hide planet if below horizon in topocentric mode
-      const planetAboveHorizon = !horizonCullingEnabled || planetPos.y >= 0;
+      const planetAboveHorizon = isAboveHorizon(planetPos);
       planetMeshes[i].visible = planetAboveHorizon;
       bodyLabels[bodyIdx].visible = planetAboveHorizon;
     }
@@ -297,7 +309,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       bodyLabels[bodyIdx].position.copy(labelPos);
       setFlagLine(bodyIdx, pos, labelPos);
       // Hide if below horizon in topocentric mode
-      const aboveHorizon = !horizonCullingEnabled || pos.y >= 0;
+      const aboveHorizon = isAboveHorizon(pos);
       bodyLabels[bodyIdx].visible = aboveHorizon;
     }
 
@@ -308,8 +320,11 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     (bodyFlagLinesGeometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
   }
 
-  function setHorizonCulling(enabled: boolean): void {
+  function setHorizonCulling(enabled: boolean, zenith?: THREE.Vector3): void {
     horizonCullingEnabled = enabled;
+    if (zenith) {
+      zenithDirection.copy(zenith).normalize();
+    }
   }
 
   return {
