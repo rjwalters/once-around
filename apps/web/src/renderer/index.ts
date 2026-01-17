@@ -19,6 +19,7 @@ import { createOrbitsLayer } from "./layers/orbits";
 import { createCometsLayer } from "./layers/comets";
 import { createEclipseLayer } from "./layers/eclipse";
 import { createSatellitesLayer } from "./layers/satellites";
+import { createEarthLayer } from "./layers/earth";
 
 export interface SkyRenderer {
   scene: THREE.Scene;
@@ -51,6 +52,12 @@ export interface SkyRenderer {
   isISSVisible(): boolean;
   hasISSData(): boolean;
   setHorizonCulling(enabled: boolean): void;
+  // Orbital mode methods
+  setOrbitalMode(enabled: boolean): void;
+  updateEarthPosition(nadirDirection: THREE.Vector3): void;
+  updateEarthRotation(date: Date, longitudeDeg: number): void;
+  updateEarthSunDirection(sunPosition: THREE.Vector3): void;
+  updateLabelOcclusion(): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -71,11 +78,13 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const cometsLayer = createCometsLayer(scene, labelsGroup);
   const eclipseLayer = createEclipseLayer(scene);
   const satellitesLayer = createSatellitesLayer(scene, labelsGroup);
+  const earthLayer = createEarthLayer(scene);
 
   // Track state
   let labelsVisible = true;
   let satellitesEnabled = true;
   let constellationStarMapInitialized = false;
+  let orbitalModeEnabled = false;
 
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
     const effectiveFov = fov * 1.2;
@@ -204,6 +213,48 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     bodiesLayer.setHorizonCulling(enabled);
   }
 
+  function setOrbitalMode(enabled: boolean): void {
+    orbitalModeEnabled = enabled;
+    earthLayer.setVisible(enabled);
+    // Hide ground when in orbital mode
+    if (enabled) {
+      groundLayer.setVisible(false);
+    }
+  }
+
+  function updateEarthPosition(nadirDirection: THREE.Vector3): void {
+    if (orbitalModeEnabled) {
+      earthLayer.updatePosition(nadirDirection);
+    }
+  }
+
+  function updateEarthRotation(date: Date, longitudeDeg: number): void {
+    if (orbitalModeEnabled) {
+      earthLayer.updateRotation(date, longitudeDeg);
+    }
+  }
+
+  function updateEarthSunDirection(sunPosition: THREE.Vector3): void {
+    if (orbitalModeEnabled) {
+      earthLayer.updateSunDirection(sunPosition);
+    }
+  }
+
+  function updateLabelOcclusion(): void {
+    if (!orbitalModeEnabled) return;
+
+    // Iterate through all labels in the labelsGroup and hide occluded ones
+    labelsGroup.children.forEach((label) => {
+      // CSS2DObject has element property
+      const css2dObj = label as THREE.Object3D & { element?: HTMLElement };
+      if (css2dObj.element) {
+        const isOccluded = earthLayer.isOccluded(label.position);
+        css2dObj.element.style.opacity = isOccluded ? '0' : '';
+        css2dObj.element.style.pointerEvents = isOccluded ? 'none' : '';
+      }
+    });
+  }
+
   function render(): void {
     eclipseLayer.updateTime();
     renderer.render(scene, camera);
@@ -247,6 +298,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     isISSVisible,
     hasISSData,
     setHorizonCulling,
+    setOrbitalMode,
+    updateEarthPosition,
+    updateEarthRotation,
+    updateEarthSunDirection,
+    updateLabelOcclusion,
     render,
     resize,
   };

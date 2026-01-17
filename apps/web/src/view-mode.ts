@@ -1,5 +1,5 @@
 /**
- * View mode management (Geocentric vs Topocentric).
+ * View mode management (Geocentric, Topocentric, and Orbital).
  */
 
 import type { ViewMode } from "./settings";
@@ -27,6 +27,9 @@ export interface ViewModeManagerOptions {
   setControlsViewMode: (mode: ViewMode) => void;
   setTopocentricParams: (latRad: number, lstRad: number) => void;
   animateToAltAz: (alt: number, az: number, duration: number) => void;
+  // Orbital mode callbacks
+  onOrbitalModeChange?: (enabled: boolean) => void;
+  onScintillationChange?: (enabled: boolean) => void;
 }
 
 export interface ViewModeManager {
@@ -38,7 +41,7 @@ export interface ViewModeManager {
 }
 
 /**
- * Create a view mode manager for geocentric/topocentric switching.
+ * Create a view mode manager for geocentric/topocentric/orbital switching.
  */
 export function createViewModeManager(options: ViewModeManagerOptions): ViewModeManager {
   const {
@@ -51,6 +54,8 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     setControlsViewMode,
     setTopocentricParams,
     animateToAltAz,
+    onOrbitalModeChange,
+    onScintillationChange,
   } = options;
 
   let currentMode: ViewMode = initialMode;
@@ -58,8 +63,10 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   // Get DOM elements
   const geocentricBtn = document.getElementById("view-geocentric");
   const topocentricBtn = document.getElementById("view-topocentric");
+  const orbitalBtn = document.getElementById("view-orbital");
   const coordAltAzGroup = document.getElementById("coord-altaz-group");
   const coordRaDecGroup = document.getElementById("coord-radec-group");
+  const horizonLabel = document.getElementById("horizon-label");
 
   function updateTopocentricParamsForTime(date: Date): void {
     const location = getObserverLocation();
@@ -78,22 +85,29 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   function updateUI(mode: ViewMode): void {
     geocentricBtn?.classList.toggle("active", mode === 'geocentric');
     topocentricBtn?.classList.toggle("active", mode === 'topocentric');
+    orbitalBtn?.classList.toggle("active", mode === 'orbital');
 
-    // Show Alt/Az in topocentric mode, RA/Dec in geocentric mode
+    // Show Alt/Az in topocentric mode, RA/Dec in geocentric and orbital modes
     if (coordAltAzGroup) {
       coordAltAzGroup.style.display = mode === 'topocentric' ? 'inline' : 'none';
     }
     if (coordRaDecGroup) {
-      coordRaDecGroup.style.display = mode === 'geocentric' ? 'inline' : 'none';
+      coordRaDecGroup.style.display = mode !== 'topocentric' ? 'inline' : 'none';
     }
 
-    // Auto-toggle horizon based on mode
+    // Update horizon/Earth toggle label based on mode
+    if (horizonLabel) {
+      horizonLabel.textContent = mode === 'orbital' ? 'Show Earth' : 'Show horizon/ground';
+    }
+
+    // Auto-toggle horizon based on mode (only in topocentric)
     onHorizonChange(mode === 'topocentric');
   }
 
   function setMode(mode: ViewMode): void {
     if (mode === currentMode) return;
 
+    const previousMode = currentMode;
     currentMode = mode;
 
     // Update topocentric params before switching mode
@@ -111,6 +125,18 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
       animateToAltAz(30, 180, 800);
     }
 
+    // Handle orbital mode changes
+    const enteringOrbital = mode === 'orbital';
+    const leavingOrbital = previousMode === 'orbital';
+
+    if (enteringOrbital || leavingOrbital) {
+      // Toggle orbital mode rendering (Earth, etc.)
+      onOrbitalModeChange?.(enteringOrbital);
+
+      // No atmospheric scintillation in space
+      onScintillationChange?.(!enteringOrbital);
+    }
+
     // Notify of mode change (for saving settings)
     onModeChange(mode);
   }
@@ -118,12 +144,17 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   function setupEventListeners(): void {
     geocentricBtn?.addEventListener("click", () => setMode('geocentric'));
     topocentricBtn?.addEventListener("click", () => setMode('topocentric'));
+    orbitalBtn?.addEventListener("click", () => setMode('orbital'));
   }
 
   // Initialize
   updateTopocentricParams();
   if (currentMode === 'topocentric') {
     setControlsViewMode('topocentric');
+  } else if (currentMode === 'orbital') {
+    setControlsViewMode('orbital');
+    onOrbitalModeChange?.(true);
+    onScintillationChange?.(false);
   }
   updateUI(currentMode);
 

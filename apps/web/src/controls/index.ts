@@ -1,8 +1,12 @@
 /**
  * Celestial Camera Controls
  *
- * Main module for camera controls supporting both geocentric (RA/Dec)
- * and topocentric (Alt/Az) navigation modes.
+ * Main module for camera controls supporting geocentric (RA/Dec),
+ * topocentric (Alt/Az), and orbital navigation modes.
+ *
+ * - Geocentric: Observer at Earth center, quaternion-based free navigation
+ * - Topocentric: Observer on Earth surface, Alt/Az with horizon lock
+ * - Orbital: Observer on satellite, quaternion-based free navigation (like geocentric)
  */
 
 import * as THREE from "three";
@@ -507,7 +511,10 @@ export function createCelestialControls(
   function setViewMode(mode: ViewMode): void {
     if (mode === viewMode) return;
 
+    const previousMode = viewMode;
+
     if (mode === "topocentric") {
+      // Entering topocentric: convert RA/Dec to Alt/Az
       const { ra, dec } = getRaDec();
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
@@ -517,13 +524,21 @@ export function createCelestialControls(
       viewMode = mode;
       updateTopocentricCamera();
     } else {
-      const altDeg = (topoAltitude * 180) / Math.PI;
-      const azDeg = (topoAzimuth * 180) / Math.PI;
-      const lstDeg = (topoLST * 180) / Math.PI;
-      const latDeg = (topoLatitude * 180) / Math.PI;
-      const raDec = horizontalToEquatorial(azDeg, altDeg, lstDeg, latDeg);
-      viewMode = mode;
-      lookAtRaDec(raDec.ra, raDec.dec);
+      // Entering geocentric or orbital: both use quaternion-based navigation
+      if (previousMode === "topocentric") {
+        // Convert Alt/Az back to RA/Dec for quaternion mode
+        const altDeg = (topoAltitude * 180) / Math.PI;
+        const azDeg = (topoAzimuth * 180) / Math.PI;
+        const lstDeg = (topoLST * 180) / Math.PI;
+        const latDeg = (topoLatitude * 180) / Math.PI;
+        const raDec = horizontalToEquatorial(azDeg, altDeg, lstDeg, latDeg);
+        viewMode = mode;
+        lookAtRaDec(raDec.ra, raDec.dec);
+      } else {
+        // Switching between geocentric and orbital: keep current orientation
+        viewMode = mode;
+        updateCameraDirection();
+      }
     }
 
     isAnimating = false;

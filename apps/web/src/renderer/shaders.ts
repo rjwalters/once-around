@@ -89,6 +89,59 @@ void main() {
 `;
 
 // -----------------------------------------------------------------------------
+// Earth shader for orbital view (day/night terminator with city lights)
+// -----------------------------------------------------------------------------
+
+export const earthVertexShader = `
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vUv;
+
+void main() {
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export const earthFragmentShader = `
+uniform sampler2D dayTexture;
+uniform sampler2D nightTexture;
+uniform vec3 sunDirection;
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vUv;
+
+void main() {
+  // Sample both textures
+  vec3 dayColor = texture2D(dayTexture, vUv).rgb;
+  vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+
+  // Compute illumination from sun direction
+  // sunDirection points FROM Earth TO Sun
+  float illumination = dot(vNormal, sunDirection);
+
+  // Smooth terminator transition for day side
+  // -0.1 to 0.2 gives a realistic twilight zone
+  float dayMix = smoothstep(-0.1, 0.2, illumination);
+
+  // Night lights intensity - only visible on dark side
+  // Fade out as we approach the terminator
+  float nightIntensity = smoothstep(0.1, -0.2, illumination);
+
+  // Boost night lights for visibility (they're dim in the texture)
+  vec3 boostedNightColor = nightColor * 2.0;
+
+  // Combine: day texture on lit side, night lights on dark side
+  vec3 finalColor = dayColor * dayMix + boostedNightColor * nightIntensity * (1.0 - dayMix);
+
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// -----------------------------------------------------------------------------
 // DSO (Deep Sky Object) shaders
 // -----------------------------------------------------------------------------
 

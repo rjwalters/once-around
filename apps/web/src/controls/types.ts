@@ -18,8 +18,9 @@ export interface CameraState {
  * View mode type.
  * - geocentric: Observer at Earth's center, RA/Dec navigation, stars fixed
  * - topocentric: Observer on Earth's surface, Alt/Az navigation, horizon fixed
+ * - orbital: Observer on satellite (Hubble), looking outward with Earth below
  */
-export type ViewMode = "geocentric" | "topocentric";
+export type ViewMode = "geocentric" | "topocentric" | "orbital";
 
 /**
  * Celestial camera controls - simple drag-to-rotate model.

@@ -58,16 +58,16 @@ Requires rise/set calculation as prerequisite.
 
 A multi-phase feature to generalize satellite tracking and eventually allow users to "ride" on space telescopes.
 
-### Phase 1: Generalized Satellite Tracking
+### Phase 1: Generalized Satellite Tracking ✓ COMPLETE
 
-Refactor ISS-specific code into a flexible multi-satellite system.
+Refactored ISS-specific code into a flexible multi-satellite system.
 
-- Rename `iss.rs` to `satellites.rs` with support for N satellites
-- Each satellite: name, ephemeris data, visual properties (color, size, icon)
-- Shared interpolation, shadow calculation, and horizon visibility code
-- Add Hubble Space Telescope (Horizons ID: -48)
-- Single frontend renderer handles all satellites
-- All satellites searchable and visible in topocentric mode
+- ✓ Renamed `iss.rs` to `satellites.rs` with support for N satellites
+- ✓ Each satellite: name, ephemeris data, visual properties (color, size, icon)
+- ✓ Shared interpolation, shadow calculation, and horizon visibility code
+- ✓ Added Hubble Space Telescope (Horizons ID: -48)
+- ✓ Single frontend renderer handles all satellites
+- ✓ All satellites searchable and visible in topocentric mode
 
 ### Phase 2: Orbital Perspective Mode ("Hubblecentric")
 
@@ -76,16 +76,43 @@ New view mode: observer rides on a satellite, looking out at the cosmos.
 **Concept:** Just as topocentric mode puts you on Earth's surface, orbital mode puts you on a satellite. The sky appears different from 540 km up:
 
 - No atmosphere (no scintillation, no extinction, no horizon haze)
-- Earth visible below as a sphere with day/night terminator
+- Earth visible below as a sphere
 - Stars appear to rotate as the satellite orbits (~95 min period for Hubble)
-- Sun avoidance zone overlay (~50° for Hubble - can't point near Sun)
-- Different "up" - satellite's orientation vs local vertical
 
-**Technical requirements:**
-- Earth sphere rendering with texture and terminator
-- Satellite orbital position feeds camera position
-- User controls telescope pointing (azimuth/elevation relative to orbit)
-- South Atlantic Anomaly visualization (radiation zone where observations pause)
+#### Phase 2a: Minimal Orbital View ✓ COMPLETE
+
+Basic orbital perspective with simple Earth rendering.
+
+- ✓ ViewMode extended to include 'orbital'
+- ✓ Earth rendered as blue sphere positioned toward nadir
+- ✓ Quaternion-based free navigation (like geocentric)
+- ✓ Scintillation automatically disabled in orbital mode
+- ✓ UI button added to view mode toggle
+
+#### Phase 2b: Earth Detail (Planned)
+
+Enhanced Earth rendering for visual realism.
+
+- Day/night terminator shading
+- Earth texture map
+- Cloud layer and atmosphere glow
+- City lights on night side
+
+#### Phase 2c: Orbital Mechanics Visualization (Planned)
+
+Help users understand orbital constraints.
+
+- Sun avoidance zone overlay (~50° for Hubble - can't point near Sun)
+- South Atlantic Anomaly (SAA) visualization (radiation zone)
+- Show orbital path
+
+#### Phase 2d: Advanced Features (Planned)
+
+Extended orbital perspective capabilities.
+
+- Guide star lock (Phase 3 integration)
+- JWST perspective (L2 orbit, different constraints)
+- ISS cupola view (tourist perspective, Earth-watching mode)
 
 **Educational value:** Most planetarium apps show the sky from Earth. This lets users experience what Hubble "sees" - a unique perspective that builds intuition about space-based astronomy.
 
@@ -106,8 +133,6 @@ Simulate how real space telescopes maintain precise pointing.
 
 ### Future Extensions
 
-- **JWST perspective** - L2 orbit, different constraints, infrared view
-- **ISS cupola view** - Tourist perspective, Earth-watching mode
 - **Historical missions** - Ride on Voyager, see what it saw at Jupiter flyby
 
 ---

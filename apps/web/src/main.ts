@@ -623,7 +623,14 @@ async function main(): Promise<void> {
     renderer.updateGroundPlaneOrientation(settings.observerLatitude, settings.observerLongitude);
 
     horizonCheckbox.addEventListener("change", () => {
-      renderer.setGroundPlaneVisible(horizonCheckbox.checked);
+      const isOrbital = viewModeManager?.getMode() === 'orbital';
+      if (isOrbital) {
+        // In orbital mode, toggle Earth visibility
+        renderer.setOrbitalMode(horizonCheckbox.checked);
+      } else {
+        // In other modes, toggle ground plane
+        renderer.setGroundPlaneVisible(horizonCheckbox.checked);
+      }
       settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
     });
   }
@@ -682,6 +689,13 @@ async function main(): Promise<void> {
     setControlsViewMode: (mode) => controls.setViewMode(mode),
     setTopocentricParams: (latRad, lstRad) => controls.setTopocentricParams(latRad, lstRad),
     animateToAltAz: (alt, az, duration) => controls.animateToAltAz(alt, az, duration),
+    // Orbital mode callbacks
+    onOrbitalModeChange: (enabled) => {
+      renderer.setOrbitalMode(enabled);
+    },
+    onScintillationChange: (enabled) => {
+      renderer.setScintillationEnabled(enabled);
+    },
   });
   viewModeManager.setupEventListeners();
 
@@ -925,7 +939,12 @@ async function main(): Promise<void> {
     toggleHorizon: () => {
       if (horizonCheckbox) {
         horizonCheckbox.checked = !horizonCheckbox.checked;
-        renderer.setGroundPlaneVisible(horizonCheckbox.checked);
+        const isOrbital = viewModeManager?.getMode() === 'orbital';
+        if (isOrbital) {
+          renderer.setOrbitalMode(horizonCheckbox.checked);
+        } else {
+          renderer.setGroundPlaneVisible(horizonCheckbox.checked);
+        }
         settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
       }
     },
@@ -992,12 +1011,38 @@ async function main(): Promise<void> {
       const lst = gmst + settings.observerLongitude; // LST in degrees
       renderer.updateScintillation(settings.observerLatitude, lst);
     }
+    // Update Earth position/rotation for orbital mode
+    if (viewModeManager.getMode() === 'orbital') {
+      // Get Hubble's position (index 1) to compute nadir direction
+      const hubblePos = renderer.getSatellitePosition(1, engine);
+      if (hubblePos) {
+        // Nadir is opposite to satellite position (toward Earth center)
+        const nadir = new THREE.Vector3(-hubblePos.x, -hubblePos.y, -hubblePos.z).normalize();
+        renderer.updateEarthPosition(nadir);
+      }
+      renderer.updateEarthRotation(currentDate, settings.observerLongitude);
+
+      // Update Sun direction for day/night terminator
+      const bodyPos = getBodyPositionsFromEngine(engine);
+      const sunPos = bodyPos.get("Sun");
+      if (sunPos) {
+        renderer.updateEarthSunDirection(sunPos);
+      }
+
+      // Hide labels occluded by Earth
+      renderer.updateLabelOcclusion();
+    }
     renderer.render();
   }
 
   // Enable scintillation if starting in topocentric mode
   if (settings.viewMode === 'topocentric') {
     renderer.setScintillationEnabled(true);
+  }
+
+  // Enable orbital mode if starting in that mode
+  if (settings.viewMode === 'orbital') {
+    renderer.setOrbitalMode(true);
   }
 
   animate();

@@ -1,0 +1,186 @@
+/**
+ * Earth Layer
+ *
+ * Renders Earth as a sphere for orbital view mode,
+ * positioned in the nadir direction (below the satellite observer).
+ * Features day/night terminator with city lights on the dark side.
+ */
+
+import * as THREE from "three";
+import { computeGMST } from "../utils/coordinates";
+import { earthVertexShader, earthFragmentShader } from "../shaders";
+
+// Earth sphere configuration
+const EARTH_RADIUS = 20;          // Visual radius in scene units
+const EARTH_DISTANCE = 35;        // Distance from camera toward nadir
+
+export interface EarthLayer {
+  /** The group containing all Earth elements */
+  group: THREE.Group;
+  /** Set visibility of the Earth */
+  setVisible(visible: boolean): void;
+  /** Update Earth position based on nadir direction */
+  updatePosition(nadirDirection: THREE.Vector3): void;
+  /** Update Earth rotation for the current time and observer longitude */
+  updateRotation(date: Date, longitudeDeg: number): void;
+  /** Update Sun direction for day/night terminator */
+  updateSunDirection(sunPosition: THREE.Vector3): void;
+  /** Check if a world position is occluded by the Earth sphere */
+  isOccluded(position: THREE.Vector3): boolean;
+}
+
+/**
+ * Create the Earth layer for orbital view mode.
+ * @param scene - The Three.js scene to add the Earth to
+ * @returns EarthLayer interface
+ */
+export function createEarthLayer(scene: THREE.Scene): EarthLayer {
+  // Group containing all Earth elements
+  const group = new THREE.Group();
+  group.visible = false; // Start hidden
+  scene.add(group);
+
+  // Load Earth textures
+  const textureLoader = new THREE.TextureLoader();
+  const dayTexture = textureLoader.load("/earth-day.jpg");
+  const nightTexture = textureLoader.load("/earth-night.jpg");
+
+  // Set proper color space for textures
+  dayTexture.colorSpace = THREE.SRGBColorSpace;
+  nightTexture.colorSpace = THREE.SRGBColorSpace;
+
+  // Earth sphere with day/night shader
+  const earthGeometry = new THREE.SphereGeometry(
+    EARTH_RADIUS,
+    64, // width segments
+    48  // height segments
+  );
+
+  // ShaderMaterial for day/night terminator with city lights
+  const earthMaterial = new THREE.ShaderMaterial({
+    vertexShader: earthVertexShader,
+    fragmentShader: earthFragmentShader,
+    uniforms: {
+      dayTexture: { value: dayTexture },
+      nightTexture: { value: nightTexture },
+      sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+    },
+  });
+
+  const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
+  group.add(earthMesh);
+
+  // Add subtle atmosphere glow
+  const atmosphereGeometry = new THREE.SphereGeometry(
+    EARTH_RADIUS * 1.02,
+    32,
+    24
+  );
+  const atmosphereMaterial = new THREE.MeshBasicMaterial({
+    color: 0x88bbff,
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.BackSide,
+  });
+  const atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+  group.add(atmosphereMesh);
+
+  // Track current rotation state
+  let currentRotationY = 0;
+  let hasBeenPositioned = false;
+
+  function setVisible(visible: boolean): void {
+    group.visible = visible;
+
+    // Set a default position if Earth hasn't been positioned yet
+    // Default: Earth "below" the observer (negative Y in Three.js coords)
+    if (visible && !hasBeenPositioned) {
+      group.position.set(0, -EARTH_DISTANCE, 0);
+      group.lookAt(0, 0, 0);
+    }
+  }
+
+  function updatePosition(nadirDirection: THREE.Vector3): void {
+    // Position Earth in the nadir direction (toward Earth's center)
+    const direction = nadirDirection.clone().normalize();
+    group.position.copy(direction.multiplyScalar(EARTH_DISTANCE));
+
+    // Orient Earth so it faces the camera
+    // The "up" direction should align with celestial north
+    const lookTarget = new THREE.Vector3(0, 0, 0); // Camera is at origin
+    group.lookAt(lookTarget);
+
+    hasBeenPositioned = true;
+  }
+
+  function updateRotation(date: Date, longitudeDeg: number): void {
+    if (!group.visible) return;
+
+    // Compute Greenwich Mean Sidereal Time
+    const gmst = computeGMST(date);
+
+    // Earth rotation: GMST gives the rotation angle
+    // The observer's longitude determines which part of Earth faces the camera
+    const rotationDeg = gmst + longitudeDeg;
+    currentRotationY = (rotationDeg * Math.PI) / 180;
+
+    // Apply rotation around Earth's axis (Y in local coordinates after lookAt)
+    // Note: This is simplified - full implementation would account for Earth's tilt
+    const earthMesh = group.children[0] as THREE.Mesh;
+    earthMesh.rotation.y = currentRotationY;
+  }
+
+  function updateSunDirection(sunPosition: THREE.Vector3): void {
+    if (!group.visible) return;
+
+    // Calculate Sun direction from Earth's position
+    // sunDirection should point FROM Earth TO Sun (normalized)
+    const earthPos = group.position;
+    const sunDir = new THREE.Vector3()
+      .subVectors(sunPosition, earthPos)
+      .normalize();
+
+    // Update shader uniform
+    earthMaterial.uniforms.sunDirection.value.copy(sunDir);
+  }
+
+  function isOccluded(position: THREE.Vector3): boolean {
+    if (!group.visible) return false;
+
+    // Camera is at origin, Earth center is at group.position
+    // Ray from camera (origin) toward the target position
+    const rayDir = position.clone().normalize();
+    const earthCenter = group.position;
+
+    // Ray-sphere intersection test
+    // Ray: P = t * rayDir (from origin)
+    // Sphere: |P - earthCenter|^2 = EARTH_RADIUS^2
+    //
+    // Substituting: |t*rayDir - earthCenter|^2 = R^2
+    // t^2 - 2t*(rayDir·earthCenter) + |earthCenter|^2 - R^2 = 0
+    //
+    // Using quadratic formula: a=1, b=-2*(rayDir·earthCenter), c=|earthCenter|^2-R^2
+    const b = -2 * rayDir.dot(earthCenter);
+    const c = earthCenter.lengthSq() - EARTH_RADIUS * EARTH_RADIUS;
+    const discriminant = b * b - 4 * c;
+
+    // If discriminant < 0, ray misses sphere (not occluded)
+    if (discriminant < 0) return false;
+
+    // Find the nearest intersection point
+    const t = (-b - Math.sqrt(discriminant)) / 2;
+
+    // If t > 0, the ray hits the sphere in front of the camera
+    // Since celestial objects are essentially at infinity, any intersection means occlusion
+    return t > 0;
+  }
+
+  return {
+    group,
+    setVisible,
+    updatePosition,
+    updateRotation,
+    updateSunDirection,
+    isOccluded,
+  };
+}
