@@ -105,29 +105,37 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
     const direction = nadirDirection.clone().normalize();
     group.position.copy(direction.multiplyScalar(EARTH_DISTANCE));
 
-    // Orient Earth so it faces the camera
-    // The "up" direction should align with celestial north
-    const lookTarget = new THREE.Vector3(0, 0, 0); // Camera is at origin
-    group.lookAt(lookTarget);
+    // Don't use lookAt - we want the Earth's Y-axis to remain aligned with
+    // celestial north (Three.js +Y). The sphere geometry with its texture
+    // will show the correct face based on the rotation we apply.
 
     hasBeenPositioned = true;
   }
 
-  function updateRotation(date: Date, longitudeDeg: number): void {
+  function updateRotation(date: Date, _longitudeDeg: number): void {
     if (!group.visible) return;
 
-    // Compute Greenwich Mean Sidereal Time
+    // Compute Greenwich Mean Sidereal Time - this tells us Earth's rotation angle
     const gmst = computeGMST(date);
 
-    // Earth rotation: GMST gives the rotation angle
-    // The observer's longitude determines which part of Earth faces the camera
-    const rotationDeg = gmst + longitudeDeg;
-    currentRotationY = (rotationDeg * Math.PI) / 180;
+    // The Earth mesh rotates around the world Y-axis (celestial north)
+    // GMST directly gives us the angle: at GMST=0, the Prime Meridian
+    // is at RA=0 (toward the vernal equinox direction, which is -X in Three.js)
+    //
+    // Three.js SphereGeometry has U=0 at +X and U=0.5 at -X
+    // Standard Earth textures have Prime Meridian at U=0.5
+    // So at GMST=0, we need rotation to put U=0.5 (-X) facing RA=0 (-X)
+    // This means no offset is needed for the base case.
+    //
+    // GMST increases as Earth rotates eastward (counterclockwise from above north pole)
+    // In Three.js Y-up, counterclockwise around +Y is positive rotation
+    const rotationRad = (gmst * Math.PI) / 180;
 
-    // Apply rotation around Earth's axis (Y in local coordinates after lookAt)
-    // Note: This is simplified - full implementation would account for Earth's tilt
+    // Apply rotation to the mesh around Y-axis (Earth's polar axis = celestial north)
     const earthMesh = group.children[0] as THREE.Mesh;
-    earthMesh.rotation.y = currentRotationY;
+    const atmosphereMesh = group.children[1] as THREE.Mesh;
+    earthMesh.rotation.y = rotationRad;
+    atmosphereMesh.rotation.y = rotationRad;
   }
 
   function updateSunDirection(sunPosition: THREE.Vector3): void {

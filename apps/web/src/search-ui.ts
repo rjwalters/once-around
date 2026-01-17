@@ -108,6 +108,7 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
 
   function handleNavigateToResult(result: SearchResult): void {
     const { ra, dec } = getUpdatedPosition(result);
+    console.log('[Search] Navigate to:', result.name, 'RA:', ra.toFixed(2), 'Dec:', dec.toFixed(2));
     navigateToResult({ ...result, ra, dec });
     hideResults();
     if (searchInput) {
