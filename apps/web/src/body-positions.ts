@@ -5,6 +5,13 @@
 import * as THREE from "three";
 import { getSunMoonSeparation } from "./eclipseData";
 
+/** A 3D position with x, y, z coordinates */
+export interface Position3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
 // Body names in the order they appear in the position buffer
 export const BODY_NAMES = [
   "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"
@@ -26,12 +33,13 @@ export const COMET_NAMES = [
 // Sky sphere radius for positioning
 export const SKY_RADIUS = 50;
 
+/** Map of body names to their 3D positions (as THREE.Vector3) */
 export type BodyPositions = Map<string, THREE.Vector3>;
 
 export interface BodyPositionBuffers {
-  bodies: Float64Array;
-  minorBodies: Float64Array;
-  comets: Float64Array;
+  bodies: Float32Array;
+  minorBodies: Float32Array;
+  comets: Float32Array;
 }
 
 /**
@@ -82,16 +90,20 @@ export function getBodyPositions(buffers: BodyPositionBuffers): BodyPositions {
 /**
  * Convert a 3D position (Three.js coordinates) to RA/Dec in degrees.
  * Three.js uses Y-up: X→RA=0°, Y→North pole, Z→RA=90°
+ * Accepts either THREE.Vector3 or a plain { x, y, z } object.
  */
-export function positionToRaDec(pos: THREE.Vector3): { ra: number; dec: number } {
-  // Normalize the position
-  const normalized = pos.clone().normalize();
+export function positionToRaDec(pos: Position3D): { ra: number; dec: number } {
+  // Normalize the position manually (works with plain objects or Vector3)
+  const len = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+  const nx = pos.x / len;
+  const ny = pos.y / len;
+  const nz = pos.z / len;
 
   // Dec is the angle from the equatorial plane (Y component)
-  const dec = Math.asin(normalized.y) * (180 / Math.PI);
+  const dec = Math.asin(ny) * (180 / Math.PI);
 
   // RA is the angle in the XZ plane (X is negated for east-west fix)
-  let ra = Math.atan2(normalized.z, -normalized.x) * (180 / Math.PI);
+  let ra = Math.atan2(nz, -nx) * (180 / Math.PI);
   if (ra < 0) ra += 360;
 
   return { ra, dec };

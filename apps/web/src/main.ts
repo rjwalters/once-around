@@ -1,15 +1,15 @@
 import "./styles.css";
 import * as THREE from "three";
-import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadISSEphemeris } from "./engine";
+import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadISSEphemeris, getISSBuffer } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
-import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement, type BodyPositions } from "./videos";
+import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement } from "./videos";
 import { STAR_DATA } from "./starData";
 import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA } from "./dsoData";
-import { loadSettings, createSettingsSaver, type ViewMode } from "./settings";
-import { createLocationManager, formatLatitude, formatLongitude, type ObserverLocation } from "./location";
+import { loadSettings, createSettingsSaver } from "./settings";
+import { createLocationManager, type ObserverLocation } from "./location";
 import { CONSTELLATION_CENTERS, type SearchItem } from "./search";
 import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tour";
 import type { SkyEngine } from "./wasm/sky_engine";
@@ -32,7 +32,6 @@ import { readUrlState, createUrlStateUpdater } from "./url-state";
 import {
   BODY_NAMES,
   COMET_NAMES,
-  MINOR_BODY_NAMES,
   getBodyPositions,
   positionToRaDec,
   calculateSunMoonSeparation,
@@ -656,6 +655,8 @@ async function main(): Promise<void> {
       // Enable/disable scintillation based on view mode
       // Scintillation only makes sense in topocentric (surface observer) mode
       renderer.setScintillationEnabled(mode === 'topocentric');
+      // Enable/disable horizon culling (hide bodies below horizon)
+      renderer.setHorizonCulling(mode === 'topocentric');
       // Show/hide atmospheric seeing control
       if (seeingControl) {
         seeingControl.style.display = mode === 'topocentric' ? 'block' : 'none';
@@ -686,7 +687,7 @@ async function main(): Promise<void> {
   });
   viewModeManager.setupEventListeners();
 
-  // Show seeing control and LST display if starting in topocentric mode
+  // Show seeing control, LST display, and enable horizon culling if starting in topocentric mode
   if (settings.viewMode === 'topocentric') {
     if (seeingControl) {
       seeingControl.style.display = 'block';
@@ -695,6 +696,7 @@ async function main(): Promise<void> {
     if (lstContainer) {
       lstContainer.style.display = 'block';
     }
+    renderer.setHorizonCulling(true);
   }
 
   // Handle seeing control changes
@@ -785,6 +787,12 @@ async function main(): Promise<void> {
     dsoData: DSO_DATA,
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     positionToRaDec,
+    getISSPosition: () => {
+      if (!engine.has_iss_ephemeris() || !engine.iss_in_range()) return null;
+      const buf = getISSBuffer(engine);
+      if (buf.length < 3) return null;
+      return { x: buf[0], y: buf[1], z: buf[2] };
+    },
   }).then(index => {
     searchIndex = index;
     console.log(`Search index built: ${index.length} items`);
@@ -799,6 +807,12 @@ async function main(): Promise<void> {
     getPlanetPosition: (name) => {
       const pos = getBodyPositionsFromEngine(engine).get(name);
       return pos ? positionToRaDec(pos) : null;
+    },
+    getISSPosition: () => {
+      if (!engine.has_iss_ephemeris() || !engine.iss_in_range()) return null;
+      const buf = getISSBuffer(engine);
+      if (buf.length < 3) return null;
+      return positionToRaDec({ x: buf[0], y: buf[1], z: buf[2] });
     },
   });
   searchUI.setupEventListeners();

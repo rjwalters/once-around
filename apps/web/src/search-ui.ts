@@ -8,6 +8,7 @@ export interface SearchUIOptions {
   getSearchIndex: () => SearchItem[];
   navigateToResult: (result: SearchResult) => void;
   getPlanetPosition: (name: string) => { ra: number; dec: number } | null;
+  getISSPosition?: () => { ra: number; dec: number } | null;
 }
 
 export interface SearchUI {
@@ -18,7 +19,7 @@ export interface SearchUI {
  * Create search UI handlers for rendering and keyboard navigation.
  */
 export function createSearchUI(options: SearchUIOptions): SearchUI {
-  const { getSearchIndex, navigateToResult, getPlanetPosition } = options;
+  const { getSearchIndex, navigateToResult, getPlanetPosition, getISSPosition } = options;
 
   // Get DOM elements
   const searchInput = document.getElementById("search") as HTMLInputElement | null;
@@ -66,6 +67,15 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
     // For planets, get current position (they move with time)
     if (result.type === 'planet') {
       const pos = getPlanetPosition(result.name);
+      if (pos) {
+        ra = pos.ra;
+        dec = pos.dec;
+      }
+    }
+
+    // For satellites (ISS), get current position (moves very fast)
+    if (result.type === 'satellite' && getISSPosition) {
+      const pos = getISSPosition();
       if (pos) {
         ra = pos.ra;
         dec = pos.dec;

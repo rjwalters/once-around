@@ -56,6 +56,7 @@ export function createRendererContext(container: HTMLElement): RendererContext {
   labelRenderer.domElement.style.position = "absolute";
   labelRenderer.domElement.style.top = "0";
   labelRenderer.domElement.style.pointerEvents = "none";
+  labelRenderer.domElement.style.zIndex = "50"; // Below control panel (z-index: 100)
   container.appendChild(labelRenderer.domElement);
 
   // Labels group

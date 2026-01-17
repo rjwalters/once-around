@@ -366,9 +366,6 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
   let targetStarOverrides: StarOverride[] = [];
   let hasStarOverrideChange = false;
 
-  // Track if we've started the camera animation for current transition
-  let cameraAnimationStarted = false;
-
   function getState(): TourPlaybackState {
     const overallProgress = calculateOverallProgress();
     const currentKeyframe = currentTour?.keyframes[currentKeyframeIndex];
@@ -437,8 +434,7 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     status = 'playing';
     phase = 'transition';
     segmentStartTime = performance.now();
-    cameraAnimationStarted = false;
-
+    
     // Set up first keyframe transition
     const firstKeyframe = tour.keyframes[0];
     startFov = callbacks.getFov();
@@ -481,8 +477,7 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
 
     // Start camera animation
     callbacks.animateToRaDec(ra, dec, firstKeyframe.transitionDuration);
-    cameraAnimationStarted = true;
-
+    
     // If instant time mode, set time immediately
     if (firstKeyframe.timeMode === 'instant') {
       callbacks.setTime(targetTime);
@@ -545,8 +540,7 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     // Start transition phase
     phase = 'transition';
     segmentStartTime = performance.now();
-    cameraAnimationStarted = false;
-
+    
     // Set up interpolation
     startFov = callbacks.getFov();
     targetFov = keyframe.fov;
@@ -589,8 +583,7 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
 
     // Start camera animation
     callbacks.animateToRaDec(ra, dec, keyframe.transitionDuration);
-    cameraAnimationStarted = true;
-
+    
     // If instant time mode, set time immediately
     if (keyframe.timeMode === 'instant') {
       callbacks.setTime(targetTime);

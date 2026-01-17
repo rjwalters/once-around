@@ -3,17 +3,7 @@
  */
 
 import { getTourById, PREDEFINED_TOURS } from "./tourData";
-
-export interface TourEngine {
-  play: (tour: unknown) => void;
-  pause: () => void;
-  resume: () => void;
-  stop: () => void;
-  previous: () => void;
-  next: () => void;
-  isActive: () => boolean;
-  getState: () => { status: string };
-}
+import type { TourEngine } from "./tour";
 
 export interface TourUIOptions {
   tourEngine: TourEngine;

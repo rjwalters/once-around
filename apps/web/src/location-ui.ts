@@ -3,19 +3,13 @@
  */
 
 import type { ObserverLocation } from "./location";
-
-export interface City {
-  name: string;
-  country: string;
-  latitude: number;
-  longitude: number;
-}
+import type { City } from "./cityData";
 
 export interface LocationUIOptions {
   searchCities: (query: string) => City[];
   setLocationFromCity: (city: City) => void;
   setLocation: (location: { latitude: number; longitude: number; name: string }) => void;
-  requestGeolocation: () => Promise<boolean>;
+  requestGeolocation: () => Promise<ObserverLocation | null>;
   getLocation: () => ObserverLocation;
 }
 

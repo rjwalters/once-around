@@ -33,6 +33,7 @@ export interface SearchIndexOptions {
   dsoData: readonly DSODataEntry[];
   getBodyPositions: () => Map<string, { x: number; y: number; z: number }>;
   positionToRaDec: (pos: { x: number; y: number; z: number }) => { ra: number; dec: number };
+  getISSPosition?: () => { x: number; y: number; z: number } | null;
 }
 
 /**
@@ -48,6 +49,7 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     dsoData,
     getBodyPositions,
     positionToRaDec,
+    getISSPosition,
   } = options;
 
   const items: SearchItem[] = [];
@@ -119,6 +121,29 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
         ra,
         dec,
         subtitle: "Comet",
+      });
+    }
+  }
+
+  // Add ISS (International Space Station)
+  if (getISSPosition) {
+    const issPos = getISSPosition();
+    if (issPos) {
+      const { ra, dec } = positionToRaDec(issPos);
+      items.push({
+        name: "ISS",
+        type: "satellite",
+        ra,
+        dec,
+        subtitle: "International Space Station",
+      });
+      // Also searchable by full name
+      items.push({
+        name: "International Space Station",
+        type: "satellite",
+        ra,
+        dec,
+        subtitle: "ISS",
       });
     }
   }

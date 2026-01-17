@@ -15,6 +15,7 @@ Historical record of implemented features in Once Around the Night Sky.
 - [UI Framework](#ui-framework)
 - [Astronomical Corrections](#astronomical-corrections)
 - [Solar System Objects](#solar-system-objects)
+- [ISS Tracking](#iss-tracking)
 
 ---
 
@@ -424,3 +425,41 @@ Refactored from vanilla CSS to Tailwind CSS v4 with modern utility-first styling
 
 - **Major asteroids:** Vesta, Pallas, Hygiea
 - **Near-Earth objects:** Apophis, Bennu
+
+---
+
+## ISS Tracking
+
+Real-time International Space Station position with visibility indication.
+
+### Implementation
+
+- **Tabulated ephemeris** - Pre-computed positions from NASA Horizons API
+- **Cubic spline interpolation** - Smooth position between tabulated points (Catmull-Rom)
+- **Earth shadow calculation** - Cylindrical approximation for umbra detection
+- **Topocentric conversion** - ECI to observer-relative coordinates
+- **Horizon culling** - ISS hidden when below observer's horizon
+
+### Visual Features
+
+- Bright yellow-white marker when illuminated by Sun
+- Dim blue-gray when in Earth's shadow (still shown if above horizon)
+- "ISS" label with shadow state indication
+- Searchable as "ISS" or "International Space Station"
+
+### Data Pipeline
+
+```
+NASA Horizons API → Python script → Binary ephemeris file → WASM loader
+```
+
+Binary format: `[count: u32][jd: f64, x: f64, y: f64, z: f64]...`
+
+### Visibility Rules
+
+ISS is displayed when ALL conditions are met:
+1. Ephemeris data loaded and date in range
+2. Above observer's horizon (topocentric mode)
+3. Position successfully interpolated
+
+Illumination state shown but doesn't hide the ISS (observers may want to see where it is even in shadow).

@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import type { BodyPositions } from "./body-positions";
+
+// Re-export for consumers that imported from here
+export type { BodyPositions };
 
 // Video placement data structure
 export interface VideoPlacement {
@@ -20,9 +24,6 @@ const LABEL_REPULSION_ITERATIONS = 8; // Number of iterations to settle labels
 // Co-location grouping constants
 const COORDINATE_TOLERANCE = 0.01; // degrees (~36 arcsec) for grouping nearby videos
 const ARC_GAP = 0.08; // radians (~4.5 degrees) gap between pie slices
-
-// Body position type - maps body name to 3D position
-export type BodyPositions = Map<string, THREE.Vector3>;
 
 // Match video object names to body names for moving objects
 // Returns the body name if matched, null otherwise

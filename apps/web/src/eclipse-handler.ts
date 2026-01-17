@@ -3,6 +3,7 @@
  */
 
 import { getNextTotalSolarEclipse } from "./eclipseData";
+import type { BodyPositions, Position3D } from "./body-positions";
 
 export interface EclipseHandlerOptions {
   getDatetimeInputValue: () => string | undefined;
@@ -11,11 +12,11 @@ export interface EclipseHandlerOptions {
   applyTimeToEngine: (date: Date) => void;
   recomputeEngine: () => void;
   updateRenderer: () => void;
-  getBodyPositions: () => Map<string, { x: number; y: number; z: number }>;
-  positionToRaDec: (pos: { x: number; y: number; z: number }) => { ra: number; dec: number };
-  calculateSunMoonSeparation: (bodyPos: Map<string, { x: number; y: number; z: number }>) => number | null;
+  getBodyPositions: () => BodyPositions;
+  positionToRaDec: (pos: Position3D) => { ra: number; dec: number };
+  calculateSunMoonSeparation: (bodyPos: BodyPositions) => number | null;
   updateEclipseRendering: (separation: number) => void;
-  updateVideoMarkers: (bodyPos: Map<string, { x: number; y: number; z: number }>) => void;
+  updateVideoMarkers: (bodyPos: BodyPositions) => void;
   animateToRaDec: (ra: number, dec: number, duration: number) => void;
 }
 

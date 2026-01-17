@@ -3,13 +3,7 @@
  */
 
 import * as THREE from "three";
-
-export interface VideoPlacement {
-  ra: number;
-  dec: number;
-  title: string;
-  object: string;
-}
+import type { VideoPlacement } from "./videos";
 
 export interface VideoMarkersLayer {
   group: { visible: boolean };

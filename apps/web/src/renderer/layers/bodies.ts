@@ -39,6 +39,8 @@ export interface BodiesLayer {
   getSunMoonSeparationDeg(): number;
   /** Update body positions and rendering */
   update(engine: SkyEngine): void;
+  /** Enable/disable horizon culling (hide objects below horizon) */
+  setHorizonCulling(enabled: boolean): void;
 }
 
 /**
@@ -189,6 +191,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   let currentSunPos = new THREE.Vector3();
   let currentMoonPos = new THREE.Vector3();
   let currentSunMoonSeparationDeg = 180;
+  let horizonCullingEnabled = false;
 
   function update(engine: SkyEngine): void {
     const bodyPositions = getBodiesPositionBuffer(engine);
@@ -226,6 +229,10 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const sunLabelPos = calculateLabelOffset(sunPos, LABEL_OFFSET);
     bodyLabels[0].position.copy(sunLabelPos);
     setFlagLine(0, sunPos, sunLabelPos);
+    // Hide sun if below horizon in topocentric mode
+    const sunAboveHorizon = !horizonCullingEnabled || sunPos.y >= 0;
+    sunMesh.visible = sunAboveHorizon;
+    bodyLabels[0].visible = sunAboveHorizon;
 
     // Update Moon
     const moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
@@ -253,6 +260,10 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const moonLabelPos = calculateLabelOffset(moonPos, LABEL_OFFSET);
     bodyLabels[1].position.copy(moonLabelPos);
     setFlagLine(1, moonPos, moonLabelPos);
+    // Hide moon if below horizon in topocentric mode
+    const moonAboveHorizon = !horizonCullingEnabled || moonPos.y >= 0;
+    moonMesh.visible = moonAboveHorizon;
+    bodyLabels[1].visible = moonAboveHorizon;
 
     // Update planets
     for (let i = 0; i < 5; i++) {
@@ -272,6 +283,11 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       const labelPos = calculateLabelOffset(planetPos, LABEL_OFFSET);
       bodyLabels[bodyIdx].position.copy(labelPos);
       setFlagLine(bodyIdx, planetPos, labelPos);
+
+      // Hide planet if below horizon in topocentric mode
+      const planetAboveHorizon = !horizonCullingEnabled || planetPos.y >= 0;
+      planetMeshes[i].visible = planetAboveHorizon;
+      bodyLabels[bodyIdx].visible = planetAboveHorizon;
     }
 
     // Update Uranus and Neptune labels (not rendered as spheres)
@@ -280,6 +296,9 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       const labelPos = calculateLabelOffset(pos, LABEL_OFFSET);
       bodyLabels[bodyIdx].position.copy(labelPos);
       setFlagLine(bodyIdx, pos, labelPos);
+      // Hide if below horizon in topocentric mode
+      const aboveHorizon = !horizonCullingEnabled || pos.y >= 0;
+      bodyLabels[bodyIdx].visible = aboveHorizon;
     }
 
     // Update flag line geometry
@@ -287,6 +306,10 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     (bodyFlagLinesGeometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     bodyFlagLinesGeometry.attributes.color.array.set(flagLineColors);
     (bodyFlagLinesGeometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+  }
+
+  function setHorizonCulling(enabled: boolean): void {
+    horizonCullingEnabled = enabled;
   }
 
   return {
@@ -299,5 +322,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     getMoonPosition: () => currentMoonPos.clone(),
     getSunMoonSeparationDeg: () => currentSunMoonSeparationDeg,
     update,
+    setHorizonCulling,
   };
 }

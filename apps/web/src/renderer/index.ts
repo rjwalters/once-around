@@ -46,6 +46,7 @@ export interface SkyRenderer {
   setISSVisible(visible: boolean): void;
   isISSVisible(): boolean;
   hasISSData(): boolean;
+  setHorizonCulling(enabled: boolean): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -182,6 +183,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     return issLayer.hasData;
   }
 
+  function setHorizonCulling(enabled: boolean): void {
+    bodiesLayer.setHorizonCulling(enabled);
+  }
+
   function render(): void {
     eclipseLayer.updateTime();
     renderer.render(scene, camera);
@@ -221,6 +226,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setISSVisible,
     isISSVisible,
     hasISSData,
+    setHorizonCulling,
     render,
     resize,
   };
