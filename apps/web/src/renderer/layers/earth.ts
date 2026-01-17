@@ -151,8 +151,9 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
     // This means no offset is needed for the base case.
     //
     // GMST increases as Earth rotates eastward (counterclockwise from above north pole)
-    // In Three.js Y-up, counterclockwise around +Y is positive rotation
-    const rotationRad = (gmst * Math.PI) / 180;
+    // In Three.js Y-up with our coordinate mapping, we need negative rotation
+    // to move the Prime Meridian eastward (toward increasing RA)
+    const rotationRad = -(gmst * Math.PI) / 180;
 
     // Apply rotation to the mesh around Y-axis (Earth's polar axis = celestial north)
     const earthMesh = group.children[0] as THREE.Mesh;

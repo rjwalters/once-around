@@ -137,7 +137,7 @@ export function createCelestialControls(
       .sub(zenith.clone().multiplyScalar(northPole.dot(zenith)))
       .normalize();
 
-    const east = new THREE.Vector3().crossVectors(zenith, north).normalize();
+    const east = new THREE.Vector3().crossVectors(north, zenith).normalize();
 
     const cosAlt = Math.cos(topoAltitude);
     const sinAlt = Math.sin(topoAltitude);

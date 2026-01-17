@@ -14,6 +14,7 @@ export interface UrlState {
   lat?: number; // Observer latitude
   lon?: number; // Observer longitude
   object?: string; // Object name for deep linking (searches catalog)
+  view?: 'geo' | 'topo' | 'orbital'; // View mode
 }
 
 /**
@@ -70,6 +71,11 @@ export function readUrlState(): UrlState {
     state.object = object.trim();
   }
 
+  const view = params.get("view");
+  if (view === 'geo' || view === 'topo' || view === 'orbital') {
+    state.view = view;
+  }
+
   return state;
 }
 
@@ -123,6 +129,9 @@ export function createUrlStateUpdater(): (state: UrlState) => void {
         } else {
           params.delete("object");
         }
+      }
+      if (pendingUrlState.view !== undefined) {
+        params.set("view", pendingUrlState.view);
       }
 
       const newUrl = `${window.location.pathname}?${params.toString()}`;

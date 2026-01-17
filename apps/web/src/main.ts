@@ -712,8 +712,21 @@ async function main(): Promise<void> {
   });
   viewModeManager.setupEventListeners();
 
+  // Apply view mode from URL if specified (overrides saved settings)
+  if (urlState.view) {
+    const viewModeMap: Record<string, 'geocentric' | 'topocentric' | 'orbital'> = {
+      'geo': 'geocentric',
+      'topo': 'topocentric',
+      'orbital': 'orbital',
+    };
+    const targetMode = viewModeMap[urlState.view];
+    if (targetMode) {
+      viewModeManager.setMode(targetMode);
+    }
+  }
+
   // Show seeing control, LST display, and enable horizon culling if starting in topocentric mode
-  if (settings.viewMode === 'topocentric') {
+  if (settings.viewMode === 'topocentric' || urlState.view === 'topo') {
     if (seeingControl) {
       seeingControl.style.display = 'block';
     }
