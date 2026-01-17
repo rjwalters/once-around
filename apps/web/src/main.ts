@@ -1041,10 +1041,16 @@ async function main(): Promise<void> {
       // Zenith in equatorial coords: RA = LST, Dec = latitude
       const latRad = (settings.observerLatitude * Math.PI) / 180;
       const lstRad = (lst * Math.PI) / 180;
+      const cosLat = Math.cos(latRad);
+      const sinLat = Math.sin(latRad);
+      const cosLst = Math.cos(lstRad);
+      const sinLst = Math.sin(lstRad);
+      // Equatorial coords (Z-up): eqX = cosLat*cosLst, eqY = cosLat*sinLst, eqZ = sinLat
+      // Convert to Three.js (Y-up): (-eqX, eqZ, eqY)
       const zenith = new THREE.Vector3(
-        Math.cos(latRad) * Math.sin(lstRad),
-        Math.sin(latRad),
-        Math.cos(latRad) * Math.cos(lstRad)
+        -cosLat * cosLst,
+        sinLat,
+        cosLat * sinLst
       );
       renderer.updateHorizonZenith(zenith);
     }
