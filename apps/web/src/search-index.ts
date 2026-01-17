@@ -24,6 +24,12 @@ export interface DSODataEntry {
   dec: number;
 }
 
+export interface SatelliteData {
+  index: number;
+  name: string;
+  fullName: string;
+}
+
 export interface SearchIndexOptions {
   bodyNames: readonly string[];
   cometNames: readonly string[];
@@ -33,6 +39,9 @@ export interface SearchIndexOptions {
   dsoData: readonly DSODataEntry[];
   getBodyPositions: () => Map<string, { x: number; y: number; z: number }>;
   positionToRaDec: (pos: { x: number; y: number; z: number }) => { ra: number; dec: number };
+  satellites?: SatelliteData[];
+  getSatellitePosition?: (index: number) => { x: number; y: number; z: number } | null;
+  // Legacy - will be converted to satellites internally
   getISSPosition?: () => { x: number; y: number; z: number } | null;
 }
 
@@ -49,6 +58,8 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     dsoData,
     getBodyPositions,
     positionToRaDec,
+    satellites,
+    getSatellitePosition,
     getISSPosition,
   } = options;
 
@@ -125,8 +136,34 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     }
   }
 
-  // Add ISS (International Space Station)
-  if (getISSPosition) {
+  // Add satellites (ISS, Hubble, etc.)
+  if (satellites && getSatellitePosition) {
+    for (const sat of satellites) {
+      const pos = getSatellitePosition(sat.index);
+      if (pos) {
+        const { ra, dec } = positionToRaDec(pos);
+        // Add by short name
+        items.push({
+          name: sat.name,
+          type: "satellite",
+          ra,
+          dec,
+          subtitle: sat.fullName,
+        });
+        // Also searchable by full name (if different)
+        if (sat.fullName !== sat.name) {
+          items.push({
+            name: sat.fullName,
+            type: "satellite",
+            ra,
+            dec,
+            subtitle: sat.name,
+          });
+        }
+      }
+    }
+  } else if (getISSPosition) {
+    // Legacy fallback for ISS only
     const issPos = getISSPosition();
     if (issPos) {
       const { ra, dec } = positionToRaDec(issPos);
@@ -137,7 +174,6 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
         dec,
         subtitle: "International Space Station",
       });
-      // Also searchable by full name
       items.push({
         name: "International Space Station",
         type: "satellite",

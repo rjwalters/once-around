@@ -4,10 +4,20 @@
 
 import { search, TYPE_COLORS, type SearchItem, type SearchResult } from "./search";
 
+// Satellite name to index mapping (must match engine.ts SATELLITES order)
+const SATELLITE_NAME_TO_INDEX: Record<string, number> = {
+  "ISS": 0,
+  "International Space Station": 0,
+  "Hubble": 1,
+  "Hubble Space Telescope": 1,
+};
+
 export interface SearchUIOptions {
   getSearchIndex: () => SearchItem[];
   navigateToResult: (result: SearchResult) => void;
   getPlanetPosition: (name: string) => { ra: number; dec: number } | null;
+  getSatellitePosition?: (index: number) => { ra: number; dec: number } | null;
+  // Legacy - will use getSatellitePosition(0) if available
   getISSPosition?: () => { ra: number; dec: number } | null;
 }
 
@@ -19,7 +29,7 @@ export interface SearchUI {
  * Create search UI handlers for rendering and keyboard navigation.
  */
 export function createSearchUI(options: SearchUIOptions): SearchUI {
-  const { getSearchIndex, navigateToResult, getPlanetPosition, getISSPosition } = options;
+  const { getSearchIndex, navigateToResult, getPlanetPosition, getSatellitePosition, getISSPosition } = options;
 
   // Get DOM elements
   const searchInput = document.getElementById("search") as HTMLInputElement | null;
@@ -73,12 +83,22 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
       }
     }
 
-    // For satellites (ISS), get current position (moves very fast)
-    if (result.type === 'satellite' && getISSPosition) {
-      const pos = getISSPosition();
-      if (pos) {
-        ra = pos.ra;
-        dec = pos.dec;
+    // For satellites (ISS, Hubble, etc.), get current position (they move fast)
+    if (result.type === 'satellite') {
+      const satIndex = SATELLITE_NAME_TO_INDEX[result.name];
+      if (satIndex !== undefined && getSatellitePosition) {
+        const pos = getSatellitePosition(satIndex);
+        if (pos) {
+          ra = pos.ra;
+          dec = pos.dec;
+        }
+      } else if (getISSPosition && (result.name === 'ISS' || result.name === 'International Space Station')) {
+        // Legacy fallback
+        const pos = getISSPosition();
+        if (pos) {
+          ra = pos.ra;
+          dec = pos.dec;
+        }
       }
     }
 

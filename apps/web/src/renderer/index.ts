@@ -18,7 +18,7 @@ import { createDSOLayer } from "./layers/dso";
 import { createOrbitsLayer } from "./layers/orbits";
 import { createCometsLayer } from "./layers/comets";
 import { createEclipseLayer } from "./layers/eclipse";
-import { createISSLayer } from "./layers/iss";
+import { createSatellitesLayer } from "./layers/satellites";
 
 export interface SkyRenderer {
   scene: THREE.Scene;
@@ -43,6 +43,10 @@ export interface SkyRenderer {
   setScintillationEnabled(enabled: boolean): void;
   setScintillationIntensity(intensity: number): void;
   updateScintillation(latitude: number, lst: number): void;
+  setSatellitesVisible(visible: boolean): void;
+  getSatellitePosition(index: number, engine: SkyEngine): { x: number; y: number; z: number } | null;
+  isSatelliteVisible(index: number): boolean;
+  // Legacy ISS methods
   setISSVisible(visible: boolean): void;
   isISSVisible(): boolean;
   hasISSData(): boolean;
@@ -66,11 +70,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const orbitsLayer = createOrbitsLayer(scene);
   const cometsLayer = createCometsLayer(scene, labelsGroup);
   const eclipseLayer = createEclipseLayer(scene);
-  const issLayer = createISSLayer(scene, labelsGroup);
+  const satellitesLayer = createSatellitesLayer(scene, labelsGroup);
 
   // Track state
   let labelsVisible = true;
-  let issEnabled = true;
+  let satellitesEnabled = true;
   let constellationStarMapInitialized = false;
 
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
@@ -91,8 +95,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     bodiesLayer.update(engine);
     moonsLayer.update(engine, fov, labelsVisible, canvasHeight);
     cometsLayer.update(engine, bodiesLayer.getSunPosition(), labelsVisible);
-    if (issEnabled) {
-      issLayer.update(engine, labelsVisible);
+    if (satellitesEnabled) {
+      satellitesLayer.update(engine, labelsVisible);
     }
   }
 
@@ -170,17 +174,30 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     starsLayer.updateScintillation(latitude, lst);
   }
 
+  function setSatellitesVisible(visible: boolean): void {
+    satellitesEnabled = visible;
+    satellitesLayer.setEnabled(visible);
+  }
+
+  function getSatellitePositionFn(index: number, engine: SkyEngine): { x: number; y: number; z: number } | null {
+    return satellitesLayer.getSatellitePosition(index, engine);
+  }
+
+  function isSatelliteVisible(index: number): boolean {
+    return satellitesLayer.isSatelliteVisible(index);
+  }
+
+  // Legacy ISS functions
   function setISSVisible(visible: boolean): void {
-    issEnabled = visible;
-    issLayer.setEnabled(visible);
+    setSatellitesVisible(visible);
   }
 
   function isISSVisible(): boolean {
-    return issLayer.isVisible();
+    return satellitesLayer.isSatelliteVisible(0); // ISS is index 0
   }
 
   function hasISSData(): boolean {
-    return issLayer.hasData;
+    return satellitesLayer.satellites[0]?.hasData ?? false;
   }
 
   function setHorizonCulling(enabled: boolean): void {
@@ -223,6 +240,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setScintillationEnabled,
     setScintillationIntensity,
     updateScintillation,
+    setSatellitesVisible,
+    getSatellitePosition: getSatellitePositionFn,
+    isSatelliteVisible,
     setISSVisible,
     isISSVisible,
     hasISSData,

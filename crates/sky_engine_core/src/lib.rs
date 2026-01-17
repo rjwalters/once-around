@@ -1,11 +1,19 @@
 pub mod catalog;
 pub mod comets;
 pub mod coords;
-pub mod iss;
 pub mod minor_bodies;
 pub mod planetary_moons;
 pub mod planets;
+pub mod satellites;
 pub mod time;
+
+// Legacy module alias for backwards compatibility
+pub mod iss {
+    //! Legacy ISS module - re-exports from satellites for backwards compatibility.
+    pub use crate::satellites::{
+        compute_iss_position, IssEphemeris, IssEphemerisPoint, IssPosition,
+    };
+}
 
 pub use catalog::{Star, StarCatalog};
 pub use comets::{
@@ -26,4 +34,12 @@ pub use planets::{
     CelestialBody, MoonPosition, Planet,
 };
 pub use time::SkyTime;
+
+// Legacy ISS exports for backwards compatibility
 pub use iss::{compute_iss_position, IssEphemeris, IssEphemerisPoint, IssPosition};
+
+// New satellite exports
+pub use satellites::{
+    compute_satellite_position, SatelliteEphemeris, SatelliteEphemerisPoint,
+    SatelliteId, SatellitePosition,
+};

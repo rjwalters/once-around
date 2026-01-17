@@ -1,6 +1,6 @@
 import "./styles.css";
 import * as THREE from "three";
-import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadISSEphemeris, getISSBuffer } from "./engine";
+import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadAllSatelliteEphemerides, getSatellitePosition, SATELLITES } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
@@ -402,13 +402,11 @@ async function main(): Promise<void> {
   renderer.updateFromEngine(engine, settings.fov);
   renderer.setMilkyWayVisibility(settings.magnitude);
 
-  // Load ISS ephemeris in background (non-blocking)
-  loadISSEphemeris(engine, "/data/iss_ephemeris.bin").then((loaded) => {
-    if (loaded) {
-      console.log("ISS ephemeris loaded - ISS tracking enabled");
-      // Trigger an update to show ISS if it's currently visible
-      renderer.updateFromEngine(engine);
-    }
+  // Load satellite ephemerides in background (non-blocking)
+  loadAllSatelliteEphemerides(engine).then(() => {
+    console.log("Satellite ephemerides loaded - satellite tracking enabled");
+    // Trigger an update to show satellites if they're currently visible
+    renderer.updateFromEngine(engine);
   });
 
   // Track current date for orbit computation (updated in onTimeChange)
@@ -787,11 +785,12 @@ async function main(): Promise<void> {
     dsoData: DSO_DATA,
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     positionToRaDec,
-    getISSPosition: () => {
-      if (!engine.has_iss_ephemeris() || !engine.iss_in_range()) return null;
-      const buf = getISSBuffer(engine);
-      if (buf.length < 3) return null;
-      return { x: buf[0], y: buf[1], z: buf[2] };
+    satellites: SATELLITES.map(s => ({ index: s.index, name: s.name, fullName: s.fullName })),
+    getSatellitePosition: (index: number) => {
+      if (!engine.has_satellite_ephemeris(index) || !engine.satellite_in_range(index)) return null;
+      const pos = getSatellitePosition(engine, index);
+      if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
+      return { x: pos.x, y: pos.y, z: pos.z };
     },
   }).then(index => {
     searchIndex = index;
@@ -808,11 +807,11 @@ async function main(): Promise<void> {
       const pos = getBodyPositionsFromEngine(engine).get(name);
       return pos ? positionToRaDec(pos) : null;
     },
-    getISSPosition: () => {
-      if (!engine.has_iss_ephemeris() || !engine.iss_in_range()) return null;
-      const buf = getISSBuffer(engine);
-      if (buf.length < 3) return null;
-      return positionToRaDec({ x: buf[0], y: buf[1], z: buf[2] });
+    getSatellitePosition: (index: number) => {
+      if (!engine.has_satellite_ephemeris(index) || !engine.satellite_in_range(index)) return null;
+      const pos = getSatellitePosition(engine, index);
+      if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
+      return positionToRaDec({ x: pos.x, y: pos.y, z: pos.z });
     },
   });
   searchUI.setupEventListeners();

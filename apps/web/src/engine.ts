@@ -223,9 +223,101 @@ export function getCometsBuffer(engine: SkyEngine): Float32Array {
   return new Float32Array(memory.buffer, ptr, len);
 }
 
+// Satellite indices (must match Rust SatelliteId order)
+export const SATELLITE_ISS = 0;
+export const SATELLITE_HUBBLE = 1;
+
+/**
+ * Satellite info for frontend use.
+ */
+export interface SatelliteInfo {
+  index: number;
+  name: string;
+  fullName: string;
+  ephemerisUrl: string;
+}
+
+/**
+ * All supported satellites.
+ */
+export const SATELLITES: SatelliteInfo[] = [
+  { index: SATELLITE_ISS, name: "ISS", fullName: "International Space Station", ephemerisUrl: "/data/iss_ephemeris.bin" },
+  { index: SATELLITE_HUBBLE, name: "Hubble", fullName: "Hubble Space Telescope", ephemerisUrl: "/data/hubble_ephemeris.bin" },
+];
+
+/**
+ * Create a Float32Array view into the satellites position buffer.
+ * N satellites * 5 floats: x, y, z (direction), illuminated (0/1), visible (0/1).
+ */
+export function getSatellitesBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.satellites_pos_ptr();
+  const len = engine.satellites_pos_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}
+
+/**
+ * Get position data for a specific satellite.
+ * @param engine - The SkyEngine instance
+ * @param index - Satellite index (SATELLITE_ISS, SATELLITE_HUBBLE, etc.)
+ * @returns Object with x, y, z, illuminated, aboveHorizon
+ */
+export function getSatellitePosition(engine: SkyEngine, index: number): {
+  x: number; y: number; z: number; illuminated: boolean; aboveHorizon: boolean;
+} {
+  const buffer = getSatellitesBuffer(engine);
+  const baseIdx = index * 5;
+  return {
+    x: buffer[baseIdx],
+    y: buffer[baseIdx + 1],
+    z: buffer[baseIdx + 2],
+    illuminated: buffer[baseIdx + 3] > 0.5,
+    aboveHorizon: buffer[baseIdx + 4] > 0.5,
+  };
+}
+
+/**
+ * Load satellite ephemeris data from a binary file.
+ * Format: [count: u32] followed by [jd: f64, x: f64, y: f64, z: f64] per point.
+ * @param engine - The SkyEngine instance
+ * @param index - Satellite index (SATELLITE_ISS, SATELLITE_HUBBLE, etc.)
+ * @param url - URL to the ephemeris binary file
+ */
+export async function loadSatelliteEphemeris(engine: SkyEngine, index: number, url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Failed to load satellite ephemeris from ${url}: ${response.status}`);
+      return false;
+    }
+    const buffer = await response.arrayBuffer();
+    engine.load_satellite_ephemeris(index, new Uint8Array(buffer));
+    engine.recompute();
+    const satInfo = SATELLITES.find(s => s.index === index);
+    console.log(`Loaded ${satInfo?.name ?? 'satellite'} ephemeris from ${url}`);
+    return true;
+  } catch (e) {
+    console.warn(`Failed to load satellite ephemeris: ${e}`);
+    return false;
+  }
+}
+
+/**
+ * Load all satellite ephemerides in parallel.
+ */
+export async function loadAllSatelliteEphemerides(engine: SkyEngine): Promise<void> {
+  const loadPromises = SATELLITES.map(sat =>
+    loadSatelliteEphemeris(engine, sat.index, sat.ephemerisUrl)
+  );
+  await Promise.all(loadPromises);
+}
+
+// === Legacy ISS functions for backwards compatibility ===
+
 /**
  * Create a Float32Array view into the ISS position buffer.
  * 5 floats: x, y, z (direction unit vector), illuminated (0/1), visible (0/1).
+ * @deprecated Use getSatellitesBuffer() or getSatellitePosition() instead
  */
 export function getISSBuffer(engine: SkyEngine): Float32Array {
   const memory = getWasmMemory();
@@ -237,21 +329,8 @@ export function getISSBuffer(engine: SkyEngine): Float32Array {
 /**
  * Load ISS ephemeris data from a binary file.
  * Format: [count: u32] followed by [jd: f64, x: f64, y: f64, z: f64] per point.
+ * @deprecated Use loadSatelliteEphemeris() instead
  */
 export async function loadISSEphemeris(engine: SkyEngine, url: string): Promise<boolean> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn(`Failed to load ISS ephemeris from ${url}: ${response.status}`);
-      return false;
-    }
-    const buffer = await response.arrayBuffer();
-    engine.load_iss_ephemeris(new Uint8Array(buffer));
-    engine.recompute();
-    console.log(`Loaded ISS ephemeris from ${url}`);
-    return true;
-  } catch (e) {
-    console.warn(`Failed to load ISS ephemeris: ${e}`);
-    return false;
-  }
+  return loadSatelliteEphemeris(engine, SATELLITE_ISS, url);
 }
