@@ -220,6 +220,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     if (enabled) {
       groundLayer.setVisible(false);
     }
+    // Enable depth testing on orbits in orbital mode so they're hidden behind Earth
+    orbitsLayer.setDepthTest(enabled);
   }
 
   function updateEarthPosition(nadirDirection: THREE.Vector3): void {
@@ -244,13 +246,27 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     if (!orbitalModeEnabled) return;
 
     // Iterate through all labels in the labelsGroup and hide occluded ones
-    labelsGroup.children.forEach((label) => {
+    labelsGroup.traverse((obj) => {
+      // Skip the labelsGroup itself
+      if (obj === labelsGroup) return;
+
+      const isOccluded = earthLayer.isOccluded(obj.position);
+
       // CSS2DObject has element property
-      const css2dObj = label as THREE.Object3D & { element?: HTMLElement };
+      const css2dObj = obj as THREE.Object3D & { element?: HTMLElement };
       if (css2dObj.element) {
-        const isOccluded = earthLayer.isOccluded(label.position);
         css2dObj.element.style.opacity = isOccluded ? '0' : '';
         css2dObj.element.style.pointerEvents = isOccluded ? 'none' : '';
+      }
+
+      // Sprites and other 3D objects
+      if (obj instanceof THREE.Sprite || obj instanceof THREE.Mesh) {
+        obj.visible = !isOccluded;
+      }
+
+      // Line segments (flag lines connecting markers to labels)
+      if (obj instanceof THREE.LineSegments) {
+        obj.visible = !isOccluded;
       }
     });
   }

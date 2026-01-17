@@ -22,6 +22,8 @@ export interface OrbitsLayer {
   load(): Promise<void>;
   /** Legacy compute method (now just calls load) */
   compute(engine: SkyEngine, centerDate: Date): Promise<void>;
+  /** Enable/disable depth testing (for orbital mode) */
+  setDepthTest(enabled: boolean): void;
 }
 
 /**
@@ -129,6 +131,18 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
     return load();
   }
 
+  /**
+   * Enable or disable depth testing on orbit lines.
+   * Enabled in orbital mode so orbits are hidden behind Earth.
+   */
+  function setDepthTest(enabled: boolean): void {
+    for (const line of lines) {
+      const material = line.material as THREE.LineBasicMaterial;
+      material.depthTest = enabled;
+      material.needsUpdate = true;
+    }
+  }
+
   return {
     group,
     lines,
@@ -136,5 +150,6 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
     focusOrbit,
     load,
     compute,
+    setDepthTest,
   };
 }
