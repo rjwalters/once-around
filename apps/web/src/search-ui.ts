@@ -119,6 +119,7 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
   /**
    * Navigate to an object by name (for deep linking via URL).
    * Returns true if object was found and navigation initiated.
+   * Also populates the search box with the object name for visual feedback.
    */
   function navigateToObjectByName(objectName: string): boolean {
     const index = getSearchIndex();
@@ -127,6 +128,12 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
     if (results.length > 0) {
       const result = results[0];
       const { ra, dec } = getUpdatedPosition(result);
+
+      // Show the object name in the search box for visual feedback
+      if (searchInput) {
+        searchInput.value = result.name;
+      }
+
       navigateToResult({ ...result, ra, dec });
       return true;
     }

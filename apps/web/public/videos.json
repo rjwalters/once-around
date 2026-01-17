@@ -288,15 +288,6 @@
     "url": "https://www.youtube.com/watch?v=9q5hc5gSpvU"
   },
   {
-    "id": "gHhvb3Ic88M",
-    "title": "Did James Webb Spot a new Gas Giant at Alpha Centauri",
-    "object": "Alpha Centauri",
-    "ra": 219.90208333333334,
-    "dec": -60.83388888888889,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=gHhvb3Ic88M"
-  },
-  {
     "id": "hyI_pPs2sKM",
     "title": "Once Around The Cosmic Owl",
     "object": "The Cosmic Owl",
@@ -304,15 +295,6 @@
     "dec": 58.27777777777778,
     "moving": false,
     "url": "https://www.youtube.com/watch?v=hyI_pPs2sKM"
-  },
-  {
-    "id": "heplgytpf-Y",
-    "title": "Where Next for New Horizons?",
-    "object": "New Horizons (Kuiper Belt)",
-    "ra": 289.6887916666667,
-    "dec": -20.223,
-    "moving": true,
-    "url": "https://www.youtube.com/watch?v=heplgytpf-Y"
   },
   {
     "id": "ASQP1ZOxFWA",
@@ -331,15 +313,6 @@
     "dec": 38.74941666666667,
     "moving": false,
     "url": "https://www.youtube.com/watch?v=s_M-7bDzZ6o"
-  },
-  {
-    "id": "GAbkTDvvScc",
-    "title": "Did We Find Betelgeuse’s Buddy?",
-    "object": "Betelgeuse",
-    "ra": 88.79291666666667,
-    "dec": 7.406944444444445,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=GAbkTDvvScc"
   },
   {
     "id": "tH1OwgpCM1k",
@@ -450,15 +423,6 @@
     "url": "https://www.youtube.com/watch?v=sW0a9hWc_xY"
   },
   {
-    "id": "RT2g9e345QQ",
-    "title": "A new look at Alpha Centauri",
-    "object": "Alpha Centauri",
-    "ra": 219.90208333333334,
-    "dec": -60.83388888888889,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=RT2g9e345QQ"
-  },
-  {
     "id": "F5puFTHy0Lo",
     "title": "Once Around Fomalhaut",
     "object": "Fomalhaut",
@@ -547,15 +511,6 @@
     "dec": -69.75611111111111,
     "moving": false,
     "url": "https://www.youtube.com/watch?v=mr-4qx4TonI"
-  },
-  {
-    "id": "QjHyei4PRWw",
-    "title": "The Milky Way's Family Tree",
-    "object": "Galactic Center",
-    "ra": 266.4166666666667,
-    "dec": -29.00777777777778,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=QjHyei4PRWw"
   },
   {
     "id": "kFVpcocENxI",
@@ -810,24 +765,6 @@
     "url": "https://www.youtube.com/watch?v=9w5z5lpA_mY"
   },
   {
-    "id": "YUM9jF-Fnq4",
-    "title": "Betelgeuse, will it supernova tomorrow?",
-    "object": "Betelgeuse",
-    "ra": 88.79291666666667,
-    "dec": 7.406944444444445,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=YUM9jF-Fnq4"
-  },
-  {
-    "id": "JmMujpRrHQI",
-    "title": "A new look at Barnard's Star",
-    "object": "Barnard's Star",
-    "ra": 269.45208333333335,
-    "dec": 4.693333333333333,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=JmMujpRrHQI"
-  },
-  {
     "id": "AEFBMr2ec6A",
     "title": "Once Around K2 18b",
     "object": "K2 18b",
@@ -862,33 +799,6 @@
     "dec": -9.458260970518054,
     "moving": false,
     "url": "https://www.youtube.com/watch?v=FBggG5xPq6A"
-  },
-  {
-    "id": "tE6AWxOdEjg",
-    "title": "The Blaze Star : T Coronae Borealis",
-    "object": "T Coronae Borealis",
-    "ra": 239.87583333333333,
-    "dec": 25.92027777777778,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=tE6AWxOdEjg"
-  },
-  {
-    "id": "_S4dcf9C38o",
-    "title": "Galaxies and The Milky Way   I2A5   Brian Lister",
-    "object": "Galactic Center",
-    "ra": 266.4166666666667,
-    "dec": -29.00777777777778,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=_S4dcf9C38o"
-  },
-  {
-    "id": "J_ZwmBq5jeE",
-    "title": "I2APt5   Galaxies and the Milky Way",
-    "object": "Galactic Center",
-    "ra": 266.4166666666667,
-    "dec": -29.00777777777778,
-    "moving": false,
-    "url": "https://www.youtube.com/watch?v=J_ZwmBq5jeE"
   },
   {
     "id": "Xe5dTYbn5HA",
@@ -961,5 +871,14 @@
     "dec": 22.321638888888888,
     "moving": true,
     "url": "https://www.youtube.com/watch?v=udTPZx6tAyo"
+  },
+  {
+    "id": "QkNMwpANg-4",
+    "title": "Once Around Lambda Orionis",
+    "object": "Lambda Orionis",
+    "ra": 83.969494,
+    "dec": 9.934155,
+    "moving": false,
+    "url": "https://www.youtube.com/watch?v=QkNMwpANg-4"
   }
 ]
