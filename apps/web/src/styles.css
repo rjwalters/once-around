@@ -95,6 +95,9 @@
   --color-comet-hover: #b3fff0;
   --color-dso: #88ccff;
   --color-dso-hover: #aaddff;
+  --color-iss: #ffee88;
+  --color-iss-hover: #ffffaa;
+  --color-iss-shadow: #8899aa;
   --color-constellation: rgba(100, 160, 220, 0.7);
   --color-video: #b366ff;
 
@@ -269,6 +272,26 @@
   .dso-label:hover {
     color: var(--color-dso-hover);
     text-shadow: 0 0 8px rgba(136, 204, 255, 0.6);
+  }
+
+  .iss-label {
+    color: var(--color-iss);
+    font-size: 11px;
+    font-weight: 600;
+    text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+    pointer-events: auto !important;
+    cursor: pointer;
+    transition: color 0.15s, text-shadow 0.15s;
+  }
+
+  .iss-label:hover {
+    color: var(--color-iss-hover);
+    text-shadow: 0 0 10px rgba(255, 238, 136, 0.7);
+  }
+
+  .iss-label.iss-in-shadow {
+    color: var(--color-iss-shadow);
+    font-style: italic;
   }
 
   .constellation-label {

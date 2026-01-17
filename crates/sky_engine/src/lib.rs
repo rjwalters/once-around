@@ -2,6 +2,7 @@ use sky_engine_core::{
     catalog::StarCatalog,
     comets::{compute_all_comet_positions, Comet},
     coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, ra_dec_to_cartesian},
+    iss::{compute_iss_position, IssEphemeris},
     minor_bodies::{compute_all_minor_body_positions, MinorBody},
     planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
     planets::{compute_all_body_positions_full, compute_moon_position_full, CelestialBody},
@@ -34,6 +35,10 @@ pub struct SkyEngine {
     // All star positions for constellation line drawing (not magnitude-filtered)
     all_stars_pos: Vec<f32>,  // x,y,z for ALL stars in catalog
     all_stars_meta: Vec<f32>, // vmag, bv_color, id, padding for ALL stars
+
+    // ISS (International Space Station)
+    iss_ephemeris: Option<IssEphemeris>,
+    iss_pos: Vec<f32>, // 5 floats: x, y, z, illuminated (0/1), visible (0/1)
 
     // Cached visible star count
     visible_count: usize,
@@ -73,6 +78,8 @@ impl SkyEngine {
             comets_pos: vec![0.0; Comet::ALL.len() * 4], // 7 comets * 4 floats (x, y, z, magnitude)
             all_stars_pos: vec![0.0; star_count * 3],
             all_stars_meta: vec![0.0; star_count * 4],
+            iss_ephemeris: None,
+            iss_pos: vec![0.0; 5], // x, y, z, illuminated, visible
             visible_count: 0,
         };
 
@@ -145,6 +152,7 @@ impl SkyEngine {
         self.recompute_planetary_moons();
         self.recompute_minor_bodies();
         self.recompute_comets();
+        self.recompute_iss();
     }
 
     /// Add more stars to the catalog from binary data.
@@ -274,6 +282,32 @@ impl SkyEngine {
             self.comets_pos[idx + 2] = z;
             // Store magnitude instead of angular diameter (comets don't have meaningful sizes)
             self.comets_pos[idx + 3] = comet_pos.magnitude as f32;
+        }
+    }
+
+    fn recompute_iss(&mut self) {
+        if let Some(ref ephemeris) = self.iss_ephemeris {
+            if let Some(pos) = compute_iss_position(
+                ephemeris,
+                &self.time,
+                self.observer_lat_rad,
+                self.observer_lon_rad,
+                0.0, // Observer height (km), assume sea level
+            ) {
+                let (x, y, z) = pos.direction.to_f32();
+                self.iss_pos[0] = x;
+                self.iss_pos[1] = y;
+                self.iss_pos[2] = z;
+                self.iss_pos[3] = if pos.illuminated { 1.0 } else { 0.0 };
+                self.iss_pos[4] = if pos.above_horizon { 1.0 } else { 0.0 };
+            } else {
+                // Outside ephemeris range or error
+                self.iss_pos[0] = 0.0;
+                self.iss_pos[1] = 0.0;
+                self.iss_pos[2] = 0.0;
+                self.iss_pos[3] = 0.0;
+                self.iss_pos[4] = 0.0;
+            }
         }
     }
 
@@ -449,6 +483,57 @@ impl SkyEngine {
     pub fn comet_magnitude(&self, index: usize) -> f32 {
         let idx = index * 4 + 3;
         self.comets_pos.get(idx).copied().unwrap_or(99.0)
+    }
+
+    // --- ISS buffer accessors ---
+
+    /// Load ISS ephemeris from binary data.
+    /// Format: [count: u32] followed by [jd: f64, x: f64, y: f64, z: f64] for each point.
+    /// Call recompute() after loading to update ISS position.
+    pub fn load_iss_ephemeris(&mut self, data: &[u8]) -> Result<(), JsError> {
+        let ephemeris = IssEphemeris::from_binary(data)
+            .map_err(|e| JsError::new(e))?;
+        self.iss_ephemeris = Some(ephemeris);
+        Ok(())
+    }
+
+    /// Check if ISS ephemeris is loaded.
+    pub fn has_iss_ephemeris(&self) -> bool {
+        self.iss_ephemeris.is_some()
+    }
+
+    /// Check if current time is within ISS ephemeris coverage.
+    pub fn iss_in_range(&self) -> bool {
+        self.iss_ephemeris
+            .as_ref()
+            .map(|e| e.covers(self.time.julian_date_tdb()))
+            .unwrap_or(false)
+    }
+
+    /// Get pointer to ISS position buffer.
+    /// 5 floats: x, y, z (direction unit vector), illuminated (0/1), visible (0/1).
+    pub fn iss_pos_ptr(&self) -> *const f32 {
+        self.iss_pos.as_ptr()
+    }
+
+    /// Get length of ISS position buffer (always 5).
+    pub fn iss_pos_len(&self) -> usize {
+        self.iss_pos.len()
+    }
+
+    /// Check if ISS is currently illuminated (not in Earth's shadow).
+    pub fn iss_illuminated(&self) -> bool {
+        self.iss_pos[3] > 0.5
+    }
+
+    /// Check if ISS is currently above the observer's horizon.
+    pub fn iss_above_horizon(&self) -> bool {
+        self.iss_pos[4] > 0.5
+    }
+
+    /// Check if ISS is visible (both illuminated and above horizon).
+    pub fn iss_visible(&self) -> bool {
+        self.iss_illuminated() && self.iss_above_horizon()
     }
 
     // --- All stars buffer accessors (for constellation drawing, not magnitude-filtered) ---

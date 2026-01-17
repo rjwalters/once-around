@@ -18,6 +18,7 @@ import { createDSOLayer } from "./layers/dso";
 import { createOrbitsLayer } from "./layers/orbits";
 import { createCometsLayer } from "./layers/comets";
 import { createEclipseLayer } from "./layers/eclipse";
+import { createISSLayer } from "./layers/iss";
 
 export interface SkyRenderer {
   scene: THREE.Scene;
@@ -42,6 +43,9 @@ export interface SkyRenderer {
   setScintillationEnabled(enabled: boolean): void;
   setScintillationIntensity(intensity: number): void;
   updateScintillation(latitude: number, lst: number): void;
+  setISSVisible(visible: boolean): void;
+  isISSVisible(): boolean;
+  hasISSData(): boolean;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -61,9 +65,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const orbitsLayer = createOrbitsLayer(scene);
   const cometsLayer = createCometsLayer(scene, labelsGroup);
   const eclipseLayer = createEclipseLayer(scene);
+  const issLayer = createISSLayer(scene, labelsGroup);
 
   // Track state
   let labelsVisible = true;
+  let issEnabled = true;
   let constellationStarMapInitialized = false;
 
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
@@ -84,6 +90,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     bodiesLayer.update(engine);
     moonsLayer.update(engine, fov, labelsVisible, canvasHeight);
     cometsLayer.update(engine, bodiesLayer.getSunPosition(), labelsVisible);
+    if (issEnabled) {
+      issLayer.update(engine, labelsVisible);
+    }
   }
 
   function setConstellationsVisible(visible: boolean): void {
@@ -160,6 +169,19 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     starsLayer.updateScintillation(latitude, lst);
   }
 
+  function setISSVisible(visible: boolean): void {
+    issEnabled = visible;
+    issLayer.setEnabled(visible);
+  }
+
+  function isISSVisible(): boolean {
+    return issLayer.isVisible();
+  }
+
+  function hasISSData(): boolean {
+    return issLayer.hasData;
+  }
+
   function render(): void {
     eclipseLayer.updateTime();
     renderer.render(scene, camera);
@@ -196,6 +218,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setScintillationEnabled,
     setScintillationIntensity,
     updateScintillation,
+    setISSVisible,
+    isISSVisible,
+    hasISSData,
     render,
     resize,
   };

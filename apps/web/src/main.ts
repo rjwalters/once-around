@@ -1,6 +1,6 @@
 import "./styles.css";
 import * as THREE from "three";
-import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer } from "./engine";
+import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadISSEphemeris } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
@@ -403,6 +403,15 @@ async function main(): Promise<void> {
   renderer.updateFromEngine(engine, settings.fov);
   renderer.setMilkyWayVisibility(settings.magnitude);
 
+  // Load ISS ephemeris in background (non-blocking)
+  loadISSEphemeris(engine, "/data/iss_ephemeris.bin").then((loaded) => {
+    if (loaded) {
+      console.log("ISS ephemeris loaded - ISS tracking enabled");
+      // Trigger an update to show ISS if it's currently visible
+      renderer.updateFromEngine(engine);
+    }
+  });
+
   // Track current date for orbit computation (updated in onTimeChange)
   let currentDate = settings.datetime ? new Date(settings.datetime) : new Date();
 
@@ -567,6 +576,19 @@ async function main(): Promise<void> {
         renderer.updateDSOs(currentFov, currentMag);
       }
       settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
+    });
+  }
+
+  // ISS (International Space Station) checkbox
+  const issCheckbox = document.getElementById("iss") as HTMLInputElement | null;
+  if (issCheckbox) {
+    // Restore from settings
+    issCheckbox.checked = settings.issVisible ?? true;
+    renderer.setISSVisible(settings.issVisible ?? true);
+
+    issCheckbox.addEventListener("change", () => {
+      renderer.setISSVisible(issCheckbox.checked);
+      settingsSaver.save({ issVisible: issCheckbox.checked });
     });
   }
 

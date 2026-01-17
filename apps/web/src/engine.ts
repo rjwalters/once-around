@@ -222,3 +222,36 @@ export function getCometsBuffer(engine: SkyEngine): Float32Array {
   const len = engine.comets_pos_len();
   return new Float32Array(memory.buffer, ptr, len);
 }
+
+/**
+ * Create a Float32Array view into the ISS position buffer.
+ * 5 floats: x, y, z (direction unit vector), illuminated (0/1), visible (0/1).
+ */
+export function getISSBuffer(engine: SkyEngine): Float32Array {
+  const memory = getWasmMemory();
+  const ptr = engine.iss_pos_ptr();
+  const len = engine.iss_pos_len();
+  return new Float32Array(memory.buffer, ptr, len);
+}
+
+/**
+ * Load ISS ephemeris data from a binary file.
+ * Format: [count: u32] followed by [jd: f64, x: f64, y: f64, z: f64] per point.
+ */
+export async function loadISSEphemeris(engine: SkyEngine, url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Failed to load ISS ephemeris from ${url}: ${response.status}`);
+      return false;
+    }
+    const buffer = await response.arrayBuffer();
+    engine.load_iss_ephemeris(new Uint8Array(buffer));
+    engine.recompute();
+    console.log(`Loaded ISS ephemeris from ${url}`);
+    return true;
+  } catch (e) {
+    console.warn(`Failed to load ISS ephemeris: ${e}`);
+    return false;
+  }
+}

@@ -1,6 +1,7 @@
 pub mod catalog;
 pub mod comets;
 pub mod coords;
+pub mod iss;
 pub mod minor_bodies;
 pub mod planetary_moons;
 pub mod planets;
@@ -25,3 +26,4 @@ pub use planets::{
     CelestialBody, MoonPosition, Planet,
 };
 pub use time::SkyTime;
+pub use iss::{compute_iss_position, IssEphemeris, IssEphemerisPoint, IssPosition};
