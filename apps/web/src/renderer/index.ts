@@ -279,6 +279,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
       // Get world position (not local position)
       obj.getWorldPosition(worldPos);
+
+      // Skip objects at origin (invalid position)
+      if (worldPos.lengthSq() < 0.01) return;
+
       const isOccluded = earthLayer.isOccluded(worldPos);
 
       // CSS2DObject has element property

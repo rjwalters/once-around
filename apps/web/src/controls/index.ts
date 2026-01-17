@@ -139,6 +139,11 @@ export function createCelestialControls(
 
     const east = new THREE.Vector3().crossVectors(north, zenith).normalize();
 
+    console.log('[Camera] updateTopocentricCamera:',
+      'zenith:', zenith.x.toFixed(3), zenith.y.toFixed(3), zenith.z.toFixed(3),
+      'north:', north.x.toFixed(3), north.y.toFixed(3), north.z.toFixed(3),
+      'east:', east.x.toFixed(3), east.y.toFixed(3), east.z.toFixed(3));
+
     const cosAlt = Math.cos(topoAltitude);
     const sinAlt = Math.sin(topoAltitude);
     const cosAz = Math.cos(topoAzimuth);
@@ -149,6 +154,11 @@ export function createCelestialControls(
       .addScaledVector(east, cosAlt * sinAz)
       .addScaledVector(zenith, sinAlt)
       .normalize();
+
+    console.log('[Camera] viewDir:',
+      'alt:', (topoAltitude * 180 / Math.PI).toFixed(1),
+      'az:', (topoAzimuth * 180 / Math.PI).toFixed(1),
+      '-> dir:', viewDir.x.toFixed(3), viewDir.y.toFixed(3), viewDir.z.toFixed(3));
 
     camera.up.copy(zenith);
     camera.lookAt(viewDir.x * 100, viewDir.y * 100, viewDir.z * 100);
