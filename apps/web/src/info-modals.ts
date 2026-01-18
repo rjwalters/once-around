@@ -1,11 +1,12 @@
 /**
- * Info modals for stars, constellations, DSOs, and comets.
+ * Info modals for stars, constellations, DSOs, comets, and dwarf planets.
  */
 
 import { STAR_DATA } from "./starData";
 import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA, type DSOType } from "./dsoData";
 import { COMET_INFO } from "./comet-info";
+import { DWARF_PLANET_INFO } from "./dwarf-planet-info";
 import { formatRAForDSO, formatDecForDSO } from "./coordinate-utils";
 import { setupModalClose, showModal, setupDelegatedModalTrigger } from "./modal-utils";
 
@@ -18,6 +19,13 @@ const COMET_NAMES = [
   "C/2020 F3 NEOWISE",
   "C/2023 A3 T-ATLAS",
   "C/1995 O1 Hale-Bopp",
+];
+
+// Minor body names must match the order used in the engine
+const MINOR_BODY_NAMES = [
+  "Pluto", "Ceres", "Eris", "Makemake", "Haumea",
+  "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna",
+  "Ixion", "Huya", "Chaos", "Salacia", "Varda",
 ];
 
 /**
@@ -208,6 +216,49 @@ function setupCometModal(): void {
 }
 
 /**
+ * Set up the dwarf planet info modal.
+ */
+function setupDwarfPlanetModal(): void {
+  const modal = document.getElementById("dwarf-planet-modal");
+  const modalClose = document.getElementById("dwarf-planet-modal-close");
+  const modalName = document.getElementById("dwarf-planet-modal-name");
+  const modalDesignation = document.getElementById("dwarf-planet-modal-designation");
+  const modalTypeBadge = document.getElementById("dwarf-planet-modal-type-badge");
+  const modalDiameter = document.getElementById("dwarf-planet-modal-diameter");
+  const modalPeriod = document.getElementById("dwarf-planet-modal-period");
+  const modalDistance = document.getElementById("dwarf-planet-modal-distance");
+  const modalMoons = document.getElementById("dwarf-planet-modal-moons");
+  const modalDiscovered = document.getElementById("dwarf-planet-modal-discovered");
+  const modalDescription = document.getElementById("dwarf-planet-modal-description");
+
+  function showDwarfPlanetInfo(minorBodyIndex: number): void {
+    const bodyName = MINOR_BODY_NAMES[minorBodyIndex];
+    const info = DWARF_PLANET_INFO[bodyName];
+    if (!info || !modal) return;
+
+    if (modalName) modalName.textContent = info.name;
+    if (modalDesignation) modalDesignation.textContent = info.designation;
+    if (modalTypeBadge) modalTypeBadge.textContent = info.type.split(" ")[0]; // Just "Dwarf" or "Trans-Neptunian"
+    if (modalDiameter) modalDiameter.textContent = info.diameter;
+    if (modalPeriod) modalPeriod.textContent = info.orbitalPeriod;
+    if (modalDistance) modalDistance.textContent = info.distance;
+    if (modalMoons) modalMoons.textContent = info.moons;
+    if (modalDiscovered) modalDiscovered.textContent = info.discoveredYear;
+    if (modalDescription) modalDescription.textContent = info.description;
+
+    showModal(modal);
+  }
+
+  setupModalClose(modal, modalClose);
+  setupDelegatedModalTrigger(
+    "minor-body-label",
+    "minorBody",
+    (value) => { const n = parseInt(value, 10); return isNaN(n) ? null : n; },
+    showDwarfPlanetInfo
+  );
+}
+
+/**
  * Set up all info modals.
  */
 export function setupInfoModals(): void {
@@ -215,4 +266,5 @@ export function setupInfoModals(): void {
   setupConstellationModal();
   setupDSOModal();
   setupCometModal();
+  setupDwarfPlanetModal();
 }

@@ -1460,6 +1460,112 @@ canvas {
   line-height: 1.7;
 }
 
+/* Dwarf Planet modal */
+.dwarf-planet-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.dwarf-planet-modal-content {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  position: relative;
+  border: 1px solid rgba(180, 140, 100, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.dwarf-planet-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.dwarf-planet-modal-close:hover {
+  color: #b48c64;
+}
+
+.dwarf-planet-modal-header {
+  margin-bottom: 16px;
+  padding-right: 40px;
+}
+
+.dwarf-planet-modal-name {
+  color: #b48c64;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.dwarf-planet-modal-subtitle {
+  color: #888;
+  font-size: 13px;
+}
+
+.dwarf-planet-modal-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(180, 140, 100, 0.2);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #b48c64;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+}
+
+.dwarf-planet-modal-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.dwarf-planet-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dwarf-planet-stat-label {
+  color: #666;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dwarf-planet-stat-value {
+  color: #ccc;
+  font-size: 13px;
+}
+
+.dwarf-planet-modal-description {
+  color: #ccc;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 /* Info text */
 #info {
   position: fixed;
