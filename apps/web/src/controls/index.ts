@@ -38,9 +38,9 @@ export function createCelestialControls(
   let dragStartY = 0;
 
   // FOV zoom settings
-  const minFov = 0.05;
+  const minFov = 0.001; // Allow deep zoom for resolving Pluto and other small bodies
   const maxFov = 100;
-  const zoomSpeed = 0.05;
+  const zoomSpeed = 0.15; // Multiplicative zoom: each wheel tick changes FOV by 15%
 
   // Animation state
   let isAnimating = false;
@@ -239,8 +239,10 @@ export function createCelestialControls(
   function onWheel(event: WheelEvent): void {
     if (!inputEnabled) return;
     event.preventDefault();
-    const delta = event.deltaY * zoomSpeed;
-    const newFov = Math.max(minFov, Math.min(maxFov, camera.fov + delta));
+    // Use multiplicative zoom so each wheel tick changes FOV by a percentage
+    // This prevents overshooting at small FOV values
+    const zoomFactor = 1 + (event.deltaY > 0 ? zoomSpeed : -zoomSpeed);
+    const newFov = Math.max(minFov, Math.min(maxFov, camera.fov * zoomFactor));
     if (newFov !== camera.fov) {
       camera.fov = newFov;
       camera.updateProjectionMatrix();
