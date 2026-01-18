@@ -87,11 +87,22 @@ function deviceOrientationToQuaternion(
   screenRotation.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -orientRad);
   quaternion.multiply(screenRotation);
 
-  // Rotate to align with celestial sphere
-  // Device "forward" (camera direction) needs to map to celestial viewing direction
+  // Rotate to align with celestial sphere coordinate system
+  // The celestial sphere uses: X = RA=0/Dec=0, Y = north pole (Dec=90), Z = RA=90/Dec=0
+  // Device orientation after euler: Z-forward, Y-up
+  // We need to map device frame to celestial frame so that:
+  // - Tilting phone up/down (beta) changes declination
+  // - Rotating phone left/right (alpha) changes RA
+  //
+  // First rotate -90° around Z to align device X with celestial forward
+  // Then rotate -90° around the new X to point device up toward celestial pole
   const worldCorrection = new THREE.Quaternion();
-  worldCorrection.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  worldCorrection.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
   quaternion.multiply(worldCorrection);
+
+  const worldCorrection2 = new THREE.Quaternion();
+  worldCorrection2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  quaternion.multiply(worldCorrection2);
 
   return quaternion;
 }
