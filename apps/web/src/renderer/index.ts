@@ -22,6 +22,8 @@ import { createSatellitesLayer } from "./layers/satellites";
 import { createEarthLayer } from "./layers/earth";
 import { createDeepFieldsLayer } from "./layers/deep-fields";
 import { createJWSTLayer } from "./layers/jwst";
+import { createMeteorShowerLayer } from "./layers/meteor-showers";
+import type { MeteorShower } from "../meteorShowerData";
 
 export interface SkyRenderer {
   scene: THREE.Scene;
@@ -38,6 +40,9 @@ export interface SkyRenderer {
   setDSOsVisible(visible: boolean): void;
   updateDeepFields(fov: number): void;
   setDeepFieldsVisible(visible: boolean): void;
+  setMeteorShowersVisible(visible: boolean): void;
+  updateMeteorShowers(currentDate: Date): void;
+  getActiveMeteorShowers(): MeteorShower[];
   getRenderedStarCount(): number;
   updateEclipse(sunMoonSeparationDeg: number): void;
   setGroundPlaneVisible(visible: boolean): void;
@@ -95,6 +100,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const earthLayer = createEarthLayer(scene);
   const deepFieldsLayer = createDeepFieldsLayer(scene);
   const jwstLayer = createJWSTLayer(scene);
+  const meteorShowerLayer = createMeteorShowerLayer(scene, labelsGroup);
 
   // Track state
   let labelsVisible = true;
@@ -167,6 +173,18 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   function setDeepFieldsVisible(visible: boolean): void {
     deepFieldsLayer.setVisible(visible);
+  }
+
+  function setMeteorShowersVisible(visible: boolean): void {
+    meteorShowerLayer.setVisible(visible);
+  }
+
+  function updateMeteorShowers(currentDate: Date): void {
+    meteorShowerLayer.update(currentDate, labelsVisible);
+  }
+
+  function getActiveMeteorShowers(): MeteorShower[] {
+    return meteorShowerLayer.getActiveShowers();
   }
 
   function getRenderedStarCount(): number {
@@ -400,6 +418,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setDSOsVisible,
     updateDeepFields,
     setDeepFieldsVisible,
+    setMeteorShowersVisible,
+    updateMeteorShowers,
+    getActiveMeteorShowers,
     getRenderedStarCount,
     updateEclipse,
     setGroundPlaneVisible,

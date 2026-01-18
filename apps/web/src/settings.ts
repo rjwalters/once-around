@@ -31,6 +31,7 @@ export interface Settings {
   orbitsVisible: boolean;
   dsosVisible: boolean;
   deepFieldsVisible: boolean;
+  meteorShowersVisible: boolean;
   issVisible: boolean;
   nightVisionEnabled: boolean;
   arModeEnabled: boolean;
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: Settings = {
   orbitsVisible: false,
   dsosVisible: false,
   deepFieldsVisible: false,
+  meteorShowersVisible: false,
   issVisible: true,
   nightVisionEnabled: false,
   arModeEnabled: false,

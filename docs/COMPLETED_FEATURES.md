@@ -16,6 +16,7 @@ Historical record of implemented features in Once Around the Night Sky.
 - [Astronomical Corrections](#astronomical-corrections)
 - [Solar System Objects](#solar-system-objects)
 - [Satellite Tracking](#satellite-tracking)
+- [Meteor Showers](#meteor-showers)
 
 ---
 
@@ -476,3 +477,35 @@ Satellites are displayed when ALL conditions are met:
 When date is outside ephemeris range, search displays toast notification explaining the issue.
 
 Illumination state shown but doesn't hide the satellite (observers may want to see where it is even in shadow).
+
+---
+
+## Meteor Showers
+
+Display meteor shower radiants with activity indicators.
+
+### Showers Included
+
+| Shower | Peak | ZHR | Parent Body |
+|--------|------|-----|-------------|
+| Quadrantids | Jan 4 | 120 | 2003 EH1 |
+| Lyrids | Apr 22 | 18 | C/1861 G1 (Thatcher) |
+| Eta Aquariids | May 6 | 50 | 1P/Halley |
+| Southern Delta Aquariids | Jul 30 | 25 | 96P/Machholz |
+| Alpha Capricornids | Jul 30 | 5 | 169P/NEAT |
+| Perseids | Aug 12 | 100 | 109P/Swift-Tuttle |
+| Draconids | Oct 8 | 10 | 21P/Giacobini-Zinner |
+| Orionids | Oct 21 | 20 | 1P/Halley |
+| Taurids | Nov 5 | 5 | 2P/Encke |
+| Leonids | Nov 17 | 15 | 55P/Tempel-Tuttle |
+| Geminids | Dec 14 | 150 | 3200 Phaethon |
+| Ursids | Dec 22 | 10 | 8P/Tuttle |
+
+### Features
+
+- **Starburst radiant markers** - Orange markers at radiant positions
+- **Peak indicators** - Brighter markers and star (★) in label during peak
+- **Radiant drift correction** - Positions adjusted based on current date
+- **Activity dates** - Only active showers are displayed
+- **Searchable** - Find showers by name with peak date and ZHR in results
+- **Keyboard shortcut** - Toggle with M key

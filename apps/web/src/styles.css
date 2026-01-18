@@ -95,6 +95,9 @@
   --color-comet-hover: #b3fff0;
   --color-dso: #88ccff;
   --color-dso-hover: #aaddff;
+  --color-meteor-shower: #ffaa44;
+  --color-meteor-shower-hover: #ffcc66;
+  --color-meteor-shower-peak: #ffdd00;
   --color-iss: #ffee88;
   --color-iss-hover: #ffffaa;
   --color-iss-shadow: #8899aa;
@@ -272,6 +275,27 @@
   .dso-label:hover {
     color: var(--color-dso-hover);
     text-shadow: 0 0 8px rgba(136, 204, 255, 0.6);
+  }
+
+  .meteor-shower-label {
+    color: var(--color-meteor-shower);
+    font-size: 10px;
+    font-weight: 500;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+    pointer-events: auto !important;
+    cursor: pointer;
+    transition: color 0.15s, text-shadow 0.15s;
+  }
+
+  .meteor-shower-label:hover {
+    color: var(--color-meteor-shower-hover);
+    text-shadow: 0 0 8px rgba(255, 170, 68, 0.6);
+  }
+
+  .meteor-shower-label.meteor-shower-peak {
+    color: var(--color-meteor-shower-peak);
+    font-weight: 700;
+    text-shadow: 0 0 6px rgba(255, 221, 0, 0.5);
   }
 
   .iss-label {

@@ -141,14 +141,16 @@ Simulate how real space telescopes maintain precise pointing.
 
 ## Medium Priority
 
-### Meteor Showers
+### Meteor Showers ✓ COMPLETE
 
 Display meteor shower radiants during active periods.
 
-- Show radiant position on sky
-- Badge/indicator: "Perseids active - 100/hr at peak"
-- Data is just coordinates + date ranges (low complexity)
-- Major observing events that drive engagement
+- ✓ 12 major annual showers with radiant positions, date ranges, ZHR, parent body
+- ✓ Starburst radiant markers on sky (brighter during peak)
+- ✓ Labels show shower name with star indicator at peak
+- ✓ Radiants drift-corrected based on current date
+- ✓ Searchable by name (e.g., "Perseids", "Geminids")
+- ✓ Toggle via checkbox or keyboard shortcut (M)
 
 ### Eclipse Path Integration
 

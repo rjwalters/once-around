@@ -449,6 +449,8 @@ async function main(): Promise<void> {
       if (videoMarkersRef) {
         videoMarkersRef.updateMovingPositions(bodyPos);
       }
+      // Update meteor showers (radiant positions drift slightly, activity changes with date)
+      renderer.updateMeteorShowers(date);
 
       const eclipseBanner = document.getElementById("eclipse-banner");
       if (eclipseBanner) {
@@ -610,6 +612,28 @@ async function main(): Promise<void> {
         renderer.updateDeepFields(currentFov);
       }
       settingsSaver.save({ deepFieldsVisible: deepFieldsCheckbox.checked });
+    });
+  }
+
+  // Meteor showers checkbox
+  const meteorShowersCheckbox = document.getElementById("meteor-showers") as HTMLInputElement | null;
+  if (meteorShowersCheckbox) {
+    // Restore from settings
+    meteorShowersCheckbox.checked = settings.meteorShowersVisible ?? false;
+    renderer.setMeteorShowersVisible(settings.meteorShowersVisible ?? false);
+
+    // Initialize meteor shower positions if restored as visible
+    if (settings.meteorShowersVisible) {
+      renderer.updateMeteorShowers(currentDate);
+    }
+
+    meteorShowersCheckbox.addEventListener("change", () => {
+      renderer.setMeteorShowersVisible(meteorShowersCheckbox.checked);
+      // Update meteor showers immediately when toggled on
+      if (meteorShowersCheckbox.checked) {
+        renderer.updateMeteorShowers(currentDate);
+      }
+      settingsSaver.save({ meteorShowersVisible: meteorShowersCheckbox.checked });
     });
   }
 
@@ -1084,6 +1108,16 @@ async function main(): Promise<void> {
           renderer.updateDeepFields(currentFov);
         }
         settingsSaver.save({ deepFieldsVisible: deepFieldsCheckbox.checked });
+      }
+    },
+    toggleMeteorShowers: () => {
+      if (meteorShowersCheckbox) {
+        meteorShowersCheckbox.checked = !meteorShowersCheckbox.checked;
+        renderer.setMeteorShowersVisible(meteorShowersCheckbox.checked);
+        if (meteorShowersCheckbox.checked) {
+          renderer.updateMeteorShowers(currentDate);
+        }
+        settingsSaver.save({ meteorShowersVisible: meteorShowersCheckbox.checked });
       }
     },
     toggleNightVision: () => {

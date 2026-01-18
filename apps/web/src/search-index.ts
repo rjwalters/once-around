@@ -4,6 +4,7 @@
 
 import type { SearchItem } from "./search";
 import type { VideoPlacement } from "./videos";
+import { METEOR_SHOWER_DATA, type MeteorShower } from "./meteorShowerData";
 
 export interface StarDataEntry {
   name: string;
@@ -265,6 +266,18 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
       ra,
       dec,
       subtitle: "Home Planet (visible from JWST)",
+    });
+  }
+
+  // Add meteor showers
+  for (const shower of METEOR_SHOWER_DATA) {
+    const peakDate = `${shower.peakMonth}/${shower.peakDay}`;
+    items.push({
+      name: shower.name,
+      type: "meteor_shower",
+      ra: shower.ra,
+      dec: shower.dec,
+      subtitle: `Peak ${peakDate}, ZHR ${shower.zhr}`,
     });
   }
 
