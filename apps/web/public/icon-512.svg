@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#0a0a1a" rx="64"/>
+
+  <!-- Subtle gradient overlay for depth -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1a1a3a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0a0a1a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#glow)" rx="64"/>
+
+  <!-- Central bright star with glow -->
+  <circle cx="256" cy="256" r="20" fill="#ffffff"/>
+  <circle cx="256" cy="256" r="32" fill="#ffffff" opacity="0.3"/>
+  <circle cx="256" cy="256" r="48" fill="#ffffff" opacity="0.1"/>
+
+  <!-- Constellation-like stars -->
+  <circle cx="128" cy="148" r="10" fill="#4a9eff" opacity="0.9"/>
+  <circle cx="384" cy="128" r="12" fill="#ffcc66" opacity="0.95"/>
+  <circle cx="96" cy="352" r="9" fill="#ffffff" opacity="0.7"/>
+  <circle cx="416" cy="320" r="11" fill="#ff8844" opacity="0.8"/>
+  <circle cx="192" cy="416" r="8" fill="#ffffff" opacity="0.6"/>
+  <circle cx="352" cy="416" r="9" fill="#4a9eff" opacity="0.7"/>
+
+  <!-- Medium background stars -->
+  <circle cx="288" cy="96" r="5" fill="#fff" opacity="0.45"/>
+  <circle cx="160" cy="224" r="4" fill="#fff" opacity="0.35"/>
+  <circle cx="416" cy="192" r="5" fill="#fff" opacity="0.4"/>
+  <circle cx="96" cy="224" r="4" fill="#fff" opacity="0.3"/>
+  <circle cx="224" cy="384" r="4" fill="#fff" opacity="0.35"/>
+  <circle cx="448" cy="416" r="5" fill="#fff" opacity="0.4"/>
+  <circle cx="64" cy="128" r="4" fill="#fff" opacity="0.3"/>
+
+  <!-- Smaller background stars -->
+  <circle cx="176" cy="80" r="2.5" fill="#fff" opacity="0.25"/>
+  <circle cx="448" cy="256" r="3" fill="#fff" opacity="0.3"/>
+  <circle cx="64" cy="288" r="2.5" fill="#fff" opacity="0.2"/>
+  <circle cx="320" cy="176" r="3" fill="#fff" opacity="0.25"/>
+  <circle cx="128" cy="320" r="2.5" fill="#fff" opacity="0.2"/>
+  <circle cx="384" cy="384" r="3" fill="#fff" opacity="0.25"/>
+  <circle cx="256" cy="448" r="2.5" fill="#fff" opacity="0.2"/>
+  <circle cx="80" cy="416" r="2" fill="#fff" opacity="0.15"/>
+  <circle cx="432" cy="80" r="2.5" fill="#fff" opacity="0.2"/>
+
+  <!-- Orbit arc suggesting "once around" -->
+  <ellipse cx="256" cy="256" rx="160" ry="64" fill="none" stroke="#4a9eff" stroke-width="3" stroke-opacity="0.3" stroke-dasharray="20 30" transform="rotate(-15 256 256)"/>
+</svg>

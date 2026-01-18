@@ -8,16 +8,15 @@ For completed features, see [docs/COMPLETED_FEATURES.md](docs/COMPLETED_FEATURES
 
 ## High Priority
 
-### PWA Support
+### PWA Support ✓ COMPLETE
 
-Add `manifest.json` and service worker for offline stargazing.
+Offline-first Progressive Web App for stargazing without connectivity.
 
-**Why high priority:** Stargazers are outdoors, often without connectivity. This is the single biggest practical improvement for actual use.
-
-- Offline-first architecture with service worker caching
-- "Add to home screen" on mobile
-- Faster repeat loads
-- Full-screen mode without browser chrome
+- ✓ `manifest.json` with app metadata, icons, and display settings
+- ✓ Service worker with caching strategies (cache-first for assets, network-first for ephemeris)
+- ✓ "Add to home screen" support on mobile
+- ✓ Full-screen standalone mode without browser chrome
+- ✓ Apple-specific meta tags for iOS support
 
 ### Rise/Set Times
 
@@ -166,14 +165,16 @@ Extend the eclipse feature with location-aware path visualization.
 
 Upcoming eclipses: Spain 2026, Egypt 2027, Australia 2028.
 
-### ISS Pass Predictions
+### ISS Pass Predictions ✓ COMPLETE
 
 Predict ISS visibility from observer location.
 
-- Calculate when ISS is above horizon AND illuminated AND sky is dark
-- Show pass time, max altitude, direction, brightness
-- "Next visible pass" in Tonight's Highlights panel
-- Requires refactoring current ephemeris approach or switching to TLE/SGP4
+- ✓ Calculate when ISS is above horizon AND illuminated AND sky is dark
+- ✓ Show pass time, max altitude, direction, duration
+- ✓ "Next visible pass" panel with countdown timer in topocentric mode
+- ✓ Expandable list of upcoming passes
+- ✓ Click any pass to jump to that time
+- ✓ Binary search refinement for accurate pass boundaries (~30 sec precision)
 
 ---
 

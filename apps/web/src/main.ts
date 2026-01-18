@@ -1356,3 +1356,30 @@ main().catch((err) => {
     `;
   }
 });
+
+// Register service worker for offline support (PWA)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("Service worker registered:", registration.scope);
+
+        // Check for updates
+        registration.addEventListener("updatefound", () => {
+          const newWorker = registration.installing;
+          if (newWorker) {
+            newWorker.addEventListener("statechange", () => {
+              if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                // New content available, could prompt user to refresh
+                console.log("New version available - refresh to update");
+              }
+            });
+          }
+        });
+      })
+      .catch((error) => {
+        console.log("Service worker registration failed:", error);
+      });
+  });
+}

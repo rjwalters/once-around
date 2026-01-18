@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Background -->
+  <rect width="192" height="192" fill="#0a0a1a" rx="24"/>
+
+  <!-- Subtle gradient overlay for depth -->
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1a1a3a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0a0a1a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="192" height="192" fill="url(#glow)" rx="24"/>
+
+  <!-- Central bright star -->
+  <circle cx="96" cy="96" r="8" fill="#ffffff"/>
+  <circle cx="96" cy="96" r="12" fill="#ffffff" opacity="0.3"/>
+
+  <!-- Constellation-like stars -->
+  <circle cx="48" cy="56" r="4" fill="#4a9eff" opacity="0.9"/>
+  <circle cx="144" cy="48" r="5" fill="#ffcc66" opacity="0.95"/>
+  <circle cx="36" cy="132" r="3.5" fill="#ffffff" opacity="0.7"/>
+  <circle cx="156" cy="120" r="4.5" fill="#ff8844" opacity="0.8"/>
+  <circle cx="72" cy="156" r="3" fill="#ffffff" opacity="0.6"/>
+  <circle cx="132" cy="156" r="3.5" fill="#4a9eff" opacity="0.7"/>
+
+  <!-- Smaller background stars -->
+  <circle cx="108" cy="36" r="2" fill="#fff" opacity="0.4"/>
+  <circle cx="60" cy="84" r="1.5" fill="#fff" opacity="0.3"/>
+  <circle cx="156" cy="72" r="2" fill="#fff" opacity="0.35"/>
+  <circle cx="36" cy="84" r="1.5" fill="#fff" opacity="0.25"/>
+  <circle cx="84" cy="144" r="1.5" fill="#fff" opacity="0.3"/>
+  <circle cx="168" cy="156" r="2" fill="#fff" opacity="0.35"/>
+  <circle cx="24" cy="48" r="1.5" fill="#fff" opacity="0.25"/>
+
+  <!-- Orbit arc suggesting "once around" -->
+  <ellipse cx="96" cy="96" rx="60" ry="24" fill="none" stroke="#4a9eff" stroke-width="1.5" stroke-opacity="0.3" stroke-dasharray="8 12" transform="rotate(-15 96 96)"/>
+</svg>
