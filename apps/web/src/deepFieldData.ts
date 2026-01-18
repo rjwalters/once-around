@@ -204,6 +204,66 @@ export const DEEP_FIELD_DATA: DeepField[] = [
     telescope: "HST",
     category: "messier",
   },
+
+  // ============================================
+  // GLOBULAR CLUSTERS
+  // ============================================
+
+  // M13 - Great Globular Cluster in Hercules
+  {
+    id: "M13",
+    name: "Hercules Globular Cluster",
+    ra: 250.423,            // 16h 41m 41.6s
+    dec: 36.461,            // +36° 27' 41"
+    sizeArcmin: 20,         // ~20' diameter
+    textureUrl: "/messier/m13.jpg",
+    rotationAngle: 0,
+    description: "The Great Globular Cluster in Hercules (M13) is one of the brightest globular clusters visible from the Northern Hemisphere. Located 22,200 light-years away, it contains several hundred thousand stars packed into a sphere about 145 light-years across. In 1974, the Arecibo message was beamed toward M13 as an attempt at interstellar communication.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M3 - Globular Cluster in Canes Venatici
+  {
+    id: "M3",
+    name: "M3 Globular Cluster",
+    ra: 205.548,            // 13h 42m 11.6s
+    dec: 28.377,            // +28° 22' 38"
+    sizeArcmin: 18,         // ~18' diameter
+    textureUrl: "/messier/m3.jpg",
+    rotationAngle: 0,
+    description: "M3 is one of the largest and brightest globular clusters in the sky, containing approximately 500,000 stars. Located 33,900 light-years away in Canes Venatici, it was the first Messier object discovered by Charles Messier himself in 1764. The cluster is notable for its large population of variable stars, with over 270 identified.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M5 - Globular Cluster in Serpens
+  {
+    id: "M5",
+    name: "M5 Globular Cluster",
+    ra: 229.638,            // 15h 18m 33.2s
+    dec: 2.081,             // +2° 04' 52"
+    sizeArcmin: 23,         // ~23' diameter
+    textureUrl: "/messier/m5.jpg",
+    rotationAngle: 0,
+    description: "M5 is one of the oldest globular clusters known, estimated at 13 billion years old. Located 24,500 light-years away in Serpens, it contains over 100,000 stars and spans about 165 light-years in diameter. Under dark skies, it is just visible to the naked eye. The cluster contains 105 known variable stars, mostly RR Lyrae type.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M22 - Sagittarius Cluster
+  {
+    id: "M22",
+    name: "Sagittarius Cluster",
+    ra: 279.100,            // 18h 36m 24s
+    dec: -23.903,           // -23° 54' 12"
+    sizeArcmin: 32,         // ~32' diameter, one of the largest
+    textureUrl: "/messier/m22.jpg",
+    rotationAngle: 0,
+    description: "M22 is one of the nearest and brightest globular clusters, located just 10,400 light-years away in Sagittarius near the galactic bulge. It was one of the first globulars discovered (1665) and contains around 70,000 stars. M22 is notable for containing two stellar-mass black holes, the first ever found in a globular cluster.",
+    telescope: "HST",
+    category: "messier",
+  },
 ];
 
 /**
