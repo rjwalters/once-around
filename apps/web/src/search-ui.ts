@@ -75,8 +75,8 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
   function getUpdatedPosition(result: SearchResult): { ra: number; dec: number } {
     let { ra, dec } = result;
 
-    // For planets, get current position (they move with time)
-    if (result.type === 'planet') {
+    // For planets and minor bodies, get current position (they move with time)
+    if (result.type === 'planet' || result.type === 'minor_body') {
       const pos = getPlanetPosition(result.name);
       if (pos) {
         ra = pos.ra;

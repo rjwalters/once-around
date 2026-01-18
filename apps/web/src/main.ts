@@ -31,6 +31,7 @@ import { setupOrbitFocus } from "./orbit-focus";
 import { readUrlState, createUrlStateUpdater } from "./url-state";
 import {
   BODY_NAMES,
+  MINOR_BODY_NAMES,
   COMET_NAMES,
   getBodyPositions,
   positionToRaDec,
@@ -822,6 +823,7 @@ async function main(): Promise<void> {
   // Initialize search index
   buildSearchIndex({
     bodyNames: BODY_NAMES,
+    minorBodyNames: MINOR_BODY_NAMES,
     cometNames: COMET_NAMES,
     starData: STAR_DATA,
     constellationData: CONSTELLATION_DATA,

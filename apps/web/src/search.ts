@@ -2,7 +2,7 @@
  * Fuzzy search across planets, stars, constellations, and videos.
  */
 
-export type SearchItemType = 'planet' | 'star' | 'constellation' | 'dso' | 'video' | 'comet' | 'satellite';
+export type SearchItemType = 'planet' | 'minor_body' | 'star' | 'constellation' | 'dso' | 'video' | 'comet' | 'satellite';
 
 export interface SearchItem {
   name: string;

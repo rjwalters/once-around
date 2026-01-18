@@ -32,6 +32,7 @@ export interface SatelliteData {
 
 export interface SearchIndexOptions {
   bodyNames: readonly string[];
+  minorBodyNames?: readonly string[];
   cometNames: readonly string[];
   starData: Record<string, StarDataEntry>;
   constellationData: Record<string, ConstellationDataEntry>;
@@ -51,6 +52,7 @@ export interface SearchIndexOptions {
 export async function buildSearchIndex(options: SearchIndexOptions): Promise<SearchItem[]> {
   const {
     bodyNames,
+    minorBodyNames,
     cometNames,
     starData,
     constellationData,
@@ -72,6 +74,37 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     if (pos) {
       const { ra, dec } = positionToRaDec(pos);
       items.push({ name, type: "planet", ra, dec });
+    }
+  }
+
+  // Add minor bodies (dwarf planets and asteroids)
+  if (minorBodyNames) {
+    // Subtitles for minor bodies based on their classification
+    const minorBodySubtitles: Record<string, string> = {
+      "Pluto": "Dwarf Planet",
+      "Ceres": "Dwarf Planet (Asteroid Belt)",
+      "Eris": "Dwarf Planet (Trans-Neptunian)",
+      "Makemake": "Dwarf Planet (Trans-Neptunian)",
+      "Haumea": "Dwarf Planet (Trans-Neptunian)",
+      "Sedna": "Detached Object",
+      "Quaoar": "Trans-Neptunian Object",
+      "Gonggong": "Trans-Neptunian Object",
+      "Orcus": "Trans-Neptunian Object",
+      "Varuna": "Trans-Neptunian Object",
+      "Vesta": "Asteroid",
+      "Pallas": "Asteroid",
+      "Hygiea": "Asteroid",
+      "Apophis": "Near-Earth Asteroid",
+      "Bennu": "Near-Earth Asteroid",
+    };
+
+    for (const name of minorBodyNames) {
+      const pos = currentBodyPositions.get(name);
+      if (pos) {
+        const { ra, dec } = positionToRaDec(pos);
+        const subtitle = minorBodySubtitles[name] || "Minor Body";
+        items.push({ name, type: "minor_body", ra, dec, subtitle });
+      }
     }
   }
 
