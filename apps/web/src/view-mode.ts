@@ -34,6 +34,12 @@ export interface ViewModeManagerOptions {
   onResetVideoOcclusion?: () => void;
 }
 
+/** Display info for the tour view indicator */
+export interface ViewIndicatorInfo {
+  label: string;
+  icon: string;  // Emoji or HTML for icon
+}
+
 export interface ViewModeManager {
   getMode: () => ViewMode;
   setMode: (mode: ViewMode) => void;
@@ -46,6 +52,8 @@ export interface ViewModeManager {
   unlockAndRestoreMode: (mode: ViewMode) => void;
   /** Check if view mode is currently locked */
   isLocked: () => boolean;
+  /** Set the tour view indicator display (only shown when locked) */
+  setIndicatorLabel: (info: ViewIndicatorInfo | null) => void;
 }
 
 /**
@@ -79,6 +87,13 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   const coordAltAzGroup = document.getElementById("coord-altaz-group");
   const coordRaDecGroup = document.getElementById("coord-radec-group");
   const horizonLabel = document.getElementById("horizon-label");
+
+  // Tour indicator elements
+  const viewModeSection = document.querySelector(".view-mode-section");
+  const viewModeToggle = document.querySelector(".view-mode-toggle");
+  const tourIndicator = document.getElementById("tour-view-indicator");
+  const indicatorIcon = tourIndicator?.querySelector(".indicator-icon");
+  const indicatorLabel = tourIndicator?.querySelector(".indicator-label");
 
   function updateTopocentricParamsForTime(date: Date): void {
     const location = getObserverLocation();
@@ -137,6 +152,55 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
         }
       }
     }
+  }
+
+  // Icon mappings for view modes (matching the button icons)
+  const VIEW_MODE_ICONS: Record<ViewMode, string> = {
+    geocentric: '\u{1F310}',  // Globe emoji
+    topocentric: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor"><rect x="0" y="14" width="24" height="3"/><circle cx="6" cy="6" r="1.5"/><circle cx="12" cy="9" r="1"/><circle cx="18" cy="4" r="1.2"/><circle cx="15" cy="7" r="0.8"/></svg>',
+    hubble: '\u{1F6F0}',  // Satellite emoji
+    jwst: '\u2B21',  // Hexagon
+  };
+
+  const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+    geocentric: 'Geocentric',
+    topocentric: 'Topocentric',
+    hubble: 'Hubble',
+    jwst: 'JWST',
+  };
+
+  function getDefaultIndicatorInfo(mode: ViewMode): ViewIndicatorInfo {
+    return {
+      label: VIEW_MODE_LABELS[mode],
+      icon: VIEW_MODE_ICONS[mode],
+    };
+  }
+
+  function updateIndicatorDisplay(info: ViewIndicatorInfo): void {
+    if (indicatorIcon) {
+      indicatorIcon.innerHTML = info.icon;
+    }
+    if (indicatorLabel) {
+      indicatorLabel.textContent = info.label;
+    }
+  }
+
+  function showTourIndicator(): void {
+    viewModeSection?.classList.add('tour-active');
+    if (viewModeToggle instanceof HTMLElement) {
+      viewModeToggle.style.display = 'none';
+    }
+    tourIndicator?.classList.remove('hidden');
+    // Set default indicator based on current mode
+    updateIndicatorDisplay(getDefaultIndicatorInfo(currentMode));
+  }
+
+  function hideTourIndicator(): void {
+    viewModeSection?.classList.remove('tour-active');
+    if (viewModeToggle instanceof HTMLElement) {
+      viewModeToggle.style.display = '';
+    }
+    tourIndicator?.classList.add('hidden');
   }
 
   function setMode(mode: ViewMode): void {
@@ -211,6 +275,7 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     const previousMode = currentMode;
     locked = true;
     updateButtonsDisabled();
+    showTourIndicator();
     if (mode !== currentMode) {
       setMode(mode);
     }
@@ -220,8 +285,19 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   function unlockAndRestoreMode(mode: ViewMode): void {
     locked = false;
     updateButtonsDisabled();
+    hideTourIndicator();
     if (mode !== currentMode) {
       setMode(mode);
+    }
+  }
+
+  function setIndicatorLabel(info: ViewIndicatorInfo | null): void {
+    if (!locked) return;  // Only update when locked (during tour)
+    if (info) {
+      updateIndicatorDisplay(info);
+    } else {
+      // Reset to default based on current mode
+      updateIndicatorDisplay(getDefaultIndicatorInfo(currentMode));
     }
   }
 
@@ -253,5 +329,6 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     lockAndSetMode,
     unlockAndRestoreMode,
     isLocked,
+    setIndicatorLabel,
   };
 }

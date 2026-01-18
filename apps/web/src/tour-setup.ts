@@ -7,6 +7,13 @@ import {
   calculateSunMoonSeparation,
   type BodyPositions,
 } from "./body-positions";
+import type { ViewIndicatorInfo } from "./view-mode";
+
+// Display names and icons for spacecraft in tour viewpoints
+const SPACECRAFT_DISPLAY: Record<string, ViewIndicatorInfo> = {
+  voyager1: { label: 'Voyager 1', icon: '\u{1F6F0}' },  // Satellite emoji
+  voyager2: { label: 'Voyager 2', icon: '\u{1F6F0}' },
+};
 
 // Map from tour target names to body/comet names in the position buffer
 const TARGET_TO_NAME: Record<TargetBody, string> = {
@@ -48,6 +55,7 @@ export interface TourSetupDependencies {
     getMode: () => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
     lockAndSetMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
     unlockAndRestoreMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => void;
+    setIndicatorLabel: (info: ViewIndicatorInfo | null) => void;
   } | null;
   getBodyPositions: () => BodyPositions;
   getCurrentDate: () => Date;
@@ -210,6 +218,7 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
       renderer.clearStarOverrides();
     },
     setViewpoint: (viewpoint: TourViewpoint, date: Date) => {
+      const mgr = getViewModeManager();
       if (viewpoint.type === 'spacecraft' && viewpoint.spacecraft) {
         // Look up spacecraft position
         const pos = getSpacecraftPosition(viewpoint.spacecraft, date);
@@ -217,6 +226,11 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
           renderer.setRemoteViewpoint(pos.x, pos.y, pos.z, pos.distanceAU);
         } else {
           console.warn(`No position data for spacecraft ${viewpoint.spacecraft} on ${date.toISOString()}`);
+        }
+        // Update indicator to show spacecraft name
+        const displayInfo = SPACECRAFT_DISPLAY[viewpoint.spacecraft];
+        if (displayInfo && mgr) {
+          mgr.setIndicatorLabel(displayInfo);
         }
       } else if (viewpoint.type === 'coordinates' && viewpoint.position) {
         // Use explicit coordinates
@@ -231,13 +245,19 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
           viewpoint.position.z,
           distance
         );
+        // For arbitrary coordinates, show generic "Remote" label
+        mgr?.setIndicatorLabel({ label: 'Remote', icon: '\u{1F30C}' });  // Milky Way emoji
       } else if (viewpoint.type === 'geocentric') {
         // Geocentric means Earth-centered, clear any remote viewpoint
         renderer.clearRemoteViewpoint();
+        // Reset indicator to show the actual view mode
+        mgr?.setIndicatorLabel(null);
       }
     },
     resetViewpoint: () => {
       renderer.clearRemoteViewpoint();
+      // Reset indicator to show the actual view mode
+      getViewModeManager()?.setIndicatorLabel(null);
     },
     getViewMode: () => getViewModeManager()?.getMode() ?? 'geocentric',
     setViewModeLocked: (mode) => {

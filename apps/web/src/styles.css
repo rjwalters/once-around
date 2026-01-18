@@ -2530,6 +2530,44 @@ canvas {
   vertical-align: middle;
 }
 
+/* Tour View Mode Indicator - shown during guided tours instead of buttons */
+.tour-view-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: #2a3a4a;
+  border: 1px solid #4a9eff;
+  border-radius: 4px;
+  color: #4a9eff;
+  font-size: 13px;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+.tour-view-indicator.hidden {
+  display: none;
+}
+
+.tour-view-indicator .indicator-icon {
+  font-size: 16px;
+}
+
+.tour-view-indicator .indicator-icon svg {
+  display: inline-block;
+  vertical-align: middle;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+
+/* Hide view mode buttons when tour indicator is shown */
+.view-mode-section.tour-active .view-mode-toggle {
+  display: none;
+}
+
 /* Help/Keyboard Shortcuts Modal */
 .help-modal {
   position: fixed;
