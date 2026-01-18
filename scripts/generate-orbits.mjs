@@ -18,7 +18,7 @@ const PROJECT_ROOT = join(__dirname, '..');
 // Constants from renderer/constants.ts
 const ORBIT_PLANET_INDICES = [2, 3, 4, 5, 6, 7, 8]; // Mercury through Neptune
 const ORBIT_NUM_POINTS = 120;
-const SKY_RADIUS = 100;
+const SKY_RADIUS = 50;
 
 // Orbital periods in days
 const ORBIT_PERIODS_DAYS = {
