@@ -1,70 +1,42 @@
 import "./styles.css";
 import * as THREE from "three";
-import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, getPlanetaryMoonsBuffer, loadAllSatelliteEphemerides, getSatellitePosition, SATELLITES } from "./engine";
+import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadAllSatelliteEphemerides } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
-import { setupUI, applyTimeToEngine, parseDatetimeLocal } from "./ui";
+import { setupUI, applyTimeToEngine } from "./ui";
 import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement } from "./videos";
-import { STAR_DATA } from "./starData";
-import { CONSTELLATION_DATA } from "./constellationData";
-import { DSO_DATA } from "./dsoData";
-import { DEEP_FIELD_DATA } from "./deepFieldData";
 import { loadSettings, createSettingsSaver } from "./settings";
 import { createLocationManager, type ObserverLocation } from "./location";
-import { CONSTELLATION_CENTERS, type SearchItem } from "./search";
-import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tour";
 import type { SkyEngine } from "./wasm/sky_engine";
 import { createTimeControls } from "./time-controls";
 import { setupSimpleModal, setupModalClose } from "./modal-utils";
-import { createViewModeManager, computeGMST } from "./view-mode";
+import { createViewModeManager } from "./view-mode";
 import { formatLST } from "./coordinate-utils";
 import { createARModeManager } from "./ar-mode";
 import { createLocationUI } from "./location-ui";
-import { createSearchUI } from "./search-ui";
 import { setupTourUI } from "./tour-ui";
+import { getTourById } from "./tourData";
 import { createCoordinateDisplay } from "./coordinate-display";
 import { setupVideoMarkerInteractions } from "./video-marker-interactions";
 import { createEclipseHandler } from "./eclipse-handler";
 import { setupInfoModals } from "./info-modals";
 import { setupKeyboardHandler } from "./keyboard-handler";
-import { buildSearchIndex } from "./search-index";
 import { setupOrbitFocus } from "./orbit-focus";
 import { readUrlState, createUrlStateUpdater } from "./url-state";
 import { ISSPassesUI } from "./iss-passes-ui";
 import {
-  BODY_NAMES,
-  MINOR_BODY_NAMES,
-  COMET_NAMES,
   getBodyPositions,
   positionToRaDec,
   calculateSunMoonSeparation,
   type BodyPositions,
 } from "./body-positions";
+import { setupTourSystem } from "./tour-setup";
+import { setupSearch } from "./search-setup";
+import { createAnimationLoop } from "./animation-loop";
 
 // Build-time constants injected by Vite
 declare const __BUILD_TIME__: string;
 declare const __GIT_COMMIT__: string;
-
-// Map from tour target names to body/comet names in the position buffer
-const TARGET_TO_NAME: Record<TargetBody, string> = {
-  sun: 'Sun',
-  moon: 'Moon',
-  mercury: 'Mercury',
-  venus: 'Venus',
-  mars: 'Mars',
-  jupiter: 'Jupiter',
-  saturn: 'Saturn',
-  uranus: 'Uranus',
-  neptune: 'Neptune',
-  // Comets (names must match COMET_NAMES)
-  halley: '1P/Halley',
-  encke: '2P/Encke',
-  'churyumov-gerasimenko': '67P/C-G',
-  wirtanen: '46P/Wirtanen',
-  neowise: 'C/2020 F3 NEOWISE',
-  'tsuchinshan-atlas': 'C/2023 A3 T-ATLAS',
-  'hale-bopp': 'C/1995 O1 Hale-Bopp',
-};
 
 // Helper to get body positions from engine
 function getBodyPositionsFromEngine(engine: SkyEngine): BodyPositions {
@@ -149,149 +121,30 @@ async function main(): Promise<void> {
   // ============================================================================
 
   // Location manager holder - set later when locationManager is created
-  // This allows tour callbacks to reference the location manager
   let locationManagerRef: {
     getLocation: () => { latitude: number; longitude: number; name?: string };
     setLocation: (location: { latitude: number; longitude: number; name?: string }) => void;
   } | null = null;
 
-  // Helper to update time and trigger all necessary updates
-  function setTimeForTour(date: Date): void {
-    applyTimeToEngine(engine, date);
-    engine.recompute();
-    renderer.updateFromEngine(engine, renderer.camera.fov);
+  // Track current date (set later after initialization)
+  let currentDate = new Date();
 
-    // Update datetime input display
-    const datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
-    if (datetimeInput) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
-
-    // Update eclipse rendering
-    const bodyPos = getBodyPositionsFromEngine(engine);
-    const sunMoonSep = calculateSunMoonSeparation(bodyPos);
-    if (sunMoonSep !== null) {
-      renderer.updateEclipse(sunMoonSep);
-    }
-  }
-
-  // Create tour engine
-  const tourEngine = createTourEngine({
-    animateToRaDec: (ra, dec, durationMs) => {
-      controls.animateToRaDec(ra, dec, durationMs);
-    },
-    setFov: (fov) => {
-      renderer.camera.fov = fov;
-      renderer.camera.updateProjectionMatrix();
-      // Update star LOD for new FOV
+  const { tourEngine, handleTourInterrupt } = setupTourSystem({
+    engine,
+    renderer,
+    controls,
+    getBodyPositions: () => getBodyPositionsFromEngine(engine),
+    getCurrentDate: () => currentDate,
+    getLocationManager: () => locationManagerRef,
+    getDefaultLocation: () => ({
+      latitude: settings.observerLatitude,
+      longitude: settings.observerLongitude,
+    }),
+    getMagnitude: () => {
       const magInput = document.getElementById("magnitude") as HTMLInputElement | null;
-      const mag = magInput ? parseFloat(magInput.value) : 6.5;
-      renderer.updateDSOs(fov, mag);
-    },
-    getFov: () => renderer.camera.fov,
-    setTime: setTimeForTour,
-    resolveBodyPosition: (target: TargetBody, datetime: Date) => {
-      // Temporarily set engine time to compute body position at keyframe datetime
-      const savedTime = new Date(currentDate);
-
-      // Set engine to keyframe time
-      engine.set_time_utc(
-        datetime.getUTCFullYear(),
-        datetime.getUTCMonth() + 1,
-        datetime.getUTCDate(),
-        datetime.getUTCHours(),
-        datetime.getUTCMinutes(),
-        datetime.getUTCSeconds()
-      );
-      engine.recompute();
-
-      // Get body position by name (works for both planets and comets)
-      const bodyName = TARGET_TO_NAME[target];
-      const bodyPos = getBodyPositionsFromEngine(engine);
-      const pos = bodyPos.get(bodyName);
-
-      // Restore original time
-      engine.set_time_utc(
-        savedTime.getUTCFullYear(),
-        savedTime.getUTCMonth() + 1,
-        savedTime.getUTCDate(),
-        savedTime.getUTCHours(),
-        savedTime.getUTCMinutes(),
-        savedTime.getUTCSeconds()
-      );
-      engine.recompute();
-
-      if (!pos) {
-        console.error(`Could not find position for body: ${target}`);
-        return { ra: 0, dec: 0 };
-      }
-
-      return positionToRaDec(pos);
-    },
-    setLocation: (latitude: number, longitude: number, name?: string) => {
-      if (locationManagerRef) {
-        locationManagerRef.setLocation({ latitude, longitude, name });
-      }
-    },
-    getLocation: () => {
-      if (locationManagerRef) {
-        return locationManagerRef.getLocation();
-      }
-      return { latitude: settings.observerLatitude, longitude: settings.observerLongitude };
-    },
-    onStateChange: (state: TourPlaybackState) => {
-      updateTourUI(state);
-    },
-    onTourComplete: () => {
-      console.log("Tour complete");
-    },
-    onCaptionChange: (caption: string | null) => {
-      const captionEl = document.getElementById("tour-caption");
-      if (captionEl) {
-        captionEl.textContent = caption ?? "";
-        captionEl.classList.toggle("hidden", !caption);
-      }
-    },
-    setStarOverrides: (overrides) => {
-      renderer.setStarOverrides(overrides);
-    },
-    clearStarOverrides: () => {
-      renderer.clearStarOverrides();
+      return magInput ? parseFloat(magInput.value) : 6.5;
     },
   });
-
-  // Update tour UI based on state
-  function updateTourUI(state: TourPlaybackState): void {
-    const playbackEl = document.getElementById("tour-playback");
-    const progressEl = document.getElementById("tour-progress");
-    const nameEl = document.getElementById("tour-playback-name");
-    const playPauseBtn = document.getElementById("tour-play-pause");
-
-    if (playbackEl) {
-      playbackEl.classList.toggle("hidden", state.status === "idle");
-    }
-    if (progressEl) {
-      progressEl.style.width = `${state.overallProgress * 100}%`;
-    }
-    if (nameEl && state.currentTour) {
-      nameEl.textContent = state.currentTour.name;
-    }
-    if (playPauseBtn) {
-      playPauseBtn.textContent = state.status === "playing" ? "⏸" : "▶";
-    }
-  }
-
-  // Handle user interruption of tour
-  function handleTourInterrupt(): void {
-    if (tourEngine.isActive()) {
-      tourEngine.pause();
-    }
-  }
 
   // Add listeners for user interactions that should pause tour
   renderer.renderer.domElement.addEventListener("mousedown", handleTourInterrupt);
@@ -448,9 +301,8 @@ async function main(): Promise<void> {
     issPassesUI.setVisible((urlViewMode || currentMode) === 'topocentric');
   });
 
-  // Track current date for orbit computation (updated in onTimeChange)
-  // Use initialDate from restoration to ensure consistency with engine and UI
-  let currentDate = initialDate;
+  // Update currentDate to use initialDate from restoration
+  currentDate = initialDate;
 
   // Reference to video markers layer (set later after creation)
   let videoMarkersRef: { updateMovingPositions: (bodyPositions: BodyPositions) => void } | null = null;
@@ -912,129 +764,20 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // Search functionality
   // ---------------------------------------------------------------------------
-  let searchIndex: SearchItem[] = [];
-
-  // Planetary moons data for search (Galilean moons + Titan)
-  // Buffer indices match the first 5 moons in the planetary moons buffer
-  const PLANETARY_MOONS = [
-    { name: "Io", parentPlanet: "Jupiter" },
-    { name: "Europa", parentPlanet: "Jupiter" },
-    { name: "Ganymede", parentPlanet: "Jupiter" },
-    { name: "Callisto", parentPlanet: "Jupiter" },
-    { name: "Titan", parentPlanet: "Saturn" },
-  ];
-
-  // Helper to get planetary moon position from buffer
-  // Buffer layout: 4 floats per moon (x, y, z, angular_diameter)
-  // Uses same coordinate transform as moons layer
-  function getPlanetaryMoonPosition(index: number): { x: number; y: number; z: number } | null {
-    const buffer = getPlanetaryMoonsBuffer(engine);
-    const idx = index * 4;
-    if (idx + 2 >= buffer.length) return null;
-    // Rust coords to Three.js: negate X, swap Y/Z
-    const rustX = buffer[idx];
-    const rustY = buffer[idx + 1];
-    const rustZ = buffer[idx + 2];
-    return { x: -rustX, y: rustZ, z: rustY };
-  }
-
-  // Helper to build search index (called initially and after satellites load)
-  const buildIndex = () => buildSearchIndex({
-    bodyNames: BODY_NAMES,
-    minorBodyNames: MINOR_BODY_NAMES,
-    cometNames: COMET_NAMES,
-    starData: STAR_DATA,
-    constellationData: CONSTELLATION_DATA,
-    constellationCenters: CONSTELLATION_CENTERS,
-    dsoData: DSO_DATA,
-    deepFieldData: DEEP_FIELD_DATA,
+  const { searchUI, navigateToUrlObject } = setupSearch({
+    engine,
+    controls,
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
-    positionToRaDec,
-    satellites: SATELLITES.map(s => ({ index: s.index, name: s.name, fullName: s.fullName })),
-    getSatellitePosition: (index: number) => {
-      if (!engine.has_satellite_ephemeris(index) || !engine.satellite_in_range(index)) return null;
-      const pos = getSatellitePosition(engine, index);
-      if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
-      return { x: pos.x, y: pos.y, z: pos.z };
-    },
-    // Earth is searchable in JWST mode (where it appears as a distant planet)
-    getEarthPosition: () => renderer.getEarthPositionJWST(),
-    // Planetary moons (Galilean moons of Jupiter + Titan)
-    planetaryMoons: PLANETARY_MOONS,
-    getPlanetaryMoonPosition,
-  });
-
-  // Initialize search index
-  buildIndex().then(index => {
-    searchIndex = index;
-    console.log(`Search index built: ${index.length} items`);
-
-    // Handle object URL parameter (deep linking)
-    if (urlState.object) {
-      // Wait a tick for searchUI to be ready
-      setTimeout(() => {
-        const found = searchUI.navigateToObject(urlState.object!);
-        if (found) {
-          console.log(`Navigated to object from URL: ${urlState.object}`);
-        } else {
-          console.warn(`Object not found in search index: ${urlState.object}`);
-        }
-      }, 0);
-    }
-
-    // Rebuild index after satellites finish loading to include them in search
-    satellitesLoadedPromise.then(() => {
-      buildIndex().then(updatedIndex => {
-        searchIndex = updatedIndex;
-        console.log(`Search index rebuilt with satellites: ${updatedIndex.length} items`);
-      });
-    });
-  });
-
-  // Create search UI
-  const searchUI = createSearchUI({
-    getSearchIndex: () => searchIndex,
-    navigateToResult: (result) => {
-      controls.animateToRaDec(result.ra, result.dec, 1000);
-    },
-    getPlanetPosition: (name) => {
-      const pos = getBodyPositionsFromEngine(engine).get(name);
-      return pos ? positionToRaDec(pos) : null;
-    },
-    getSatellitePosition: (index: number) => {
-      if (!engine.has_satellite_ephemeris(index) || !engine.satellite_in_range(index)) return null;
-      const pos = getSatellitePosition(engine, index);
-      if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
-      // Convert from Rust/ECI coords (Z-up) to Three.js coords (Y-up) for positionToRaDec
-      // Same transform as rustToThreeJS: x=-rustX, y=rustZ, z=rustY
-      return positionToRaDec({ x: -pos.x, y: pos.z, z: pos.y });
-    },
-    // Earth position for JWST mode (dynamic lookup)
-    getEarthPosition: () => {
-      const pos = renderer.getEarthPositionJWST();
-      return pos ? positionToRaDec(pos) : null;
-    },
-    // Planetary moon position (dynamic lookup - they orbit quickly)
-    getPlanetaryMoonPosition: (name: string) => {
-      const moonIndex = PLANETARY_MOONS.findIndex(m => m.name === name);
-      if (moonIndex < 0) return null;
-      const pos = getPlanetaryMoonPosition(moonIndex);
-      return pos ? positionToRaDec(pos) : null;
-    },
-    // JWST mode detection
-    isJWSTMode: () => viewModeManager.getMode() === 'jwst',
-    // Moon's geocentric position (for JWST mode offset calculation)
-    getMoonPosition: () => {
-      const pos = getBodyPositionsFromEngine(engine).get('Moon');
-      return pos ? positionToRaDec(pos) : null;
-    },
-    // Sun's geocentric position (for JWST mode offset calculation)
-    getSunPosition: () => {
-      const pos = getBodyPositionsFromEngine(engine).get('Sun');
-      return pos ? positionToRaDec(pos) : null;
-    },
+    getEarthPositionJWST: () => renderer.getEarthPositionJWST(),
+    getViewMode: () => viewModeManager.getMode(),
+    satellitesLoadedPromise,
   });
   searchUI.setupEventListeners();
+
+  // Handle object URL parameter (deep linking)
+  if (urlState.object) {
+    navigateToUrlObject(urlState.object);
+  }
 
   // About modal
   setupSimpleModal(
@@ -1226,74 +969,20 @@ async function main(): Promise<void> {
   });
 
   // Animation loop
-  function animate(): void {
-    requestAnimationFrame(animate);
-    controls.update();
-    tourEngine.update();
-    // Update ground plane position for current sidereal time
-    renderer.updateGroundPlaneForTime(currentDate);
-    // Update scintillation and horizon zenith for topocentric mode
-    if (viewModeManager.getMode() === 'topocentric') {
-      const gmst = computeGMST(currentDate);
-      let lst = gmst + settings.observerLongitude; // LST in degrees
-      lst = ((lst % 360) + 360) % 360; // Normalize to 0-360
-      renderer.updateScintillation(settings.observerLatitude, lst);
-
-      // Update horizon zenith direction for proper horizon culling
-      // Zenith in equatorial coords: RA = LST, Dec = latitude
-      const latRad = (settings.observerLatitude * Math.PI) / 180;
-      const lstRad = (lst * Math.PI) / 180;
-      const cosLat = Math.cos(latRad);
-      const sinLat = Math.sin(latRad);
-      const cosLst = Math.cos(lstRad);
-      const sinLst = Math.sin(lstRad);
-      // Equatorial coords (Z-up): eqX = cosLat*cosLst, eqY = cosLat*sinLst, eqZ = sinLat
-      // Convert to Three.js (Y-up): (-eqX, eqZ, eqY)
-      const zenith = new THREE.Vector3(
-        -cosLat * cosLst,
-        sinLat,
-        cosLat * sinLst
-      );
-      renderer.updateHorizonZenith(zenith);
-    }
-    // Update Earth position/rotation for Hubble mode
-    if (viewModeManager.getMode() === 'hubble') {
-      // Get Hubble's position (index 1) to compute nadir direction
-      const hubblePos = renderer.getSatellitePosition(1, engine);
-      if (hubblePos) {
-        // Nadir is opposite to satellite position (toward Earth center)
-        const nadir = new THREE.Vector3(-hubblePos.x, -hubblePos.y, -hubblePos.z).normalize();
-        renderer.updateEarthPosition(nadir);
-      }
-      renderer.updateEarthRotation(currentDate, settings.observerLongitude);
-
-      // Update Sun direction for day/night terminator
-      const bodyPos = getBodyPositionsFromEngine(engine);
-      const sunPos = bodyPos.get("Sun");
-      if (sunPos) {
-        renderer.updateEarthSunDirection(sunPos);
-      }
-
-      // Hide labels occluded by Earth
-      renderer.updateLabelOcclusion();
-
-      // Hide video markers occluded by Earth
-      videoMarkers.updateOcclusion(renderer.isOccludedByEarth);
-    }
-
-    // Update deep fields visibility based on current FOV
-    const currentFov = controls.getCameraState().fov;
-    renderer.updateDeepFields(currentFov);
-
-    // Update JWST layer (Earth and Moon as distant objects)
-    if (viewModeManager.getMode() === 'jwst') {
-      const sunPos = renderer.getSunPosition();
-      const moonPos = renderer.getMoonPosition();
-      renderer.updateJWST(currentFov, sunPos, moonPos, currentDate);
-    }
-
-    renderer.render();
-  }
+  const animate = createAnimationLoop({
+    controls,
+    tourEngine,
+    renderer,
+    videoMarkers,
+    getViewMode: () => viewModeManager.getMode(),
+    getCurrentDate: () => currentDate,
+    getObserverLocation: () => ({
+      latitude: settings.observerLatitude,
+      longitude: settings.observerLongitude,
+    }),
+    getBodyPositions: () => getBodyPositionsFromEngine(engine),
+    engine,
+  });
 
   // Enable scintillation if starting in topocentric mode
   if (settings.viewMode === 'topocentric') {
@@ -1331,6 +1020,17 @@ async function main(): Promise<void> {
       loadingOverlay.classList.add("hidden");
       // Remove from DOM after fade out
       setTimeout(() => loadingOverlay.remove(), 500);
+    }
+
+    // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
+    if (urlState.tour) {
+      const tour = getTourById(urlState.tour);
+      if (tour) {
+        console.log(`Starting tour from URL: ${urlState.tour}`);
+        tourEngine.play(tour);
+      } else {
+        console.warn(`Tour not found: ${urlState.tour}`);
+      }
     }
   });
 

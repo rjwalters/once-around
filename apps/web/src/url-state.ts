@@ -15,6 +15,7 @@ export interface UrlState {
   lon?: number; // Observer longitude
   object?: string; // Object name for deep linking (searches catalog)
   view?: 'geo' | 'topo' | 'hubble' | 'jwst'; // View mode
+  tour?: string; // Tour ID to auto-start (e.g., 'sn-1054')
 }
 
 /**
@@ -74,6 +75,11 @@ export function readUrlState(): UrlState {
   const view = params.get("view");
   if (view === 'geo' || view === 'topo' || view === 'hubble' || view === 'jwst') {
     state.view = view;
+  }
+
+  const tour = params.get("tour");
+  if (tour !== null && tour.trim().length > 0) {
+    state.tour = tour.trim();
   }
 
   return state;
