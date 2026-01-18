@@ -68,6 +68,8 @@ export interface SkyRenderer {
   // JWST mode methods
   setJWSTMode(enabled: boolean): void;
   updateJWST(fov: number, sunPosition: THREE.Vector3, currentDate: Date): void;
+  /** Get Earth's position in JWST mode (for search). Returns null if not in JWST mode. */
+  getEarthPositionJWST(): { x: number; y: number; z: number } | null;
   getSunPosition(): THREE.Vector3;
   render(): void;
   resize(width: number, height: number): void;
@@ -347,6 +349,13 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     return earthLayer.isOccluded(position);
   }
 
+  function getEarthPositionJWST(): { x: number; y: number; z: number } | null {
+    if (!jwstModeEnabled) return null;
+    const pos = jwstLayer.getEarthPosition();
+    if (!pos) return null;
+    return { x: pos.x, y: pos.y, z: pos.z };
+  }
+
   function getSunPosition(): THREE.Vector3 {
     return bodiesLayer.getSunPosition();
   }
@@ -400,6 +409,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setHubbleMode,
     setJWSTMode,
     updateJWST,
+    getEarthPositionJWST,
     getSunPosition,
     updateEarthPosition,
     updateEarthRotation,

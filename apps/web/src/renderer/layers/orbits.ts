@@ -1,13 +1,15 @@
 /**
  * Orbits Layer
  *
- * Renders planetary orbit paths using pre-computed static data.
- * Orbit data is generated at build time and loaded instantly.
+ * Renders planetary orbit paths computed dynamically from the current simulation date.
+ * Orbits show the apparent path of each planet on the celestial sphere over time.
  */
 
 import * as THREE from "three";
 import type { SkyEngine } from "../../wasm/sky_engine";
-import { ORBIT_PLANET_INDICES, ORBIT_NUM_POINTS, BODY_COLORS } from "../constants";
+import { getBodiesPositionBuffer } from "../../engine";
+import { ORBIT_PLANET_INDICES, ORBIT_NUM_POINTS, ORBIT_PERIODS_DAYS, BODY_COLORS, SKY_RADIUS } from "../constants";
+import { readPositionFromBuffer } from "../utils/coordinates";
 
 export interface OrbitsLayer {
   /** The group containing all orbit lines */
@@ -18,11 +20,9 @@ export interface OrbitsLayer {
   setVisible(visible: boolean): void;
   /** Focus on a single planet's orbit, or show all if null */
   focusOrbit(bodyIndex: number | null): void;
-  /** Load pre-computed orbital paths */
-  load(): Promise<void>;
-  /** Legacy compute method (now just calls load) */
+  /** Compute orbital paths centered on the given date */
   compute(engine: SkyEngine, centerDate: Date): Promise<void>;
-  /** Enable/disable depth testing (for orbital mode) */
+  /** Enable/disable depth testing (for Hubble/JWST modes) */
   setDepthTest(enabled: boolean): void;
 }
 
@@ -52,9 +52,9 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
     group.add(line);
   }
 
-  // Track if orbits have been loaded
-  let loaded = false;
-  let loadPromise: Promise<void> | null = null;
+  // Track computation state
+  let computePromise: Promise<void> | null = null;
+  let lastComputeDate: Date | null = null;
 
   function setVisible(visible: boolean): void {
     group.visible = visible;
@@ -79,61 +79,72 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
   }
 
   /**
-   * Load pre-computed orbit data from static file.
-   * The data is computed at build time and contains positions for all planets.
+   * Compute orbital paths dynamically using the WASM engine.
+   * Samples planet positions over each planet's orbital period centered on centerDate.
+   *
+   * NOTE: This mutates the engine's time state. The caller should restore the engine
+   * to the current simulation time after calling this function.
    */
-  async function load(): Promise<void> {
-    if (loaded) return;
-    if (loadPromise) return loadPromise;
+  async function compute(engine: SkyEngine, centerDate: Date): Promise<void> {
+    // Skip if already computed for the same date (within 1 day)
+    if (lastComputeDate && Math.abs(centerDate.getTime() - lastComputeDate.getTime()) < 86400000) {
+      if (computePromise) return computePromise;
+    }
 
-    loadPromise = (async () => {
-      try {
-        const response = await fetch('/data/orbits.bin');
-        if (!response.ok) {
-          console.warn('Failed to load orbit data, orbits will not be available');
-          return;
-        }
+    lastComputeDate = centerDate;
 
-        const buffer = await response.arrayBuffer();
-        const orbitData = new Float32Array(buffer);
+    computePromise = (async () => {
+      const radius = SKY_RADIUS - 1;
+      const msPerDay = 24 * 60 * 60 * 1000;
 
-        // Data format: 7 planets × 120 points × 3 floats, sequential
-        const floatsPerOrbit = ORBIT_NUM_POINTS * 3;
+      for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
+        const bodyIdx = ORBIT_PLANET_INDICES[planetIdx];
+        const orbitPeriod = ORBIT_PERIODS_DAYS[bodyIdx];
+        const halfSpan = orbitPeriod / 2;
 
-        for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
-          const offset = planetIdx * floatsPerOrbit;
-          const positions = orbitData.slice(offset, offset + floatsPerOrbit);
+        const positions = new Float32Array(ORBIT_NUM_POINTS * 3);
 
-          // Update this planet's orbit line geometry
-          const geometry = lines[planetIdx].geometry;
-          geometry.setAttribute(
-            "position",
-            new THREE.BufferAttribute(positions, 3)
+        for (let i = 0; i < ORBIT_NUM_POINTS; i++) {
+          // Calculate date for this sample point
+          const t = i / (ORBIT_NUM_POINTS - 1);
+          const dayOffset = -halfSpan + t * orbitPeriod;
+          const sampleDate = new Date(centerDate.getTime() + dayOffset * msPerDay);
+
+          // Set engine time and compute
+          engine.set_time_utc(
+            sampleDate.getUTCFullYear(),
+            sampleDate.getUTCMonth() + 1,
+            sampleDate.getUTCDate(),
+            sampleDate.getUTCHours(),
+            sampleDate.getUTCMinutes(),
+            sampleDate.getUTCSeconds()
           );
-          geometry.computeBoundingSphere();
+          engine.recompute();
+
+          // Get position from engine buffer
+          const bodyPositions = getBodiesPositionBuffer(engine);
+          const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
+
+          positions[i * 3] = pos.x;
+          positions[i * 3 + 1] = pos.y;
+          positions[i * 3 + 2] = pos.z;
         }
 
-        loaded = true;
-        console.log('Loaded pre-computed orbit data');
-      } catch (e) {
-        console.warn('Error loading orbit data:', e);
+        // Update this planet's orbit line geometry
+        const geometry = lines[planetIdx].geometry;
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geometry.computeBoundingSphere();
       }
+
+      console.log(`Computed orbit paths centered on ${centerDate.toISOString()}`);
     })();
 
-    return loadPromise;
-  }
-
-  /**
-   * Legacy compute method - now just loads pre-computed data.
-   * The engine and date parameters are ignored since we use static data.
-   */
-  async function compute(_engine: SkyEngine, _centerDate: Date): Promise<void> {
-    return load();
+    return computePromise;
   }
 
   /**
    * Enable or disable depth testing on orbit lines.
-   * Enabled in orbital mode so orbits are hidden behind Earth.
+   * Enabled in Hubble mode so orbits are hidden behind Earth.
    */
   function setDepthTest(enabled: boolean): void {
     for (const line of lines) {
@@ -148,7 +159,6 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
     lines,
     setVisible,
     focusOrbit,
-    load,
     compute,
     setDepthTest,
   };

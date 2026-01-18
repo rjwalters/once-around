@@ -1,18 +1,25 @@
 /**
  * Earth Layer
  *
- * Renders Earth as a sphere for orbital view mode,
+ * Renders Earth as a sphere for Hubble view mode,
  * positioned in the nadir direction (below the satellite observer).
  * Features day/night terminator with city lights on the dark side.
  */
 
 import * as THREE from "three";
 import { computeGMST } from "../utils/coordinates";
-import { earthVertexShader, earthFragmentShader } from "../shaders";
+import {
+  earthVertexShader,
+  earthFragmentShader,
+  cloudVertexShader,
+  cloudFragmentShader,
+} from "../shaders";
 
 // Earth sphere configuration
 const EARTH_RADIUS = 20;          // Visual radius in scene units
 const EARTH_DISTANCE = 35;        // Distance from camera toward nadir
+const CLOUD_ALTITUDE = 1.008;     // Cloud layer at 0.8% above surface
+const CLOUD_DRIFT_RATE = 0.02;    // Clouds drift at 2% of Earth's rotation (eastward)
 
 export interface EarthLayer {
   /** The group containing all Earth elements */
@@ -30,7 +37,7 @@ export interface EarthLayer {
 }
 
 /**
- * Create the Earth layer for orbital view mode.
+ * Create the Earth layer for Hubble view mode.
  * @param scene - The Three.js scene to add the Earth to
  * @returns EarthLayer interface
  */
@@ -84,6 +91,28 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
   });
   const atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
   group.add(atmosphereMesh);
+
+  // Cloud layer - slightly above Earth surface, drifts slowly
+  const cloudTexture = textureLoader.load("/earth-clouds.jpg");
+  cloudTexture.colorSpace = THREE.SRGBColorSpace;
+
+  const cloudGeometry = new THREE.SphereGeometry(
+    EARTH_RADIUS * CLOUD_ALTITUDE,
+    64,
+    48
+  );
+  const cloudMaterial = new THREE.ShaderMaterial({
+    vertexShader: cloudVertexShader,
+    fragmentShader: cloudFragmentShader,
+    uniforms: {
+      cloudTexture: { value: cloudTexture },
+      sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+    },
+    transparent: true,
+    depthWrite: false, // Prevents z-fighting artifacts
+  });
+  const cloudMesh = new THREE.Mesh(cloudGeometry, cloudMaterial);
+  group.add(cloudMesh);
 
   // Terminator line - dashed circle showing day/night boundary
   const terminatorSegments = 64;
@@ -155,11 +184,17 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
     // to move the Prime Meridian eastward (toward increasing RA)
     const rotationRad = -(gmst * Math.PI) / 180;
 
-    // Apply rotation to the mesh around Y-axis (Earth's polar axis = celestial north)
+    // Clouds drift eastward relative to Earth's surface (jet stream effect)
+    // This creates a slight offset that accumulates over time
+    const cloudRotationRad = rotationRad * (1 + CLOUD_DRIFT_RATE);
+
+    // Apply rotation to the meshes around Y-axis (Earth's polar axis = celestial north)
     const earthMesh = group.children[0] as THREE.Mesh;
     const atmosphereMesh = group.children[1] as THREE.Mesh;
+    const cloudMesh = group.children[2] as THREE.Mesh;
     earthMesh.rotation.y = rotationRad;
     atmosphereMesh.rotation.y = rotationRad;
+    cloudMesh.rotation.y = cloudRotationRad;
   }
 
   function updateSunDirection(sunPosition: THREE.Vector3): void {
@@ -172,12 +207,13 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
       .subVectors(sunPosition, earthPos)
       .normalize();
 
-    // Update shader uniform
+    // Update shader uniforms for Earth and cloud layers
     earthMaterial.uniforms.sunDirection.value.copy(sunDir);
+    cloudMaterial.uniforms.sunDirection.value.copy(sunDir);
 
     // Orient terminator line perpendicular to Sun direction
     // The terminator is a great circle whose normal is the Sun direction
-    const terminatorLine = group.children[2] as THREE.LineLoop;
+    const terminatorLine = group.children[3] as THREE.LineLoop;
 
     // Create a quaternion that rotates from +Z (initial normal) to sunDir
     const up = new THREE.Vector3(0, 0, 1);

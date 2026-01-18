@@ -1,5 +1,5 @@
 /**
- * View mode management (Geocentric, Topocentric, and Orbital).
+ * View mode management (Geocentric, Topocentric, Hubble, and JWST).
  */
 
 import type { ViewMode } from "./settings";
@@ -27,8 +27,9 @@ export interface ViewModeManagerOptions {
   setControlsViewMode: (mode: ViewMode) => void;
   setTopocentricParams: (latRad: number, lstRad: number) => void;
   animateToAltAz: (alt: number, az: number, duration: number) => void;
-  // Orbital mode callbacks
-  onOrbitalModeChange?: (enabled: boolean) => void;
+  // Space telescope mode callbacks
+  onHubbleModeChange?: (enabled: boolean) => void;
+  onJWSTModeChange?: (enabled: boolean) => void;
   onScintillationChange?: (enabled: boolean) => void;
   onResetVideoOcclusion?: () => void;
 }
@@ -42,7 +43,7 @@ export interface ViewModeManager {
 }
 
 /**
- * Create a view mode manager for geocentric/topocentric/orbital switching.
+ * Create a view mode manager for geocentric/topocentric/hubble/jwst switching.
  */
 export function createViewModeManager(options: ViewModeManagerOptions): ViewModeManager {
   const {
@@ -55,7 +56,8 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     setControlsViewMode,
     setTopocentricParams,
     animateToAltAz,
-    onOrbitalModeChange,
+    onHubbleModeChange,
+    onJWSTModeChange,
     onScintillationChange,
     onResetVideoOcclusion,
   } = options;
@@ -65,7 +67,8 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   // Get DOM elements
   const geocentricBtn = document.getElementById("view-geocentric");
   const topocentricBtn = document.getElementById("view-topocentric");
-  const orbitalBtn = document.getElementById("view-orbital");
+  const hubbleBtn = document.getElementById("view-hubble");
+  const jwstBtn = document.getElementById("view-jwst");
   const coordAltAzGroup = document.getElementById("coord-altaz-group");
   const coordRaDecGroup = document.getElementById("coord-radec-group");
   const horizonLabel = document.getElementById("horizon-label");
@@ -88,9 +91,10 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   function updateUI(mode: ViewMode): void {
     geocentricBtn?.classList.toggle("active", mode === 'geocentric');
     topocentricBtn?.classList.toggle("active", mode === 'topocentric');
-    orbitalBtn?.classList.toggle("active", mode === 'orbital');
+    hubbleBtn?.classList.toggle("active", mode === 'hubble');
+    jwstBtn?.classList.toggle("active", mode === 'jwst');
 
-    // Show Alt/Az in topocentric mode, RA/Dec in geocentric and orbital modes
+    // Show Alt/Az in topocentric mode, RA/Dec in other modes
     if (coordAltAzGroup) {
       coordAltAzGroup.style.display = mode === 'topocentric' ? 'inline' : 'none';
     }
@@ -100,7 +104,13 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
 
     // Update horizon/Earth toggle label based on mode
     if (horizonLabel) {
-      horizonLabel.textContent = mode === 'orbital' ? 'Show Earth' : 'Show horizon/ground';
+      if (mode === 'hubble') {
+        horizonLabel.textContent = 'Show Earth';
+      } else if (mode === 'jwst') {
+        horizonLabel.textContent = 'Show Sun/Earth';
+      } else {
+        horizonLabel.textContent = 'Show horizon/ground';
+      }
     }
 
     // Auto-toggle horizon based on mode (only in topocentric)
@@ -128,19 +138,30 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
       animateToAltAz(30, 180, 800);
     }
 
-    // Handle orbital mode changes
-    const enteringOrbital = mode === 'orbital';
-    const leavingOrbital = previousMode === 'orbital';
+    // Handle space telescope mode changes
+    const enteringHubble = mode === 'hubble';
+    const leavingHubble = previousMode === 'hubble';
+    const enteringJWST = mode === 'jwst';
+    const leavingJWST = previousMode === 'jwst';
+    const enteringSpace = enteringHubble || enteringJWST;
+    const leavingSpace = (leavingHubble || leavingJWST) && !enteringSpace;
 
-    if (enteringOrbital || leavingOrbital) {
-      // Toggle orbital mode rendering (Earth, etc.)
-      onOrbitalModeChange?.(enteringOrbital);
+    if (enteringHubble || leavingHubble) {
+      // Toggle Hubble mode rendering (Earth sphere, etc.)
+      onHubbleModeChange?.(enteringHubble);
+    }
 
+    if (enteringJWST || leavingJWST) {
+      // Toggle JWST mode rendering (distant Sun/Earth/Moon dots, etc.)
+      onJWSTModeChange?.(enteringJWST);
+    }
+
+    if (enteringSpace || leavingSpace) {
       // No atmospheric scintillation in space
-      onScintillationChange?.(!enteringOrbital);
+      onScintillationChange?.(!enteringSpace);
 
-      // Reset video marker visibility when leaving orbital mode
-      if (leavingOrbital) {
+      // Reset video marker visibility when leaving space modes
+      if (leavingSpace) {
         onResetVideoOcclusion?.();
       }
     }
@@ -152,16 +173,21 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   function setupEventListeners(): void {
     geocentricBtn?.addEventListener("click", () => setMode('geocentric'));
     topocentricBtn?.addEventListener("click", () => setMode('topocentric'));
-    orbitalBtn?.addEventListener("click", () => setMode('orbital'));
+    hubbleBtn?.addEventListener("click", () => setMode('hubble'));
+    jwstBtn?.addEventListener("click", () => setMode('jwst'));
   }
 
   // Initialize
   updateTopocentricParams();
   if (currentMode === 'topocentric') {
     setControlsViewMode('topocentric');
-  } else if (currentMode === 'orbital') {
-    setControlsViewMode('orbital');
-    onOrbitalModeChange?.(true);
+  } else if (currentMode === 'hubble') {
+    setControlsViewMode('hubble');
+    onHubbleModeChange?.(true);
+    onScintillationChange?.(false);
+  } else if (currentMode === 'jwst') {
+    setControlsViewMode('jwst');
+    onJWSTModeChange?.(true);
     onScintillationChange?.(false);
   }
   updateUI(currentMode);

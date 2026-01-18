@@ -19,6 +19,10 @@ export interface SearchUIOptions {
   getSatellitePosition?: (index: number) => { ra: number; dec: number } | null;
   // Legacy - will use getSatellitePosition(0) if available
   getISSPosition?: () => { ra: number; dec: number } | null;
+  // Earth position for JWST mode (dynamic lookup)
+  getEarthPosition?: () => { ra: number; dec: number } | null;
+  // Planetary moon position (dynamic lookup - they orbit quickly)
+  getPlanetaryMoonPosition?: (name: string) => { ra: number; dec: number } | null;
 }
 
 export interface SearchUI {
@@ -30,7 +34,7 @@ export interface SearchUI {
  * Create search UI handlers for rendering and keyboard navigation.
  */
 export function createSearchUI(options: SearchUIOptions): SearchUI {
-  const { getSearchIndex, navigateToResult, getPlanetPosition, getSatellitePosition, getISSPosition } = options;
+  const { getSearchIndex, navigateToResult, getPlanetPosition, getSatellitePosition, getISSPosition, getEarthPosition, getPlanetaryMoonPosition } = options;
 
   // Get DOM elements
   const searchInput = document.getElementById("search") as HTMLInputElement | null;
@@ -75,9 +79,28 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
   function getUpdatedPosition(result: SearchResult): { ra: number; dec: number } {
     let { ra, dec } = result;
 
+    // Special handling for Earth (only searchable in JWST mode)
+    if (result.name === 'Earth' && getEarthPosition) {
+      const pos = getEarthPosition();
+      if (pos) {
+        ra = pos.ra;
+        dec = pos.dec;
+      }
+      return { ra, dec };
+    }
+
     // For planets and minor bodies, get current position (they move with time)
     if (result.type === 'planet' || result.type === 'minor_body') {
       const pos = getPlanetPosition(result.name);
+      if (pos) {
+        ra = pos.ra;
+        dec = pos.dec;
+      }
+    }
+
+    // For planetary moons, get current position (they orbit their parent planet quickly)
+    if (result.type === 'moon' && result.name !== 'Moon' && getPlanetaryMoonPosition) {
+      const pos = getPlanetaryMoonPosition(result.name);
       if (pos) {
         ra = pos.ra;
         dec = pos.dec;

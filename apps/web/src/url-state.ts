@@ -14,7 +14,7 @@ export interface UrlState {
   lat?: number; // Observer latitude
   lon?: number; // Observer longitude
   object?: string; // Object name for deep linking (searches catalog)
-  view?: 'geo' | 'topo' | 'orbital'; // View mode
+  view?: 'geo' | 'topo' | 'hubble' | 'jwst'; // View mode
 }
 
 /**
@@ -72,7 +72,7 @@ export function readUrlState(): UrlState {
   }
 
   const view = params.get("view");
-  if (view === 'geo' || view === 'topo' || view === 'orbital') {
+  if (view === 'geo' || view === 'topo' || view === 'hubble' || view === 'jwst') {
     state.view = view;
   }
 

@@ -415,7 +415,7 @@ export interface VideoMarkersLayer {
   updateMovingPositions(bodyPositions: BodyPositions): void;
   /** Update occlusion visibility based on a checker function */
   updateOcclusion(isOccluded: (position: THREE.Vector3) => boolean): void;
-  /** Reset all markers and labels to visible (when leaving orbital mode) */
+  /** Reset all markers and labels to visible (when leaving Hubble mode) */
   resetOcclusion(): void;
 }
 

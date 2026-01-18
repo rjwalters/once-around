@@ -2,7 +2,7 @@
  * Fuzzy search across planets, stars, constellations, and videos.
  */
 
-export type SearchItemType = 'planet' | 'minor_body' | 'star' | 'constellation' | 'dso' | 'deep_field' | 'video' | 'comet' | 'satellite';
+export type SearchItemType = 'planet' | 'moon' | 'minor_body' | 'star' | 'constellation' | 'dso' | 'deep_field' | 'video' | 'comet' | 'satellite';
 
 export interface SearchItem {
   name: string;
@@ -101,6 +101,8 @@ export function search(
  */
 export const TYPE_COLORS: Record<SearchItemType, string> = {
   planet: '#ffcc66',
+  moon: '#c0c0c0',  // Silver/gray for moons
+  minor_body: '#cc99ff',  // Light purple for dwarf planets/asteroids
   star: '#ff8844',
   constellation: '#64a0dc',
   dso: '#88ccff',

@@ -153,8 +153,8 @@ export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
       dfm.mesh.visible = opacity > 0.01;
 
       if (dfm.mesh.visible) {
-        // Billboard toward camera - make the quad always face the camera
-        dfm.mesh.lookAt(camera.position);
+        // Billboard toward camera - copy camera orientation so plane faces viewer
+        dfm.mesh.quaternion.copy(camera.quaternion);
       }
     }
   }

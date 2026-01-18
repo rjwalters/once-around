@@ -18,9 +18,10 @@ export interface CameraState {
  * View mode type.
  * - geocentric: Observer at Earth's center, RA/Dec navigation, stars fixed
  * - topocentric: Observer on Earth's surface, Alt/Az navigation, horizon fixed
- * - orbital: Observer on satellite (Hubble), looking outward with Earth below
+ * - hubble: Observer on Hubble Space Telescope (LEO), looking outward with Earth below
+ * - jwst: Observer on James Webb Space Telescope (L2), ~1.5M km from Earth
  */
-export type ViewMode = "geocentric" | "topocentric" | "orbital";
+export type ViewMode = "geocentric" | "topocentric" | "hubble" | "jwst";
 
 /**
  * Celestial camera controls - simple drag-to-rotate model.

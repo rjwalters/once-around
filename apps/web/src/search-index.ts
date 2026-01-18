@@ -53,6 +53,11 @@ export interface SearchIndexOptions {
   getSatellitePosition?: (index: number) => { x: number; y: number; z: number } | null;
   // Legacy - will be converted to satellites internally
   getISSPosition?: () => { x: number; y: number; z: number } | null;
+  // Earth position for JWST mode (where Earth is visible as a distant planet)
+  getEarthPosition?: () => { x: number; y: number; z: number } | null;
+  // Planetary moons (Galilean moons + Titan)
+  planetaryMoons?: { name: string; parentPlanet: string }[];
+  getPlanetaryMoonPosition?: (index: number) => { x: number; y: number; z: number } | null;
 }
 
 /**
@@ -73,17 +78,23 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     satellites,
     getSatellitePosition,
     getISSPosition,
+    getEarthPosition,
+    planetaryMoons,
+    getPlanetaryMoonPosition,
   } = options;
 
   const items: SearchItem[] = [];
 
-  // Add planets (get current positions)
+  // Add planets and Earth's Moon (get current positions)
   const currentBodyPositions = getBodyPositions();
   for (const name of bodyNames) {
     const pos = currentBodyPositions.get(name);
     if (pos) {
       const { ra, dec } = positionToRaDec(pos);
-      items.push({ name, type: "planet", ra, dec });
+      // Earth's Moon is categorized as 'moon', not 'planet'
+      const type = name === "Moon" ? "moon" : "planet";
+      const subtitle = name === "Moon" ? "Earth's Moon" : undefined;
+      items.push({ name, type, ra, dec, subtitle });
     }
   }
 
@@ -115,6 +126,23 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
         const subtitle = minorBodySubtitles[name] || "Minor Body";
         items.push({ name, type: "minor_body", ra, dec, subtitle });
       }
+    }
+  }
+
+  // Add planetary moons (Galilean moons of Jupiter + Titan)
+  if (planetaryMoons && getPlanetaryMoonPosition) {
+    for (let i = 0; i < planetaryMoons.length; i++) {
+      const moon = planetaryMoons[i];
+      const pos = getPlanetaryMoonPosition(i);
+      // Use actual position if available, otherwise default to (0,0)
+      const { ra, dec } = pos ? positionToRaDec(pos) : { ra: 0, dec: 0 };
+      items.push({
+        name: moon.name,
+        type: "moon",
+        ra,
+        dec,
+        subtitle: `Moon of ${moon.parentPlanet}`,
+      });
     }
   }
 
@@ -248,6 +276,20 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
         subtitle: "ISS",
       });
     }
+  }
+
+  // Add Earth (searchable in JWST mode where it appears as a distant planet)
+  // Always add to index - position will be looked up dynamically when navigating
+  if (getEarthPosition) {
+    const earthPos = getEarthPosition();
+    const { ra, dec } = earthPos ? positionToRaDec(earthPos) : { ra: 0, dec: 0 };
+    items.push({
+      name: "Earth",
+      type: "planet",
+      ra,
+      dec,
+      subtitle: "Home Planet (visible from JWST)",
+    });
   }
 
   // Add videos

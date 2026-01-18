@@ -1,6 +1,6 @@
 import "./styles.css";
 import * as THREE from "three";
-import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadAllSatelliteEphemerides, getSatellitePosition, SATELLITES } from "./engine";
+import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, getPlanetaryMoonsBuffer, loadAllSatelliteEphemerides, getSatellitePosition, SATELLITES } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine, parseDatetimeLocal } from "./ui";
@@ -850,6 +850,30 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   let searchIndex: SearchItem[] = [];
 
+  // Planetary moons data for search (Galilean moons + Titan)
+  // Buffer indices match the first 5 moons in the planetary moons buffer
+  const PLANETARY_MOONS = [
+    { name: "Io", parentPlanet: "Jupiter" },
+    { name: "Europa", parentPlanet: "Jupiter" },
+    { name: "Ganymede", parentPlanet: "Jupiter" },
+    { name: "Callisto", parentPlanet: "Jupiter" },
+    { name: "Titan", parentPlanet: "Saturn" },
+  ];
+
+  // Helper to get planetary moon position from buffer
+  // Buffer layout: 4 floats per moon (x, y, z, angular_diameter)
+  // Uses same coordinate transform as moons layer
+  function getPlanetaryMoonPosition(index: number): { x: number; y: number; z: number } | null {
+    const buffer = getPlanetaryMoonsBuffer(engine);
+    const idx = index * 4;
+    if (idx + 2 >= buffer.length) return null;
+    // Rust coords to Three.js: negate X, swap Y/Z
+    const rustX = buffer[idx];
+    const rustY = buffer[idx + 1];
+    const rustZ = buffer[idx + 2];
+    return { x: -rustX, y: rustZ, z: rustY };
+  }
+
   // Helper to build search index (called initially and after satellites load)
   const buildIndex = () => buildSearchIndex({
     bodyNames: BODY_NAMES,
@@ -869,6 +893,11 @@ async function main(): Promise<void> {
       if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
       return { x: pos.x, y: pos.y, z: pos.z };
     },
+    // Earth is searchable in JWST mode (where it appears as a distant planet)
+    getEarthPosition: () => renderer.getEarthPositionJWST(),
+    // Planetary moons (Galilean moons of Jupiter + Titan)
+    planetaryMoons: PLANETARY_MOONS,
+    getPlanetaryMoonPosition,
   });
 
   // Initialize search index
@@ -913,6 +942,18 @@ async function main(): Promise<void> {
       const pos = getSatellitePosition(engine, index);
       if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
       return positionToRaDec({ x: pos.x, y: pos.y, z: pos.z });
+    },
+    // Earth position for JWST mode (dynamic lookup)
+    getEarthPosition: () => {
+      const pos = renderer.getEarthPositionJWST();
+      return pos ? positionToRaDec(pos) : null;
+    },
+    // Planetary moon position (dynamic lookup - they orbit quickly)
+    getPlanetaryMoonPosition: (name: string) => {
+      const moonIndex = PLANETARY_MOONS.findIndex(m => m.name === name);
+      if (moonIndex < 0) return null;
+      const pos = getPlanetaryMoonPosition(moonIndex);
+      return pos ? positionToRaDec(pos) : null;
     },
   });
   searchUI.setupEventListeners();
@@ -1152,11 +1193,14 @@ async function main(): Promise<void> {
       videoMarkers.updateOcclusion(renderer.isOccludedByEarth);
     }
 
+    // Update deep fields visibility based on current FOV
+    const currentFov = controls.getCameraState().fov;
+    renderer.updateDeepFields(currentFov);
+
     // Update JWST layer (Earth as distant planet)
     if (viewModeManager.getMode() === 'jwst') {
-      const fov = controls.getCameraState().fov;
       const sunPos = renderer.getSunPosition();
-      renderer.updateJWST(fov, sunPos, currentDate);
+      renderer.updateJWST(currentFov, sunPos, currentDate);
     }
 
     renderer.render();

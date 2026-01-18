@@ -69,34 +69,37 @@ Refactored ISS-specific code into a flexible multi-satellite system.
 - ✓ Single frontend renderer handles all satellites
 - ✓ All satellites searchable and visible in topocentric mode
 
-### Phase 2: Orbital Perspective Mode ("Hubblecentric")
+### Phase 2: Space Telescope View Modes
 
-New view mode: observer rides on a satellite, looking out at the cosmos.
+Four view modes are now supported:
+1. **Geocentric** - Center of Earth, no Earth rendering
+2. **Topocentric** - Earth's surface at lat/long with horizon
+3. **Hubble** - LEO (~540 km), Earth visible as large sphere below
+4. **JWST** - L2 (~1.5M km), Earth/Sun/Moon as distant dots
 
-**Concept:** Just as topocentric mode puts you on Earth's surface, orbital mode puts you on a satellite. The sky appears different from 540 km up:
+#### Phase 2a: Hubble View Mode ✓ COMPLETE
 
-- No atmosphere (no scintillation, no extinction, no horizon haze)
-- Earth visible below as a sphere
-- Stars appear to rotate as the satellite orbits (~95 min period for Hubble)
+Observer rides on Hubble Space Telescope in low Earth orbit.
 
-#### Phase 2a: Minimal Orbital View ✓ COMPLETE
+- ✓ ViewMode extended to include 'hubble'
+- ✓ Earth rendered as sphere positioned toward nadir
+- ✓ Day/night terminator with city lights
+- ✓ Cloud layer with slow drift animation
+- ✓ Quaternion-based free navigation
+- ✓ Scintillation automatically disabled
+- ✓ Earth occlusion of labels/markers
 
-Basic orbital perspective with simple Earth rendering.
+#### Phase 2b: JWST View Mode ✓ COMPLETE
 
-- ✓ ViewMode extended to include 'orbital'
-- ✓ Earth rendered as blue sphere positioned toward nadir
-- ✓ Quaternion-based free navigation (like geocentric)
-- ✓ Scintillation automatically disabled in orbital mode
+Observer at L2 Lagrange point, ~1.5 million km from Earth.
+
+- ✓ ViewMode extended to include 'jwst'
 - ✓ UI button added to view mode toggle
-
-#### Phase 2b: Earth Detail (Planned)
-
-Enhanced Earth rendering for visual realism.
-
-- Day/night terminator shading
-- Earth texture map
-- Cloud layer and atmosphere glow
-- City lights on night side
+- ✓ Quaternion-based free navigation
+- ✓ Scintillation disabled (in space)
+- ✓ Earth rendered with LOD system (sprite → disk → textured sphere based on zoom)
+- ✓ Sun avoidance zone overlay (~45° half-angle cone with gradient)
+- Deep field images prominently featured (already available via DSO layer toggle)
 
 #### Phase 2c: Orbital Mechanics Visualization (Planned)
 
@@ -106,15 +109,7 @@ Help users understand orbital constraints.
 - South Atlantic Anomaly (SAA) visualization (radiation zone)
 - Show orbital path
 
-#### Phase 2d: Advanced Features (Planned)
-
-Extended orbital perspective capabilities.
-
-- Guide star lock (Phase 3 integration)
-- JWST perspective (L2 orbit, different constraints)
-- ISS cupola view (tourist perspective, Earth-watching mode)
-
-**Educational value:** Most planetarium apps show the sky from Earth. This lets users experience what Hubble "sees" - a unique perspective that builds intuition about space-based astronomy.
+**Educational value:** Most planetarium apps show the sky from Earth. These modes let users experience what Hubble and JWST "see" - unique perspectives that build intuition about space-based astronomy.
 
 ### Phase 3: Guide Star Lock
 

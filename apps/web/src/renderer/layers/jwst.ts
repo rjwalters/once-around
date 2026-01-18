@@ -91,6 +91,8 @@ export interface JWSTLayer {
   isVisible(): boolean;
   /** Update layer based on current FOV and sun position */
   update(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, currentDate: Date): void;
+  /** Get Earth's current position as a unit vector (for search) */
+  getEarthPosition(): THREE.Vector3 | null;
 }
 
 /**
@@ -325,9 +327,28 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
     return visible;
   }
 
+  // Track last computed Earth position for search
+  let lastEarthPosition: THREE.Vector3 | null = null;
+
+  // Wrap update to track Earth position
+  const originalUpdate = update;
+  function wrappedUpdate(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, currentDate: Date): void {
+    originalUpdate(fov, canvasHeight, sunPosition, currentDate);
+    // Store Earth position (normalized direction on sky sphere)
+    if (visible) {
+      lastEarthPosition = sunPosition.clone().normalize();
+    }
+  }
+
+  function getEarthPositionFn(): THREE.Vector3 | null {
+    if (!visible) return null;
+    return lastEarthPosition;
+  }
+
   return {
     setVisible,
     isVisible: isVisibleFn,
-    update,
+    update: wrappedUpdate,
+    getEarthPosition: getEarthPositionFn,
   };
 }
