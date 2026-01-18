@@ -21,11 +21,11 @@ const COMET_NAMES = [
   "C/1995 O1 Hale-Bopp",
 ];
 
-// Minor body names must match the order used in the engine
+// Minor body names must match the order used in the engine (from renderer/constants.ts)
 const MINOR_BODY_NAMES = [
   "Pluto", "Ceres", "Eris", "Makemake", "Haumea",
   "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna",
-  "Ixion", "Huya", "Chaos", "Salacia", "Varda",
+  "Vesta", "Pallas", "Hygiea", "Apophis", "Bennu",
 ];
 
 /**

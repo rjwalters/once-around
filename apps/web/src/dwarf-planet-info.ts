@@ -125,59 +125,59 @@ export const DWARF_PLANET_INFO: Record<string, DwarfPlanetInfo> = {
     discoveredYear: "2000",
     description: "One of the first large Kuiper belt objects discovered, Varuna helped establish that the outer solar system contains many substantial bodies. Named after the Hindu deity of water and the celestial ocean, it has a rapid 6.3-hour rotation period."
   },
-  "Ixion": {
-    name: "Ixion",
-    designation: "28978 Ixion",
-    type: "Trans-Neptunian Object (Plutino)",
-    diameter: "617 km",
-    orbitalPeriod: "250 years",
-    distance: "30-49 AU",
-    moons: "None known",
-    discoveredYear: "2001",
-    description: "A moderately red plutino with a surface likely covered in organic compounds called tholins. Named after the Greek mythological figure condemned to spin eternally on a wheel of fire, it shares Pluto's 3:2 orbital resonance with Neptune."
+  "Vesta": {
+    name: "Vesta",
+    designation: "4 Vesta",
+    type: "Asteroid (Main Belt)",
+    diameter: "525 km",
+    orbitalPeriod: "3.6 years",
+    distance: "2.2-2.6 AU",
+    moons: "None",
+    discoveredYear: "1807",
+    description: "The second-largest asteroid and second-most massive object in the asteroid belt. NASA's Dawn spacecraft orbited Vesta in 2011-2012, revealing a differentiated body with an iron core, making it more like a small planet. Its surface shows evidence of ancient lava flows."
   },
-  "Huya": {
-    name: "Huya",
-    designation: "38628 Huya",
-    type: "Trans-Neptunian Object (Plutino)",
-    diameter: "406 km",
-    orbitalPeriod: "250 years",
-    distance: "29-50 AU",
-    moons: "1",
-    discoveredYear: "2000",
-    description: "A plutino discovered on the March equinox, named after Juy\u00e1, the rain god of the Wayuu people of Venezuela and Colombia. Its surface appears relatively neutral in color compared to other trans-Neptunian objects."
+  "Pallas": {
+    name: "Pallas",
+    designation: "2 Pallas",
+    type: "Asteroid (Main Belt)",
+    diameter: "512 km",
+    orbitalPeriod: "4.6 years",
+    distance: "2.1-3.4 AU",
+    moons: "None",
+    discoveredYear: "1802",
+    description: "The third-largest asteroid by volume but second by mass. Pallas has an unusually tilted orbit (34°) compared to other large asteroids. Its surface is rich in carbon compounds, giving it a very dark appearance."
   },
-  "Chaos": {
-    name: "Chaos",
-    designation: "19521 Chaos",
-    type: "Trans-Neptunian Object (Cubewano)",
-    diameter: "~600 km",
-    orbitalPeriod: "309 years",
-    distance: "41-51 AU",
-    moons: "None known",
-    discoveredYear: "1998",
-    description: "Named after the primordial void in Greek mythology from which the first gods emerged. Chaos was among the earlier trans-Neptunian objects discovered during systematic surveys of the outer solar system."
+  "Hygiea": {
+    name: "Hygiea",
+    designation: "10 Hygiea",
+    type: "Asteroid (Main Belt)",
+    diameter: "434 km",
+    orbitalPeriod: "5.6 years",
+    distance: "2.8-3.5 AU",
+    moons: "None",
+    discoveredYear: "1849",
+    description: "The fourth-largest asteroid and the largest of the dark C-type asteroids. Recent observations suggest Hygiea may be nearly spherical, potentially qualifying it as a dwarf planet. It's the largest member of the Hygiea asteroid family."
   },
-  "Salacia": {
-    name: "Salacia",
-    designation: "120347 Salacia",
-    type: "Trans-Neptunian Object (Cubewano)",
-    diameter: "854 km",
-    orbitalPeriod: "274 years",
-    distance: "38-47 AU",
-    moons: "1 (Actaea)",
+  "Apophis": {
+    name: "Apophis",
+    designation: "99942 Apophis",
+    type: "Near-Earth Asteroid (Aten)",
+    diameter: "370 m",
+    orbitalPeriod: "0.89 years",
+    distance: "0.75-1.1 AU",
+    moons: "None",
     discoveredYear: "2004",
-    description: "A large binary trans-Neptunian object named after the Roman goddess of the sea. Unusually dark for its size, suggesting a carbon-rich surface. Its moon Actaea is named after a sea nymph in Greek mythology."
+    description: "A potentially hazardous asteroid that will pass within 31,000 km of Earth on April 13, 2029 - closer than geostationary satellites. Named after the Egyptian god of chaos. Future impacts have been ruled out for at least 100 years."
   },
-  "Varda": {
-    name: "Varda",
-    designation: "174567 Varda",
-    type: "Trans-Neptunian Object (Cubewano)",
-    diameter: "792 km",
-    orbitalPeriod: "313 years",
-    distance: "40-52 AU",
-    moons: "1 (Ilmar\u00eb)",
-    discoveredYear: "2003",
-    description: "Named after the queen of the Valar in Tolkien's legendarium, who created the stars. Varda and its moon Ilmar\u00eb form a binary system where the moon is about half the size of the primary, similar to Pluto-Charon."
+  "Bennu": {
+    name: "Bennu",
+    designation: "101955 Bennu",
+    type: "Near-Earth Asteroid (Apollo)",
+    diameter: "490 m",
+    orbitalPeriod: "1.2 years",
+    distance: "0.9-1.4 AU",
+    moons: "None",
+    discoveredYear: "1999",
+    description: "A carbon-rich asteroid visited by NASA's OSIRIS-REx mission, which collected samples and returned them to Earth in 2023. Named after the Egyptian deity associated with rebirth. Bennu has a small chance of impacting Earth in the late 2100s."
   }
 };
