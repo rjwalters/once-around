@@ -24,7 +24,9 @@ export function raDecToDirection(raDeg: number, decDeg: number): THREE.Vector3 {
 }
 
 /**
- * Create a quaternion that orients the view to look at the given RA/Dec.
+ * Create a quaternion that orients the view to look at the given RA/Dec,
+ * with "up" aligned toward the celestial north pole.
+ * This prevents roll accumulation during navigation.
  */
 export function raDecToQuaternion(ra: number, dec: number): THREE.Quaternion {
   const raRad = (ra * Math.PI) / 180;
@@ -35,18 +37,42 @@ export function raDecToQuaternion(ra: number, dec: number): THREE.Quaternion {
   // Y axis points to Dec=+90 (north celestial pole)
   // +Z axis points to RA=90°, Dec=0
   const cosDec = Math.cos(decRad);
-  const targetDir = new THREE.Vector3(
+  const viewDir = new THREE.Vector3(
     -cosDec * Math.cos(raRad),
     Math.sin(decRad),
     cosDec * Math.sin(raRad)
   );
 
-  // Our default view direction is -X (matches RA=0 after east-west fix)
-  const defaultDir = new THREE.Vector3(-1, 0, 0);
+  // Celestial north pole direction
+  const northPole = new THREE.Vector3(0, 1, 0);
 
-  // Create quaternion that rotates default to target
+  // Compute "up" direction: project north pole onto plane perpendicular to view
+  // This keeps celestial north pointing up (or as close to up as possible)
+  const up = northPole
+    .clone()
+    .sub(viewDir.clone().multiplyScalar(northPole.dot(viewDir)))
+    .normalize();
+
+  // Handle the case when looking directly at the poles
+  if (up.lengthSq() < 0.001) {
+    // At poles, use RA=0 direction as reference for "up"
+    const ra0Dir = new THREE.Vector3(-1, 0, 0);
+    up.copy(ra0Dir.sub(viewDir.clone().multiplyScalar(ra0Dir.dot(viewDir))).normalize());
+  }
+
+  // Compute right vector
+  const right = new THREE.Vector3().crossVectors(viewDir, up).normalize();
+
+  // Build rotation matrix from basis vectors
+  // Camera looks along -Z in its local space, so we need:
+  // - right = local +X
+  // - up = local +Y
+  // - viewDir = local -Z (so -viewDir = local +Z)
+  const m = new THREE.Matrix4();
+  m.makeBasis(right, up, viewDir.clone().negate());
+
   const quat = new THREE.Quaternion();
-  quat.setFromUnitVectors(defaultDir, targetDir);
+  quat.setFromRotationMatrix(m);
 
   return quat;
 }

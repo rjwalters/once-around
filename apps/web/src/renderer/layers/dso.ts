@@ -57,8 +57,9 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
 
     // Axis ratio (minor/major), clamped to avoid degenerate cases
     const axisRatio = Math.max(0.1, dso.sizeArcmin[1] / dso.sizeArcmin[0]);
-    // Position angle in radians
-    const paRad = (dso.positionAngle * Math.PI) / 180;
+    // Position angle in radians (add 90° because shader stretches along x-axis,
+    // but PA=0 should have major axis pointing North/up)
+    const paRad = ((dso.positionAngle + 90) * Math.PI) / 180;
     ellipseParams[i * 2] = axisRatio;
     ellipseParams[i * 2 + 1] = paRad;
 

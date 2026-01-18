@@ -292,6 +292,158 @@ export const DEEP_FIELD_DATA: DeepField[] = [
     telescope: "HST",
     category: "messier",
   },
+
+  // ============================================
+  // ADDITIONAL GALAXIES
+  // ============================================
+
+  // M33 - Triangulum Galaxy
+  {
+    id: "M33",
+    name: "Triangulum Galaxy",
+    ra: 23.462,             // 1h 33m 51s
+    dec: 30.660,            // +30° 39' 37"
+    sizeArcmin: 62,         // ~62' x 37', third largest in Local Group
+    textureUrl: "/messier/m33.jpg",
+    rotationAngle: 23,      // Position angle ~23°
+    description: "The Triangulum Galaxy (M33) is the third-largest member of the Local Group, located 2.7 million light-years away. This face-on spiral is challenging to see with the naked eye but reveals beautiful spiral structure in photographs. It contains NGC 604, one of the largest known star-forming regions.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M81 - Bode's Galaxy
+  {
+    id: "M81",
+    name: "Bode's Galaxy",
+    ra: 148.888,            // 9h 55m 33s
+    dec: 69.065,            // +69° 03' 55"
+    sizeArcmin: 21,         // ~21' x 10'
+    textureUrl: "/messier/m81.jpg",
+    rotationAngle: 157,     // Position angle ~157°
+    description: "Bode's Galaxy (M81) is a grand design spiral galaxy 12 million light-years away in Ursa Major. It forms a famous pair with the nearby starburst galaxy M82. The gravitational interaction between these two galaxies has triggered intense star formation in M82 and enhanced the spiral structure of M81.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M82 - Cigar Galaxy
+  {
+    id: "M82",
+    name: "Cigar Galaxy",
+    ra: 148.968,            // 9h 55m 52s
+    dec: 69.680,            // +69° 40' 47"
+    sizeArcmin: 11,         // ~11' x 4'
+    textureUrl: "/messier/m82.jpg",
+    rotationAngle: 65,      // Position angle ~65°
+    description: "The Cigar Galaxy (M82) is a starburst galaxy 12 million light-years away, undergoing an exceptionally high rate of star formation triggered by its close encounter with M81. Superwinds of gas and dust stream from the galaxy's core, visible as dramatic red filaments extending thousands of light-years above and below the disk.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M64 - Black Eye Galaxy
+  {
+    id: "M64",
+    name: "Black Eye Galaxy",
+    ra: 194.182,            // 12h 56m 44s
+    dec: 21.683,            // +21° 41'
+    sizeArcmin: 10,         // ~10' x 5'
+    textureUrl: "/messier/m64.jpg",
+    rotationAngle: 112,     // Position angle ~112°
+    description: "The Black Eye Galaxy (M64) is named for the spectacular dark band of dust in front of its bright nucleus. Located 17 million light-years away in Coma Berenices, it has an unusual structure where the outer gas rotates opposite to the inner gas and stars, likely the result of a billion-year-old galaxy merger.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M83 - Southern Pinwheel Galaxy
+  {
+    id: "M83",
+    name: "Southern Pinwheel Galaxy",
+    ra: 204.254,            // 13h 37m 01s
+    dec: -29.865,           // -29° 51' 54"
+    sizeArcmin: 13,         // ~13' x 12'
+    textureUrl: "/messier/m83.jpg",
+    rotationAngle: 45,      // Position angle ~45°
+    description: "The Southern Pinwheel (M83) is one of the closest and brightest barred spiral galaxies, located 15 million light-years away in Hydra. It is undergoing intense star formation and has produced six observed supernovae since 1923, more than any other galaxy. Its well-defined spiral arms glow with young blue stars and pink star-forming regions.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M87 - Virgo A
+  {
+    id: "M87",
+    name: "Virgo A",
+    ra: 187.706,            // 12h 30m 49s
+    dec: 12.391,            // +12° 23' 28"
+    sizeArcmin: 7,          // ~7' diameter
+    textureUrl: "/messier/m87.jpg",
+    rotationAngle: 0,       // Elliptical, no position angle
+    description: "Virgo A (M87) is a supergiant elliptical galaxy at the heart of the Virgo Cluster, 53 million light-years away. It contains several trillion stars and a supermassive black hole of 6.5 billion solar masses—the first black hole ever directly imaged. A dramatic jet of plasma extends 5,000 light-years from its core.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // ============================================
+  // ADDITIONAL NEBULAE
+  // ============================================
+
+  // M16 - Eagle Nebula (full view)
+  {
+    id: "M16",
+    name: "Eagle Nebula",
+    ra: 274.700,            // 18h 18m 48s
+    dec: -13.769,           // -13° 46' 7"
+    sizeArcmin: 30,         // ~30' across
+    textureUrl: "/messier/m16.jpg",
+    rotationAngle: 0,
+    description: "The Eagle Nebula (M16) is a young open star cluster surrounded by a vast emission nebula, 7,000 light-years away in Serpens. It contains the famous 'Pillars of Creation'—dense columns of gas and dust where new stars are forming. The nebula spans about 70 light-years and is illuminated by hot young stars at its center.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M17 - Omega/Swan Nebula
+  {
+    id: "M17",
+    name: "Omega Nebula",
+    ra: 275.196,            // 18h 20m 47s
+    dec: -16.172,           // -16° 10' 18"
+    sizeArcmin: 20,         // ~20' x 15'
+    textureUrl: "/messier/m17.jpg",
+    rotationAngle: 0,
+    description: "The Omega Nebula (M17), also called the Swan Nebula, is one of the brightest and most massive star-forming regions in our galaxy. Located 5,500 light-years away in Sagittarius, it contains an open cluster of 35 hot young stars whose radiation sculpts and illuminates the surrounding gas and dust.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // ============================================
+  // MAGELLANIC CLOUDS
+  // ============================================
+
+  // Large Magellanic Cloud
+  {
+    id: "LMC",
+    name: "Large Magellanic Cloud",
+    ra: 80.894,             // 5h 23m 35s
+    dec: -69.756,           // -69° 45' 22"
+    sizeArcmin: 600,        // ~10° x 9° - one of the largest deep sky objects
+    textureUrl: "/messier/lmc.jpg",
+    rotationAngle: 0,
+    description: "The Large Magellanic Cloud (LMC) is a satellite galaxy of the Milky Way, visible to the naked eye from the Southern Hemisphere. At 163,000 light-years away, it is one of our nearest galactic neighbors. The LMC contains the Tarantula Nebula (30 Doradus), the most active star-forming region in the Local Group.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // Small Magellanic Cloud
+  {
+    id: "SMC",
+    name: "Small Magellanic Cloud",
+    ra: 13.187,             // 0h 52m 45s
+    dec: -72.829,           // -72° 49' 43"
+    sizeArcmin: 280,        // ~4.7° x 2.7°
+    textureUrl: "/messier/smc.jpg",
+    rotationAngle: 0,
+    description: "The Small Magellanic Cloud (SMC) is a dwarf irregular galaxy and satellite of the Milky Way, located 200,000 light-years away. Along with its larger companion the LMC, it is visible to the naked eye from the Southern Hemisphere. The SMC contains several hundred million stars and numerous star-forming regions.",
+    telescope: "HST",
+    category: "messier",
+  },
 ];
 
 /**
