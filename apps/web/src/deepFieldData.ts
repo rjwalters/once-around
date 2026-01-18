@@ -134,6 +134,76 @@ export const DEEP_FIELD_DATA: DeepField[] = [
     telescope: "HST",
     category: "messier",
   },
+
+  // M31 - Andromeda Galaxy
+  {
+    id: "M31",
+    name: "Andromeda Galaxy",
+    ra: 10.685,             // 0h 42m 44s
+    dec: 41.269,            // +41° 16' 9"
+    sizeArcmin: 190,        // ~190' x 60', our nearest large galaxy neighbor
+    textureUrl: "/messier/m31.jpg",
+    rotationAngle: 35,      // Position angle ~35°
+    description: "The Andromeda Galaxy (M31) is the nearest major galaxy to the Milky Way, at 2.5 million light-years away. Containing roughly one trillion stars, it is on a collision course with our galaxy, expected to merge in about 4.5 billion years. Visible to the naked eye, it has been observed since antiquity.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M42 - Orion Nebula
+  {
+    id: "M42",
+    name: "Orion Nebula",
+    ra: 83.82,              // 5h 35m 17s
+    dec: -5.39,             // -5° 23' 28"
+    sizeArcmin: 65,         // ~85' x 60', using average
+    textureUrl: "/messier/m42.jpg",
+    rotationAngle: 0,
+    description: "The Orion Nebula (M42) is the closest massive star-forming region to Earth at 1,344 light-years. Located in Orion's sword, it contains the Trapezium, a tight cluster of young hot stars whose ultraviolet radiation illuminates the surrounding gas. Over 700 stars in various stages of formation have been identified within the nebula.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M1 - Crab Nebula
+  {
+    id: "M1",
+    name: "Crab Nebula",
+    ra: 83.633,             // 5h 34m 32s
+    dec: 22.015,            // +22° 00' 52"
+    sizeArcmin: 7,          // ~7' x 5'
+    textureUrl: "/messier/m1.jpg",
+    rotationAngle: 0,
+    description: "The Crab Nebula (M1) is the remnant of a supernova explosion witnessed by Chinese astronomers in 1054 AD. Located 6,500 light-years away in Taurus, it contains a pulsar at its center - a rapidly spinning neutron star emitting radiation 30 times per second. The nebula is expanding at about 1,500 km/s.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M101 - Pinwheel Galaxy
+  {
+    id: "M101",
+    name: "Pinwheel Galaxy",
+    ra: 210.802,            // 14h 03m 12.6s
+    dec: 54.349,            // +54° 20' 57"
+    sizeArcmin: 29,         // ~29' x 27', nearly face-on
+    textureUrl: "/messier/m101.jpg",
+    rotationAngle: 0,
+    description: "The Pinwheel Galaxy (M101) is a face-on spiral galaxy 21 million light-years away in Ursa Major. With a diameter of 170,000 light-years, it is nearly twice the size of the Milky Way. Its asymmetric shape is the result of gravitational interactions with companion galaxies, which have also triggered extensive star formation in its spiral arms.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M27 - Dumbbell Nebula
+  {
+    id: "M27",
+    name: "Dumbbell Nebula",
+    ra: 299.902,            // 19h 59m 36.3s
+    dec: 22.721,            // +22° 43' 16"
+    sizeArcmin: 8,          // ~8' x 5.7'
+    textureUrl: "/messier/m27.jpg",
+    rotationAngle: 0,
+    description: "The Dumbbell Nebula (M27) was the first planetary nebula ever discovered, by Charles Messier in 1764. Located 1,360 light-years away in Vulpecula, it represents the final stage of a Sun-like star's life. The central white dwarf is one of the largest known, and the nebula continues to expand at about 31 km/s.",
+    telescope: "HST",
+    category: "messier",
+  },
 ];
 
 /**
