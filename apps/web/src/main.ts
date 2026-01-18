@@ -157,7 +157,7 @@ async function main(): Promise<void> {
   function setTimeForTour(date: Date): void {
     applyTimeToEngine(engine, date);
     engine.recompute();
-    renderer.updateFromEngine(engine);
+    renderer.updateFromEngine(engine, renderer.camera.fov);
 
     // Update datetime input display
     const datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
@@ -398,7 +398,7 @@ async function main(): Promise<void> {
     stopTimePlayback: () => timeControls?.stopPlayback(),
     applyTimeToEngine: (date) => applyTimeToEngine(engine, date),
     recomputeEngine: () => engine.recompute(),
-    updateRenderer: () => renderer.updateFromEngine(engine),
+    updateRenderer: () => renderer.updateFromEngine(engine, renderer.camera.fov),
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     positionToRaDec,
     calculateSunMoonSeparation,
@@ -415,7 +415,7 @@ async function main(): Promise<void> {
   loadAllSatelliteEphemerides(engine).then(() => {
     console.log("Satellite ephemerides loaded - satellite tracking enabled");
     // Trigger an update to show satellites if they're currently visible
-    renderer.updateFromEngine(engine);
+    renderer.updateFromEngine(engine, renderer.camera.fov);
   });
 
   // Track current date for orbit computation (updated in onTimeChange)
@@ -434,7 +434,7 @@ async function main(): Promise<void> {
       currentDate = date;
       applyTimeToEngine(engine, date);
       engine.recompute();
-      renderer.updateFromEngine(engine);
+      renderer.updateFromEngine(engine, renderer.camera.fov);
       updateRenderedStars();
       // Update topocentric parameters (LST changes with time)
       viewModeManager.updateTopocentricParamsForTime(date);
@@ -465,7 +465,7 @@ async function main(): Promise<void> {
     onMagnitudeChange: (mag: number) => {
       engine.set_mag_limit(mag);
       engine.recompute();
-      renderer.updateFromEngine(engine);
+      renderer.updateFromEngine(engine, renderer.camera.fov);
       renderer.setMilkyWayVisibility(mag);
       updateRenderedStars();
       // Update DSO visibility based on new magnitude limit
