@@ -126,6 +126,13 @@ async function main(): Promise<void> {
     setLocation: (location: { latitude: number; longitude: number; name?: string }) => void;
   } | null = null;
 
+  // View mode manager holder - set later when viewModeManager is created
+  let viewModeManagerRef: {
+    getMode: () => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
+    lockAndSetMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
+    unlockAndRestoreMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => void;
+  } | null = null;
+
   // Track current date (set later after initialization)
   let currentDate = new Date();
 
@@ -133,6 +140,7 @@ async function main(): Promise<void> {
     engine,
     renderer,
     controls,
+    getViewModeManager: () => viewModeManagerRef,
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     getCurrentDate: () => currentDate,
     getLocationManager: () => locationManagerRef,
@@ -648,6 +656,10 @@ async function main(): Promise<void> {
       videoMarkers.resetOcclusion();
     },
   });
+
+  // Set the reference for tour system to use
+  viewModeManagerRef = viewModeManager;
+
   viewModeManager.setupEventListeners();
 
   // Apply view mode from URL if specified (overrides saved settings)

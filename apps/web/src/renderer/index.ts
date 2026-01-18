@@ -23,6 +23,7 @@ import { createEarthLayer } from "./layers/earth";
 import { createDeepFieldsLayer } from "./layers/deep-fields";
 import { createJWSTLayer } from "./layers/jwst";
 import { createMeteorShowerLayer } from "./layers/meteor-showers";
+import { createRemoteViewLayer } from "./layers/remote-view";
 import type { MeteorShower } from "../meteorShowerData";
 
 export interface SkyRenderer {
@@ -77,6 +78,11 @@ export interface SkyRenderer {
   getEarthPositionJWST(): { x: number; y: number; z: number } | null;
   getSunPosition(): THREE.Vector3;
   getMoonPosition(): THREE.Vector3;
+  // Remote viewpoint methods (for tour-specific views like Pale Blue Dot)
+  setRemoteViewpoint(x: number, y: number, z: number, distanceAU: number): void;
+  clearRemoteViewpoint(): void;
+  isRemoteViewpointActive(): boolean;
+  updateRemoteView(fov: number): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -101,6 +107,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const deepFieldsLayer = createDeepFieldsLayer(scene);
   const jwstLayer = createJWSTLayer(scene);
   const meteorShowerLayer = createMeteorShowerLayer(scene, labelsGroup);
+  const remoteViewLayer = createRemoteViewLayer(scene);
 
   // Track state
   let labelsVisible = true;
@@ -390,6 +397,26 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     return bodiesLayer.getMoonPosition();
   }
 
+  // Remote viewpoint methods
+  function setRemoteViewpoint(x: number, y: number, z: number, distanceAU: number): void {
+    remoteViewLayer.setViewpoint(x, y, z, distanceAU);
+  }
+
+  function clearRemoteViewpoint(): void {
+    remoteViewLayer.clearViewpoint();
+  }
+
+  function isRemoteViewpointActive(): boolean {
+    return remoteViewLayer.isActive();
+  }
+
+  function updateRemoteView(fov: number): void {
+    if (remoteViewLayer.isActive()) {
+      const canvasHeight = ctx.container.clientHeight;
+      remoteViewLayer.update(fov, canvasHeight, camera);
+    }
+  }
+
   function render(): void {
     eclipseLayer.updateTime();
     renderer.render(scene, camera);
@@ -445,6 +472,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     getEarthPositionJWST,
     getSunPosition,
     getMoonPosition,
+    setRemoteViewpoint,
+    clearRemoteViewpoint,
+    isRemoteViewpointActive,
+    updateRemoteView,
     updateEarthPosition,
     updateEarthRotation,
     updateEarthSunDirection,

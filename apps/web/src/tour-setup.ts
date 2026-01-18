@@ -1,4 +1,5 @@
-import { createTourEngine, type TourPlaybackState, type TargetBody } from "./tour";
+import { createTourEngine, type TourPlaybackState, type TargetBody, type TourViewpoint } from "./tour";
+import { getSpacecraftPosition } from "./spacecraftPositions";
 import { applyTimeToEngine } from "./ui";
 import type { SkyEngine } from "./wasm/sky_engine";
 import {
@@ -37,10 +38,17 @@ export interface TourSetupDependencies {
     updateDSOs: (fov: number, mag: number) => void;
     setStarOverrides: (overrides: Map<number, { color?: string; scale?: number }>) => void;
     clearStarOverrides: () => void;
+    setRemoteViewpoint: (x: number, y: number, z: number, distanceAU: number) => void;
+    clearRemoteViewpoint: () => void;
   };
   controls: {
     animateToRaDec: (ra: number, dec: number, durationMs: number) => void;
   };
+  getViewModeManager: () => {
+    getMode: () => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
+    lockAndSetMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
+    unlockAndRestoreMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => void;
+  } | null;
   getBodyPositions: () => BodyPositions;
   getCurrentDate: () => Date;
   getLocationManager: () => {
@@ -63,6 +71,7 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
     engine,
     renderer,
     controls,
+    getViewModeManager,
     getBodyPositions,
     getCurrentDate,
     getLocationManager,
@@ -199,6 +208,45 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
     },
     clearStarOverrides: () => {
       renderer.clearStarOverrides();
+    },
+    setViewpoint: (viewpoint: TourViewpoint, date: Date) => {
+      if (viewpoint.type === 'spacecraft' && viewpoint.spacecraft) {
+        // Look up spacecraft position
+        const pos = getSpacecraftPosition(viewpoint.spacecraft, date);
+        if (pos) {
+          renderer.setRemoteViewpoint(pos.x, pos.y, pos.z, pos.distanceAU);
+        } else {
+          console.warn(`No position data for spacecraft ${viewpoint.spacecraft} on ${date.toISOString()}`);
+        }
+      } else if (viewpoint.type === 'coordinates' && viewpoint.position) {
+        // Use explicit coordinates
+        const distance = viewpoint.distanceAU ?? Math.sqrt(
+          viewpoint.position.x ** 2 +
+          viewpoint.position.y ** 2 +
+          viewpoint.position.z ** 2
+        );
+        renderer.setRemoteViewpoint(
+          viewpoint.position.x,
+          viewpoint.position.y,
+          viewpoint.position.z,
+          distance
+        );
+      } else if (viewpoint.type === 'geocentric') {
+        // Geocentric means Earth-centered, clear any remote viewpoint
+        renderer.clearRemoteViewpoint();
+      }
+    },
+    resetViewpoint: () => {
+      renderer.clearRemoteViewpoint();
+    },
+    getViewMode: () => getViewModeManager()?.getMode() ?? 'geocentric',
+    setViewModeLocked: (mode) => {
+      const mgr = getViewModeManager();
+      return mgr ? mgr.lockAndSetMode(mode) : 'geocentric';
+    },
+    unlockViewMode: (mode) => {
+      const mgr = getViewModeManager();
+      if (mgr) mgr.unlockAndRestoreMode(mode);
     },
   });
 

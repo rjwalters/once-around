@@ -40,6 +40,12 @@ export interface ViewModeManager {
   updateTopocentricParams: () => void;
   updateTopocentricParamsForTime: (date: Date) => void;
   setupEventListeners: () => void;
+  /** Lock view mode (disable buttons), set to specified mode, return previous mode */
+  lockAndSetMode: (mode: ViewMode) => ViewMode;
+  /** Unlock view mode (enable buttons) and restore to specified mode */
+  unlockAndRestoreMode: (mode: ViewMode) => void;
+  /** Check if view mode is currently locked */
+  isLocked: () => boolean;
 }
 
 /**
@@ -63,6 +69,7 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   } = options;
 
   let currentMode: ViewMode = initialMode;
+  let locked = false;
 
   // Get DOM elements
   const geocentricBtn = document.getElementById("view-geocentric");
@@ -115,6 +122,21 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
 
     // Auto-toggle horizon based on mode (only in topocentric)
     onHorizonChange(mode === 'topocentric');
+  }
+
+  function updateButtonsDisabled(): void {
+    const buttons = [geocentricBtn, topocentricBtn, hubbleBtn, jwstBtn];
+    for (const btn of buttons) {
+      if (btn) {
+        if (locked) {
+          btn.setAttribute('disabled', 'true');
+          btn.classList.add('locked');
+        } else {
+          btn.removeAttribute('disabled');
+          btn.classList.remove('locked');
+        }
+      }
+    }
   }
 
   function setMode(mode: ViewMode): void {
@@ -171,10 +193,40 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
   }
 
   function setupEventListeners(): void {
-    geocentricBtn?.addEventListener("click", () => setMode('geocentric'));
-    topocentricBtn?.addEventListener("click", () => setMode('topocentric'));
-    hubbleBtn?.addEventListener("click", () => setMode('hubble'));
-    jwstBtn?.addEventListener("click", () => setMode('jwst'));
+    geocentricBtn?.addEventListener("click", () => {
+      if (!locked) setMode('geocentric');
+    });
+    topocentricBtn?.addEventListener("click", () => {
+      if (!locked) setMode('topocentric');
+    });
+    hubbleBtn?.addEventListener("click", () => {
+      if (!locked) setMode('hubble');
+    });
+    jwstBtn?.addEventListener("click", () => {
+      if (!locked) setMode('jwst');
+    });
+  }
+
+  function lockAndSetMode(mode: ViewMode): ViewMode {
+    const previousMode = currentMode;
+    locked = true;
+    updateButtonsDisabled();
+    if (mode !== currentMode) {
+      setMode(mode);
+    }
+    return previousMode;
+  }
+
+  function unlockAndRestoreMode(mode: ViewMode): void {
+    locked = false;
+    updateButtonsDisabled();
+    if (mode !== currentMode) {
+      setMode(mode);
+    }
+  }
+
+  function isLocked(): boolean {
+    return locked;
   }
 
   // Initialize
@@ -198,5 +250,8 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     updateTopocentricParams,
     updateTopocentricParamsForTime,
     setupEventListeners,
+    lockAndSetMode,
+    unlockAndRestoreMode,
+    isLocked,
   };
 }

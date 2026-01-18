@@ -31,6 +31,7 @@ export interface AnimationLoopDependencies {
     isOccludedByEarth: (position: THREE.Vector3) => boolean;
     getSunPosition: () => { x: number; y: number; z: number } | null;
     getMoonPosition: () => { x: number; y: number; z: number } | null;
+    updateRemoteView: (fov: number) => void;
   };
   videoMarkers: {
     updateOcclusion: (isOccluded: (position: THREE.Vector3) => boolean) => void;
@@ -116,6 +117,9 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     // Update deep fields visibility based on current FOV
     const currentFov = controls.getCameraState().fov;
     renderer.updateDeepFields(currentFov);
+
+    // Update remote view (for tour viewpoints like Pale Blue Dot)
+    renderer.updateRemoteView(currentFov);
 
     // Update JWST layer (Earth and Moon as distant objects)
     if (viewMode === "jwst") {

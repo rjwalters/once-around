@@ -47,6 +47,28 @@ export interface TourLocation {
 }
 
 /**
+ * Observer viewpoint for a keyframe.
+ * Allows positioning the observer at different locations in the solar system.
+ *
+ * When type is 'geocentric' (default), the observer is at Earth's center.
+ * When type is 'spacecraft', the observer is at a spacecraft's position.
+ * When type is 'coordinates', the observer is at explicit heliocentric coordinates.
+ */
+export interface TourViewpoint {
+  /** Type of viewpoint */
+  type: 'geocentric' | 'spacecraft' | 'coordinates';
+
+  /** Spacecraft identifier (e.g., 'voyager1') - required if type is 'spacecraft' */
+  spacecraft?: string;
+
+  /** Heliocentric position in AU - required if type is 'coordinates' */
+  position?: { x: number; y: number; z: number };
+
+  /** Distance from Sun in AU - auto-calculated if not specified */
+  distanceAU?: number;
+}
+
+/**
  * Star property override for special effects during tours.
  * Used for hypothetical events like supernovae.
  *
@@ -118,6 +140,9 @@ export interface TourKeyframe {
 
   /** Optional star property overrides for special effects (e.g., supernovae) */
   starOverrides?: StarOverride[];
+
+  /** Optional observer viewpoint. If not specified, geocentric view is used. */
+  viewpoint?: TourViewpoint;
 }
 
 /**
@@ -138,6 +163,9 @@ export interface TourDefinition {
 
   /** Whether tour should loop (default: false) */
   loop?: boolean;
+
+  /** Required view mode for this tour (locks view mode while tour is active) */
+  viewMode?: 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
 }
 
 /**
@@ -213,6 +241,21 @@ export interface TourCallbacks {
 
   /** Clear all star property overrides */
   clearStarOverrides?: () => void;
+
+  /** Set observer viewpoint (for remote locations like spacecraft) */
+  setViewpoint?: (viewpoint: TourViewpoint, date: Date) => void;
+
+  /** Reset viewpoint to geocentric (Earth-centered) view */
+  resetViewpoint?: () => void;
+
+  /** Get current view mode */
+  getViewMode?: () => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
+
+  /** Set view mode and lock it (returns previous mode for restoration) */
+  setViewModeLocked?: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
+
+  /** Unlock view mode and restore to given mode */
+  unlockViewMode?: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => void;
 }
 
 /**
@@ -379,6 +422,9 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
   let targetLocation: TourLocation | null = null;
   let hasLocationChange = false;
 
+  // View mode state (for restoring after tour ends)
+  let savedViewMode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst' | null = null;
+
   // Star override interpolation state
   let startStarOverrides: StarOverride[] = [];
   let targetStarOverrides: StarOverride[] = [];
@@ -452,7 +498,14 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     status = 'playing';
     phase = 'transition';
     segmentStartTime = performance.now();
-    
+
+    // Lock view mode if tour specifies one
+    if (tour.viewMode && callbacks.setViewModeLocked) {
+      savedViewMode = callbacks.setViewModeLocked(tour.viewMode);
+    } else {
+      savedViewMode = null;
+    }
+
     // Set up first keyframe transition
     const firstKeyframe = tour.keyframes[0];
     startFov = callbacks.getFov();
@@ -490,6 +543,13 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
       targetStarOverrides = [];
     }
 
+    // Handle viewpoint (no interpolation - instant cut)
+    if (firstKeyframe.viewpoint && callbacks.setViewpoint) {
+      callbacks.setViewpoint(firstKeyframe.viewpoint, new Date(firstKeyframe.datetime));
+    } else if (callbacks.resetViewpoint) {
+      callbacks.resetViewpoint();
+    }
+
     // Resolve position (either from target body or explicit ra/dec)
     const { ra, dec } = resolveKeyframePosition(firstKeyframe, callbacks.resolveBodyPosition);
 
@@ -524,12 +584,19 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
   }
 
   function stop(): void {
+    // Unlock view mode and restore previous if we locked it
+    if (savedViewMode !== null && callbacks.unlockViewMode) {
+      callbacks.unlockViewMode(savedViewMode);
+      savedViewMode = null;
+    }
+
     status = 'idle';
     currentTour = null;
     currentKeyframeIndex = 0;
     phase = 'transition';
     callbacks.onCaptionChange?.(null);
     callbacks.clearStarOverrides?.();
+    callbacks.resetViewpoint?.();
     notifyStateChange();
   }
 
@@ -594,6 +661,14 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
       targetStarOverrides = [];
     } else {
       hasStarOverrideChange = false;
+    }
+
+    // Handle viewpoint changes (no interpolation - instant cut)
+    if (keyframe.viewpoint && callbacks.setViewpoint) {
+      callbacks.setViewpoint(keyframe.viewpoint, new Date(keyframe.datetime));
+    } else if (prevKeyframe?.viewpoint && callbacks.resetViewpoint) {
+      // Previous keyframe had a remote viewpoint, this one doesn't - reset to geocentric
+      callbacks.resetViewpoint();
     }
 
     // Resolve position (either from target body or explicit ra/dec)

@@ -1827,6 +1827,106 @@ export const PLUTO_DISCOVERY_TOUR: TourDefinition = {
 };
 
 /**
+ * Pale Blue Dot Tour - February 14, 1990
+ *
+ * On February 14, 1990, Voyager 1 turned its camera backward and captured
+ * the iconic "Pale Blue Dot" image of Earth from 6 billion kilometers away.
+ * This photograph, showing Earth as a tiny speck suspended in a sunbeam,
+ * inspired Carl Sagan's famous reflection on our place in the cosmos.
+ *
+ * Voyager 1 position: ~40.11 AU from the Sun
+ * Earth appears at magnitude ~28 (far below visibility, shown as iconic image)
+ */
+export const PALE_BLUE_DOT_TOUR: TourDefinition = {
+  id: 'pale-blue-dot',
+  name: 'Pale Blue Dot',
+  description: "See Earth as Voyager 1 saw it from 6 billion kilometers away",
+  viewMode: 'geocentric',  // Required for remote viewpoint to work correctly
+  keyframes: [
+    {
+      // Start: Context from Earth - show Jupiter which Voyager passed years ago
+      target: 'jupiter',
+      fov: 20,
+      datetime: '1990-02-14T00:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'February 14, 1990 - Voyager 1 has traveled for 12 years since leaving Earth...',
+    },
+    {
+      // Show the outer solar system context
+      target: 'saturn',
+      fov: 30,
+      datetime: '1990-02-14T02:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Now 6 billion kilometers from home, beyond the orbit of Neptune...',
+    },
+    {
+      // Transition to Voyager's view - look toward inner solar system
+      // From Voyager's position (-26.67, 28.57, 12.31) AU, the Sun appears at ~RA 321°, Dec -33°
+      ra: 321,
+      dec: -33,
+      fov: 60,
+      datetime: '1990-02-14T04:48:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      viewpoint: { type: 'spacecraft', spacecraft: 'voyager1' },
+      caption: 'Carl Sagan convinced NASA to turn Voyager\'s camera backward for one last look at home...',
+    },
+    {
+      // Zoom toward where Earth would be
+      ra: 321,
+      dec: -33,
+      fov: 20,
+      datetime: '1990-02-14T04:48:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      viewpoint: { type: 'spacecraft', spacecraft: 'voyager1' },
+      caption: 'Earth appears as a mere point of light, caught in a scattered ray of sunlight...',
+    },
+    {
+      // Close zoom on the Pale Blue Dot
+      ra: 321,
+      dec: -33,
+      fov: 5,
+      datetime: '1990-02-14T04:48:00Z',
+      holdDuration: 6000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      viewpoint: { type: 'spacecraft', spacecraft: 'voyager1' },
+      caption: '"Look again at that dot. That\'s here. That\'s home. That\'s us."',
+    },
+    {
+      // Hold on the image with Sagan quote
+      ra: 321,
+      dec: -33,
+      fov: 5,
+      datetime: '1990-02-14T04:48:00Z',
+      holdDuration: 7000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      viewpoint: { type: 'spacecraft', spacecraft: 'voyager1' },
+      caption: '"Everyone you love, everyone you know, everyone you ever heard of... lived there on a mote of dust suspended in a sunbeam."',
+    },
+    {
+      // Return to Earth perspective
+      target: 'sun',
+      fov: 30,
+      datetime: '1990-02-14T06:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      // No viewpoint = back to geocentric
+      caption: 'Voyager 1 continues its journey into interstellar space, now over 160 AU from the Sun.',
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
@@ -1848,6 +1948,7 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   URANUS_DISCOVERY_TOUR,
   NEPTUNE_DISCOVERY_TOUR,
   PLUTO_DISCOVERY_TOUR,
+  PALE_BLUE_DOT_TOUR,
 ];
 
 /**
