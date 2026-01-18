@@ -108,6 +108,7 @@ export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
 
     // Create mesh
     const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 6; // Render on top of DSO ellipses (renderOrder 5)
 
     // Position on the sky sphere (slightly in front to prevent z-fighting with stars)
     const pos = raDecToPosition(field.ra, field.dec, SKY_RADIUS - 0.5);

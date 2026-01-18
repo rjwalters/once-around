@@ -82,6 +82,7 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
 
   const points = new THREE.Points(geometry, material);
   points.visible = false; // Hidden by default
+  points.renderOrder = 5; // Render before deep field images
   scene.add(points);
 
   // Flag lines connecting labels to DSOs
