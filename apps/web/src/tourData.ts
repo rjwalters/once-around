@@ -1418,6 +1418,415 @@ export const MERCURY_TRANSIT_2019_TOUR: TourDefinition = {
 };
 
 /**
+ * Galileo's Discovery of Jupiter's Moons Tour - January 1610
+ *
+ * On January 7, 1610, Galileo Galilei pointed his improved telescope at Jupiter
+ * and noticed three small "stars" near the planet. Over the following nights,
+ * he observed them moving - they were moons orbiting Jupiter, not Earth.
+ *
+ * This discovery was revolutionary: it proved not everything orbited Earth,
+ * providing strong evidence for the Copernican heliocentric model.
+ *
+ * Galileo observed from Padua, Italy (45.41°N, 11.88°E)
+ * Jupiter was in Taurus during January 1610.
+ */
+export const GALILEO_JUPITER_TOUR: TourDefinition = {
+  id: 'galileo-jupiter-1610',
+  name: "Galileo's Discovery (1610)",
+  description: 'The night Galileo found moons orbiting Jupiter',
+  keyframes: [
+    {
+      // Keyframe 1: Setting the scene - Padua, Italy
+      target: 'jupiter',
+      fov: 40,
+      datetime: '1610-01-07T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 45.41,
+        longitude: 11.88,
+        name: 'Padua, Italy',
+      },
+      caption: 'January 7, 1610 - Padua, Italy. Galileo Galilei turns his improved telescope toward Jupiter...',
+    },
+    {
+      // Keyframe 2: Zoom to Jupiter
+      target: 'jupiter',
+      fov: 8,
+      datetime: '1610-01-07T21:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Through his 20x telescope, Galileo sees three small "stars" aligned near Jupiter',
+    },
+    {
+      // Keyframe 3: Close view showing moons
+      target: 'jupiter',
+      fov: 2,
+      datetime: '1610-01-07T22:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'animate',
+      caption: 'He sketches their positions, thinking them fixed stars. But tomorrow, they will have moved...',
+    },
+    {
+      // Keyframe 4: January 8 - they've moved!
+      target: 'jupiter',
+      fov: 2,
+      datetime: '1610-01-08T21:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'January 8 - The "stars" have changed position! Galileo is puzzled',
+    },
+    {
+      // Keyframe 5: January 10 - only two visible
+      target: 'jupiter',
+      fov: 2,
+      datetime: '1610-01-10T21:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'January 10 - Only two "stars" visible. One must be behind Jupiter!',
+    },
+    {
+      // Keyframe 6: January 13 - four moons!
+      target: 'jupiter',
+      fov: 2,
+      datetime: '1610-01-13T21:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'January 13 - A fourth "star" appears! Galileo realizes: these are moons orbiting Jupiter',
+    },
+    {
+      // Keyframe 7: The revelation
+      target: 'jupiter',
+      fov: 3,
+      datetime: '1610-01-15T21:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Not everything orbits Earth. The Copernican revolution has found its proof.',
+    },
+    {
+      // Keyframe 8: Wide view - context
+      target: 'jupiter',
+      fov: 20,
+      datetime: '1610-01-15T22:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'Galileo names them the Medicean Stars. Today we call them Io, Europa, Ganymede, and Callisto.',
+    },
+  ],
+};
+
+/**
+ * Discovery of Uranus Tour - March 13, 1781
+ *
+ * William Herschel, a musician and amateur astronomer in Bath, England,
+ * discovered Uranus while systematically surveying the sky. He initially
+ * thought it was a comet, but its nearly circular orbit revealed it as
+ * the first planet discovered in recorded history.
+ *
+ * Uranus was in Gemini at the time of discovery.
+ * Herschel observed from his home in Bath (51.38°N, 2.36°W).
+ */
+export const URANUS_DISCOVERY_TOUR: TourDefinition = {
+  id: 'uranus-discovery-1781',
+  name: 'Discovery of Uranus (1781)',
+  description: 'William Herschel finds the first new planet',
+  keyframes: [
+    {
+      // Keyframe 1: Setting the scene - Bath, England
+      target: 'uranus',
+      fov: 50,
+      datetime: '1781-03-13T22:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 51.38,
+        longitude: -2.36,
+        name: 'Bath, England',
+      },
+      caption: 'March 13, 1781 - Bath, England. William Herschel surveys the sky with his homemade telescope...',
+    },
+    {
+      // Keyframe 2: The region of sky
+      target: 'uranus',
+      fov: 20,
+      datetime: '1781-03-13T22:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Scanning Gemini, Herschel notices an object that appears as a disk, not a point of light',
+    },
+    {
+      // Keyframe 3: Closer view
+      target: 'uranus',
+      fov: 8,
+      datetime: '1781-03-13T23:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: '"I perceived it to be a comet," he wrote. But he would soon discover it was far more...',
+    },
+    {
+      // Keyframe 4: A few days later - it has moved
+      target: 'uranus',
+      fov: 10,
+      datetime: '1781-03-17T22:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Days later, it has moved against the background stars - definitely not a star',
+    },
+    {
+      // Keyframe 5: Months of observation
+      target: 'uranus',
+      fov: 15,
+      datetime: '1781-06-01T23:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Mathematicians calculate its orbit: nearly circular, at 19 times Earth\'s distance from the Sun',
+    },
+    {
+      // Keyframe 6: The conclusion
+      target: 'uranus',
+      fov: 8,
+      datetime: '1781-09-01T22:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'This is no comet - it\'s a planet! The first discovered since antiquity',
+    },
+    {
+      // Keyframe 7: Wide context
+      target: 'uranus',
+      fov: 30,
+      datetime: '1781-09-01T22:30:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'Herschel wanted to name it "Georgium Sidus" after King George III. Astronomers chose Uranus instead.',
+    },
+  ],
+};
+
+/**
+ * Discovery of Neptune Tour - September 23, 1846
+ *
+ * Neptune was the first planet discovered through mathematical prediction.
+ * Urbain Le Verrier calculated its position based on perturbations in Uranus's
+ * orbit. Johann Galle found it at Berlin Observatory within 1° of the prediction.
+ *
+ * This was a triumph of Newtonian mechanics - Newton's laws could predict
+ * the existence and location of an unseen world.
+ *
+ * Neptune was in Aquarius at the time of discovery.
+ */
+export const NEPTUNE_DISCOVERY_TOUR: TourDefinition = {
+  id: 'neptune-discovery-1846',
+  name: 'Discovery of Neptune (1846)',
+  description: 'Found by mathematics before being seen',
+  keyframes: [
+    {
+      // Keyframe 1: Setting the scene - Berlin Observatory
+      target: 'neptune',
+      fov: 50,
+      datetime: '1846-09-23T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 52.52,
+        longitude: 13.41,
+        name: 'Berlin Observatory',
+      },
+      caption: 'September 23, 1846 - Berlin Observatory. A letter from Le Verrier has just arrived...',
+    },
+    {
+      // Keyframe 2: The prediction
+      target: 'neptune',
+      fov: 25,
+      datetime: '1846-09-23T21:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Le Verrier\'s calculations predict an unseen planet is perturbing Uranus\'s orbit',
+    },
+    {
+      // Keyframe 3: Searching the predicted location
+      target: 'neptune',
+      fov: 10,
+      datetime: '1846-09-23T22:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Johann Galle and Heinrich d\'Arrest search the predicted region in Aquarius...',
+    },
+    {
+      // Keyframe 4: Found!
+      target: 'neptune',
+      fov: 5,
+      datetime: '1846-09-23T23:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'animate',
+      caption: '"That star is not on the chart!" Within one degree of Le Verrier\'s prediction - Neptune is found!',
+    },
+    {
+      // Keyframe 5: Confirmation
+      target: 'neptune',
+      fov: 8,
+      datetime: '1846-09-24T22:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'The next night confirms it: the object has moved. A new planet, seen only 30 minutes after the search began.',
+    },
+    {
+      // Keyframe 6: The triumph
+      target: 'neptune',
+      fov: 15,
+      datetime: '1846-10-01T22:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'News spreads across Europe. Newton\'s laws have predicted the existence of an unseen world.',
+    },
+    {
+      // Keyframe 7: Wide view
+      target: 'neptune',
+      fov: 30,
+      datetime: '1846-10-01T22:30:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'At 30 times Earth\'s distance from the Sun, Neptune takes 165 years to orbit once.',
+    },
+  ],
+};
+
+/**
+ * Discovery of Pluto Tour - February 18, 1930
+ *
+ * Clyde Tombaugh, a young astronomer at Lowell Observatory, discovered Pluto
+ * using a blink comparator - alternating between two photographic plates taken
+ * days apart to spot moving objects.
+ *
+ * The discovery was announced on March 13, 1930 - the anniversary of both
+ * Herschel's discovery of Uranus and Percival Lowell's birth.
+ *
+ * Pluto was in Gemini at the time of discovery.
+ * (Note: Pluto was reclassified as a dwarf planet in 2006.)
+ */
+export const PLUTO_DISCOVERY_TOUR: TourDefinition = {
+  id: 'pluto-discovery-1930',
+  name: 'Discovery of Pluto (1930)',
+  description: 'Clyde Tombaugh finds the ninth world',
+  keyframes: [
+    {
+      // Keyframe 1: Setting the scene - Lowell Observatory
+      ra: 101.29,
+      dec: 23.01,
+      fov: 50,
+      datetime: '1930-01-23T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 35.20,
+        longitude: -111.66,
+        name: 'Lowell Observatory, Flagstaff',
+      },
+      caption: 'January 1930 - Lowell Observatory, Arizona. Clyde Tombaugh photographs the sky, searching for "Planet X"...',
+    },
+    {
+      // Keyframe 2: The photographic plates
+      ra: 101.29,
+      dec: 23.01,
+      fov: 20,
+      datetime: '1930-01-23T04:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'January 23: Tombaugh exposes a plate of the Gemini star field. Six days later, he takes another.',
+    },
+    {
+      // Keyframe 3: January 29 - second plate
+      ra: 101.29,
+      dec: 23.01,
+      fov: 15,
+      datetime: '1930-01-29T04:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'January 29: The second photograph is taken. Weeks of painstaking comparison lie ahead.',
+    },
+    {
+      // Keyframe 4: The blink comparator
+      ra: 101.29,
+      dec: 23.01,
+      fov: 8,
+      datetime: '1930-02-18T16:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'February 18, 1930 - At the blink comparator, Tombaugh alternates between the two plates...',
+    },
+    {
+      // Keyframe 5: Discovery!
+      ra: 101.29,
+      dec: 23.01,
+      fov: 5,
+      datetime: '1930-02-18T16:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'A faint dot jumps back and forth - something has moved! After months of searching, Tombaugh has found it.',
+    },
+    {
+      // Keyframe 6: Confirmation period
+      ra: 101.29,
+      dec: 23.01,
+      fov: 10,
+      datetime: '1930-03-01T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Weeks of additional observations confirm the discovery. At magnitude 15, it\'s too faint to see without a telescope.',
+    },
+    {
+      // Keyframe 7: Announcement
+      ra: 101.29,
+      dec: 23.01,
+      fov: 20,
+      datetime: '1930-03-13T12:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'March 13, 1930 - The discovery is announced on the 149th anniversary of Uranus\'s discovery.',
+    },
+    {
+      // Keyframe 8: Closing
+      ra: 101.29,
+      dec: 23.01,
+      fov: 30,
+      datetime: '1930-03-13T12:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'Named Pluto after the god of the underworld. In 2006, it was reclassified as a dwarf planet - but Tombaugh\'s discovery endures.',
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
@@ -1435,6 +1844,10 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   VENUS_TRANSIT_1769_TOUR,
   VENUS_TRANSIT_2012_TOUR,
   MERCURY_TRANSIT_2019_TOUR,
+  GALILEO_JUPITER_TOUR,
+  URANUS_DISCOVERY_TOUR,
+  NEPTUNE_DISCOVERY_TOUR,
+  PLUTO_DISCOVERY_TOUR,
 ];
 
 /**
