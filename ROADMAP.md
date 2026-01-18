@@ -183,7 +183,7 @@ Predict ISS visibility from observer location.
 
 Extend DSO rendering with tour-based overrides for dynamic effects.
 
-**Current state:** Basic DSO rendering complete with 28 objects.
+**Current state:** DSO/deep field rendering complete with 28 deep field images.
 
 **Remaining work:**
 - Nebula override system similar to star overrides

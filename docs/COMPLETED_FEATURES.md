@@ -125,6 +125,7 @@ Two distinct viewing perspectives with fundamentally different navigation models
 - No horizon (meaningless from Earth's center)
 - Time changes move Sun/Moon/planets; stars stay fixed
 - Use case: "Explore the celestial sphere"
+- **Roll correction:** After drag ends, view smoothly drifts back to celestial-north-up (600ms animation) to prevent roll accumulation during navigation
 
 ### Topocentric Mode
 
@@ -286,11 +287,33 @@ function horizontalToEquatorial(
 
 ## Deep Sky Objects
 
-28 DSOs rendered with full visual treatment.
+DSO ellipse markers and 28 deep field images rendered with full visual treatment.
 
-### Object Types
+### Deep Field Images
 
-- **Galaxies:** M31 (Andromeda), M33 (Triangulum), LMC, SMC, M81, M82
+High-resolution imagery from Hubble and JWST displayed at actual sky positions:
+
+**Deep Fields:**
+- Hubble Deep Field (HDF), Hubble Ultra Deep Field (HUDF)
+- JWST First Deep Field (SMACS 0723), Cosmic Cliffs (Carina), Pillars of Creation
+
+**Galaxies:**
+- M31 (Andromeda), M33 (Triangulum), M51 (Whirlpool), M81 (Bode's), M82 (Cigar)
+- M64 (Black Eye), M83 (Southern Pinwheel), M87 (Virgo A), M101 (Pinwheel), M104 (Sombrero)
+- LMC, SMC (Magellanic Clouds)
+
+**Nebulae:**
+- M1 (Crab), M8 (Lagoon), M16 (Eagle), M17 (Omega), M20 (Trifid)
+- M27 (Dumbbell), M42 (Orion), M57 (Ring)
+
+**Globular Clusters:**
+- M3, M5, M13 (Hercules), M22 (Sagittarius)
+
+### DSO Ellipse Markers
+
+Schematic ellipse rendering for all DSO types:
+
+- **Galaxies:** M31, M33, LMC, SMC, M81, M82, and more
 - **Emission Nebulae:** M42 (Orion), M8 (Lagoon), M17 (Omega), M20 (Trifid), NGC7000 (North America), IC1396
 - **Planetary Nebulae:** M57 (Ring), M27 (Dumbbell), NGC7293 (Helix)
 - **Globular Clusters:** NGC5139 (Omega Centauri), NGC104 (47 Tuc), M13, M22, M5
@@ -299,6 +322,7 @@ function horizontalToEquatorial(
 
 ### Rendering Features
 
+- Deep field images overlay at correct sky positions with proper rotation
 - Elliptical sprite rendering with position angle and axis ratio
 - Type-based color coding
 - Labels with catalog IDs
