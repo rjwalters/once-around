@@ -17,6 +17,8 @@ Historical record of implemented features in Once Around the Night Sky.
 - [Solar System Objects](#solar-system-objects)
 - [Satellite Tracking](#satellite-tracking)
 - [Meteor Showers](#meteor-showers)
+- [ISS Pass Predictions](#iss-pass-predictions)
+- [PWA Support](#pwa-support)
 
 ---
 
@@ -533,3 +535,75 @@ Display meteor shower radiants with activity indicators.
 - **Activity dates** - Only active showers are displayed
 - **Searchable** - Find showers by name with peak date and ZHR in results
 - **Keyboard shortcut** - Toggle with M key
+
+---
+
+## ISS Pass Predictions
+
+Predict visible ISS passes from observer location in topocentric mode.
+
+### Visibility Conditions
+
+A pass is visible when ALL conditions are met:
+1. **Above horizon** - ISS altitude > 10° (configurable)
+2. **Illuminated** - ISS in sunlight (not in Earth's shadow)
+3. **Dark sky** - Sun altitude < -6° (civil twilight)
+
+### Implementation
+
+- **Coarse scan** - 10-minute interval search across ephemeris range
+- **Binary search refinement** - ~30 second precision for rise/set times
+- **Sun altitude calculation** - WASM function computes Sun position
+- **Ephemeris range awareness** - Only searches within available data
+
+### UI Features
+
+- **Next visible pass** panel with countdown timer
+- **Pass details** - Rise/set times, max altitude, direction (NW → SE)
+- **Expandable list** - View upcoming passes
+- **Click to jump** - Click any pass to set time to that pass
+- **View mode aware** - Hidden in non-topocentric modes
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `iss-passes.ts` | Pass prediction algorithm |
+| `iss-passes-ui.ts` | UI component |
+| `lib.rs` | `sun_altitude()` and `satellite_ephemeris_range()` functions |
+
+---
+
+## PWA Support
+
+Progressive Web App for offline stargazing.
+
+### Features
+
+- **Offline support** - Service worker caches app for use without internet
+- **Add to home screen** - Install as standalone app on mobile/desktop
+- **Full-screen mode** - No browser chrome when installed
+- **Faster loads** - Cached assets for instant startup
+
+### Caching Strategy
+
+| Asset Type | Strategy |
+|------------|----------|
+| Images, WASM, star data | Cache-first |
+| Ephemeris data | Network-first (prefer fresh) |
+| HTML, app shell | Stale-while-revalidate |
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `manifest.json` | App metadata, icons, display settings |
+| `sw.js` | Service worker with caching logic |
+| `icon-192.svg` | App icon (192×192) |
+| `icon-512.svg` | App icon (512×512) |
+
+### iOS Support
+
+- Apple-specific meta tags for standalone mode
+- Theme color for status bar
+- Touch icon for home screen
