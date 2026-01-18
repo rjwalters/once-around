@@ -163,6 +163,34 @@ export const DEEP_FIELD_DATA: DeepField[] = [
     category: "messier",
   },
 
+  // M8 - Lagoon Nebula
+  {
+    id: "M8",
+    name: "Lagoon Nebula",
+    ra: 270.94,             // 18h 03m 37s
+    dec: -24.39,            // -24° 23' 12"
+    sizeArcmin: 90,         // ~90' x 40', one of the largest emission nebulae
+    textureUrl: "/messier/m8.jpg",
+    rotationAngle: 0,
+    description: "The Lagoon Nebula (M8) is one of the largest and brightest emission nebulae in the sky, visible to the naked eye from dark locations. Located 4,100 light-years away in Sagittarius, it contains the open cluster NGC 6530 and the Hourglass Nebula at its center. The nebula spans about 110 light-years and is an active stellar nursery.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M20 - Trifid Nebula
+  {
+    id: "M20",
+    name: "Trifid Nebula",
+    ra: 270.60,             // 18h 02m 23s
+    dec: -23.03,            // -23° 01' 48"
+    sizeArcmin: 28,         // ~28' diameter
+    textureUrl: "/messier/m20.jpg",
+    rotationAngle: 0,
+    description: "The Trifid Nebula (M20) is a unique combination of three nebula types: an emission nebula (red), reflection nebula (blue), and dark nebula (the lanes that give it its name). Located 5,200 light-years away in Sagittarius, it was named 'Trifid' by John Herschel for the three dark dust lanes that appear to divide it into three lobes.",
+    telescope: "HST",
+    category: "messier",
+  },
+
   // M1 - Crab Nebula
   {
     id: "M1",
