@@ -1,7 +1,10 @@
 /**
  * Satellites Layer
  *
- * Renders satellites (ISS, Hubble, etc.) as moving points with visibility-based appearance.
+ * Renders satellites (ISS, Hubble, etc.) with LOD-based rendering:
+ * - Far away: Point source (glow sprite)
+ * - Close up: Detailed sprite showing satellite structure
+ *
  * Satellites are only visible when:
  * 1. Ephemeris data is loaded and covers the current time
  * 2. They're above the observer's horizon
@@ -27,6 +30,25 @@ const SATELLITE_COLORS: { [key: string]: THREE.Color } = {
   Hubble: new THREE.Color(0.8, 0.9, 1.0),  // Slightly blue-white
 };
 
+// Satellite physical sizes in meters (for angular size calculation)
+// ISS: ~109m x 73m (solar array span x length) - use largest dimension
+// Hubble: ~13.2m length x 4.2m diameter
+const SATELLITE_SIZES_METERS: { [key: string]: number } = {
+  ISS: 109,
+  Hubble: 13.2,
+};
+
+// LOD thresholds in pixels (when to switch from point to detailed sprite)
+const LOD_POINT_MAX_PX = 3;     // Below this: point sprite only
+const LOD_DETAIL_MIN_PX = 6;   // Above this: detailed sprite fully visible
+// Between 3-6px: crossfade
+
+// Satellite texture URLs (detail sprites)
+const SATELLITE_TEXTURES: { [key: string]: string } = {
+  ISS: "/iss.jpg",
+  Hubble: "/hubble.jpg",
+};
+
 export interface SatelliteState {
   info: SatelliteInfo;
   mesh: THREE.Points;
@@ -34,19 +56,79 @@ export interface SatelliteState {
   labelDiv: HTMLDivElement;
   hasData: boolean;
   visible: boolean;
+  // LOD support
+  detailSprite: THREE.Sprite | null;
+  detailMaterial: THREE.SpriteMaterial | null;
+  glowSprite: THREE.Sprite;
+  glowMaterial: THREE.SpriteMaterial;
 }
 
 export interface SatellitesLayer {
   /** All satellite states */
   satellites: SatelliteState[];
   /** Update all satellite positions and visibility */
-  update(engine: SkyEngine, labelsVisible: boolean): void;
+  update(engine: SkyEngine, labelsVisible: boolean, fov: number, canvasHeight: number): void;
   /** Set whether satellites layer is enabled */
   setEnabled(enabled: boolean): void;
   /** Get position for a specific satellite (for search) */
   getSatellitePosition(index: number, engine: SkyEngine): { x: number; y: number; z: number } | null;
   /** Check if a specific satellite is visible */
   isSatelliteVisible(index: number): boolean;
+}
+
+/**
+ * Create a glow texture for point source rendering.
+ */
+function createGlowTexture(size = 128): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  const center = size / 2;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+
+  // Gaussian-like falloff for natural glow
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.05, 'rgba(255,255,255,0.95)');
+  gradient.addColorStop(0.1, 'rgba(255,255,255,0.8)');
+  gradient.addColorStop(0.2, 'rgba(255,255,255,0.5)');
+  gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
+  gradient.addColorStop(0.6, 'rgba(255,255,255,0.08)');
+  gradient.addColorStop(0.8, 'rgba(255,255,255,0.02)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// Shared glow texture for all satellites
+let sharedGlowTexture: THREE.Texture | null = null;
+
+function getGlowTexture(): THREE.Texture {
+  if (!sharedGlowTexture) {
+    sharedGlowTexture = createGlowTexture();
+  }
+  return sharedGlowTexture;
+}
+
+/**
+ * Load satellite detail texture if available.
+ */
+function loadDetailTexture(name: string): THREE.Texture | null {
+  const url = SATELLITE_TEXTURES[name];
+  if (!url) return null;
+
+  const loader = new THREE.TextureLoader();
+  const texture = loader.load(url, undefined, undefined, () => {
+    // Texture failed to load - this is expected if file doesn't exist
+    console.log(`Satellite detail texture not found: ${url}`);
+  });
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 /**
@@ -57,7 +139,7 @@ function createSatelliteMesh(
   scene: THREE.Scene,
   labelsGroup: THREE.Group
 ): SatelliteState {
-  // Create point geometry
+  // Create point geometry (legacy, still used for basic rendering)
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(3);
   const colors = new Float32Array(3);
@@ -79,6 +161,40 @@ function createSatelliteMesh(
   mesh.renderOrder = 100; // Render on top
   scene.add(mesh);
 
+  // Create glow sprite (point source representation)
+  const glowTexture = getGlowTexture();
+  const color = SATELLITE_COLORS[info.name] ?? COLOR_ILLUMINATED;
+  const glowMaterial = new THREE.SpriteMaterial({
+    map: glowTexture,
+    color: color,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const glowSprite = new THREE.Sprite(glowMaterial);
+  glowSprite.visible = false;
+  glowSprite.renderOrder = 101;
+  scene.add(glowSprite);
+
+  // Create detail sprite (for zoomed in view)
+  let detailSprite: THREE.Sprite | null = null;
+  let detailMaterial: THREE.SpriteMaterial | null = null;
+
+  const detailTexture = loadDetailTexture(info.name);
+  if (detailTexture) {
+    detailMaterial = new THREE.SpriteMaterial({
+      map: detailTexture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    detailSprite = new THREE.Sprite(detailMaterial);
+    detailSprite.visible = false;
+    detailSprite.renderOrder = 102;
+    scene.add(detailSprite);
+  }
+
   // Create label
   const div = document.createElement("div");
   div.className = `sky-label satellite-label satellite-${info.name.toLowerCase()}`;
@@ -94,6 +210,10 @@ function createSatelliteMesh(
     labelDiv: div,
     hasData: false,
     visible: false,
+    detailSprite,
+    detailMaterial,
+    glowSprite,
+    glowMaterial,
   };
 }
 
@@ -111,9 +231,9 @@ export function createSatellitesLayer(scene: THREE.Scene, labelsGroup: THREE.Gro
     createSatelliteMesh(info, scene, labelsGroup)
   );
 
-  function update(engine: SkyEngine, labelsVisible: boolean): void {
+  function update(engine: SkyEngine, labelsVisible: boolean, fov: number, canvasHeight: number): void {
     for (const sat of satelliteStates) {
-      updateSatellite(sat, engine, labelsVisible, enabled);
+      updateSatellite(sat, engine, labelsVisible, enabled, fov, canvasHeight);
     }
   }
 
@@ -124,6 +244,8 @@ export function createSatellitesLayer(scene: THREE.Scene, labelsGroup: THREE.Gro
         sat.mesh.visible = false;
         sat.label.visible = false;
         sat.visible = false;
+        sat.glowSprite.visible = false;
+        if (sat.detailSprite) sat.detailSprite.visible = false;
       }
     }
   }
@@ -155,17 +277,50 @@ export function createSatellitesLayer(scene: THREE.Scene, labelsGroup: THREE.Gro
 }
 
 /**
+ * Smoothstep function for smooth transitions.
+ */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Calculate angular size in pixels for a satellite.
+ * @param distanceKm - Distance to satellite in kilometers
+ * @param sizeMeter - Physical size of satellite in meters
+ * @param fov - Field of view in degrees
+ * @param canvasHeight - Canvas height in pixels
+ * @returns Angular size in pixels
+ */
+function calculatePixelSize(distanceKm: number, sizeMeters: number, fov: number, canvasHeight: number): number {
+  if (distanceKm <= 0) return 0;
+
+  // Convert distance to meters
+  const distanceMeters = distanceKm * 1000;
+
+  // Angular size in radians: arctan(size / distance) ≈ size / distance for small angles
+  const angularSizeRad = sizeMeters / distanceMeters;
+
+  // Convert to degrees then to pixels
+  const angularSizeDeg = angularSizeRad * (180 / Math.PI);
+  const pixelSize = (angularSizeDeg / fov) * canvasHeight;
+
+  return pixelSize;
+}
+
+/**
  * Update a single satellite's state.
  */
 function updateSatellite(
   sat: SatelliteState,
   engine: SkyEngine,
   labelsVisible: boolean,
-  enabled: boolean
+  enabled: boolean,
+  fov: number,
+  canvasHeight: number
 ): void {
-  const { info, mesh, label, labelDiv } = sat;
+  const { info, mesh, label, labelDiv, glowSprite, glowMaterial, detailSprite, detailMaterial } = sat;
   const geometry = mesh.geometry as THREE.BufferGeometry;
-  const material = mesh.material as THREE.PointsMaterial;
 
   // Check if we have ephemeris data
   sat.hasData = engine.has_satellite_ephemeris(info.index);
@@ -174,6 +329,8 @@ function updateSatellite(
     mesh.visible = false;
     label.visible = false;
     sat.visible = false;
+    glowSprite.visible = false;
+    if (detailSprite) detailSprite.visible = false;
     return;
   }
 
@@ -182,6 +339,8 @@ function updateSatellite(
     mesh.visible = false;
     label.visible = false;
     sat.visible = false;
+    glowSprite.visible = false;
+    if (detailSprite) detailSprite.visible = false;
     labelDiv.textContent = `${info.name} (no data)`;
     return;
   }
@@ -197,6 +356,8 @@ function updateSatellite(
     mesh.visible = false;
     label.visible = false;
     sat.visible = false;
+    glowSprite.visible = false;
+    if (detailSprite) detailSprite.visible = false;
     return;
   }
 
@@ -204,22 +365,61 @@ function updateSatellite(
   const radius = SKY_RADIUS - 0.3; // Slightly in front of stars
   const satPos = rustToThreeJS(pos.x, pos.y, pos.z, radius);
 
-  // Update point position
-  const posAttr = geometry.getAttribute("position") as THREE.BufferAttribute;
-  posAttr.setXYZ(0, satPos.x, satPos.y, satPos.z);
-  posAttr.needsUpdate = true;
+  // Calculate angular size in pixels for LOD selection
+  const sizeMeters = SATELLITE_SIZES_METERS[info.name] ?? 50; // Default 50m
+  const pixelSize = calculatePixelSize(pos.distanceKm, sizeMeters, fov, canvasHeight);
+
+  // Calculate LOD blend factor (0 = point only, 1 = detail only)
+  const detailBlend = smoothstep(LOD_POINT_MAX_PX, LOD_DETAIL_MIN_PX, pixelSize);
 
   // Update color based on illumination
   const baseColor = SATELLITE_COLORS[info.name] ?? COLOR_ILLUMINATED;
   const color = pos.illuminated ? baseColor : COLOR_SHADOW;
-  const colorAttr = geometry.getAttribute("color") as THREE.BufferAttribute;
-  colorAttr.setXYZ(0, color.r, color.g, color.b);
-  colorAttr.needsUpdate = true;
+  const opacity = pos.illuminated ? 1.0 : 0.4;
 
-  // Update opacity - dimmer when in shadow
-  material.opacity = pos.illuminated ? 1.0 : 0.4;
+  // Hide legacy point mesh - we use sprites now
+  mesh.visible = false;
 
-  mesh.visible = true;
+  // Position both sprites
+  glowSprite.position.copy(satPos);
+  if (detailSprite) detailSprite.position.copy(satPos);
+
+  // === Point source sprite (glow) ===
+  // Show when we're in point-source mode or transitioning
+  if (detailBlend < 1.0) {
+    glowSprite.visible = true;
+    glowMaterial.color.copy(color);
+    glowMaterial.opacity = opacity * (1.0 - detailBlend);
+
+    // Fixed star-like size for glow
+    const fovArcsec = fov * 3600;
+    const pointSizeArcsec = Math.max(2, fov * 3600 / canvasHeight * 1.5);
+    const spriteWorldSize = (pointSizeArcsec / fovArcsec) * SKY_RADIUS * 4;
+    glowSprite.scale.set(spriteWorldSize, spriteWorldSize, 1);
+  } else {
+    glowSprite.visible = false;
+  }
+
+  // === Detail sprite (satellite image) ===
+  // Show when zoomed in enough AND we have a texture
+  if (detailSprite && detailMaterial && detailBlend > 0) {
+    detailSprite.visible = true;
+    detailMaterial.opacity = opacity * detailBlend;
+
+    // Scale based on angular size
+    // Satellite should appear at its actual angular size when fully detailed
+    const fovArcsec = fov * 3600;
+    const angSizeArcsec = (sizeMeters / (pos.distanceKm * 1000)) * (180 / Math.PI) * 3600;
+
+    // But clamp to minimum visible size and multiply for visibility
+    const minArcsec = fov * 3600 / canvasHeight * 6; // Minimum 6 pixels
+    const displayArcsec = Math.max(angSizeArcsec, minArcsec);
+    const spriteWorldSize = (displayArcsec / fovArcsec) * SKY_RADIUS * 2;
+    detailSprite.scale.set(spriteWorldSize, spriteWorldSize, 1);
+  } else if (detailSprite) {
+    detailSprite.visible = false;
+  }
+
   sat.visible = visible;
 
   // Update label
@@ -228,12 +428,13 @@ function updateSatellite(
     label.position.copy(labelPos);
     label.visible = true;
 
-    // Update label text with status
+    // Update label text with status and distance
+    const distText = pos.distanceKm > 0 ? ` (${Math.round(pos.distanceKm)} km)` : '';
     if (pos.illuminated) {
-      labelDiv.textContent = info.name;
+      labelDiv.textContent = info.name + distText;
       labelDiv.classList.remove("satellite-in-shadow");
     } else {
-      labelDiv.textContent = `${info.name} (shadow)`;
+      labelDiv.textContent = `${info.name} (shadow)${distText}`;
       labelDiv.classList.add("satellite-in-shadow");
     }
   } else {

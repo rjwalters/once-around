@@ -247,7 +247,7 @@ export const SATELLITES: SatelliteInfo[] = [
 
 /**
  * Create a Float32Array view into the satellites position buffer.
- * N satellites * 5 floats: x, y, z (direction), illuminated (0/1), visible (0/1).
+ * N satellites * 6 floats: x, y, z (direction), illuminated (0/1), visible (0/1), distance_km.
  */
 export function getSatellitesBuffer(engine: SkyEngine): Float32Array {
   const memory = getWasmMemory();
@@ -260,19 +260,20 @@ export function getSatellitesBuffer(engine: SkyEngine): Float32Array {
  * Get position data for a specific satellite.
  * @param engine - The SkyEngine instance
  * @param index - Satellite index (SATELLITE_ISS, SATELLITE_HUBBLE, etc.)
- * @returns Object with x, y, z, illuminated, aboveHorizon
+ * @returns Object with x, y, z, illuminated, aboveHorizon, distanceKm
  */
 export function getSatellitePosition(engine: SkyEngine, index: number): {
-  x: number; y: number; z: number; illuminated: boolean; aboveHorizon: boolean;
+  x: number; y: number; z: number; illuminated: boolean; aboveHorizon: boolean; distanceKm: number;
 } {
   const buffer = getSatellitesBuffer(engine);
-  const baseIdx = index * 5;
+  const baseIdx = index * 6;
   return {
     x: buffer[baseIdx],
     y: buffer[baseIdx + 1],
     z: buffer[baseIdx + 2],
     illuminated: buffer[baseIdx + 3] > 0.5,
     aboveHorizon: buffer[baseIdx + 4] > 0.5,
+    distanceKm: buffer[baseIdx + 5],
   };
 }
 
@@ -285,7 +286,9 @@ export function getSatellitePosition(engine: SkyEngine, index: number): {
  */
 export async function loadSatelliteEphemeris(engine: SkyEngine, index: number, url: string): Promise<boolean> {
   try {
-    const response = await fetch(url);
+    // Add cache-busting parameter to ensure fresh data
+    const cacheBustUrl = `${url}?v=${Date.now()}`;
+    const response = await fetch(cacheBustUrl);
     if (!response.ok) {
       console.warn(`Failed to load satellite ephemeris from ${url}: ${response.status}`);
       return false;

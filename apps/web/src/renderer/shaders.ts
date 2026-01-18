@@ -208,10 +208,13 @@ void main() {
   float nightIntensity = smoothstep(0.1, -0.2, illumination);
 
   // Boost night lights for visibility (they're dim in the texture)
-  vec3 boostedNightColor = nightColor * 2.0;
+  vec3 boostedNightColor = nightColor * 3.0;
 
-  // Combine: day texture on lit side, night lights on dark side
-  vec3 finalColor = dayColor * dayMix + boostedNightColor * nightIntensity * (1.0 - dayMix);
+  // Ambient light so Earth is always visible (important for JWST view where we see night side)
+  vec3 ambientColor = dayColor * 0.15;
+
+  // Combine: day texture on lit side, night lights + ambient on dark side
+  vec3 finalColor = dayColor * dayMix + (boostedNightColor * nightIntensity + ambientColor) * (1.0 - dayMix);
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
@@ -608,6 +611,158 @@ void main() {
   // Final output - subtle glow, not overpowering the stars
   float alpha = brightness * 0.4 * visibility;
   gl_FragColor = vec4(color * brightness * 0.5 * visibility, alpha);
+}
+`;
+
+// -----------------------------------------------------------------------------
+// JWST View Mode - Earth from L2 (night side with limb glow)
+// -----------------------------------------------------------------------------
+
+export const jwstEarthVertexShader = `
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vUv;
+
+void main() {
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export const jwstEarthFragmentShader = `
+uniform sampler2D nightTexture;
+uniform vec3 sunDirection;    // Direction FROM Earth TO Sun
+uniform float pixelSize;      // For LOD-based rendering
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec2 vUv;
+
+void main() {
+  // From L2, we primarily see Earth's night side (facing away from Sun)
+  // sunDirection points toward Sun, so the lit side faces +sunDirection
+  // We're viewing from the opposite side, so we see the dark side
+
+  float illumination = dot(vNormal, sunDirection);
+
+  // Night side texture (city lights)
+  vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+
+  // Boost night lights significantly for visibility
+  vec3 boostedNight = nightColor * 4.0;
+
+  // Base dark Earth color (very dark blue-gray)
+  vec3 darkSide = vec3(0.02, 0.03, 0.05);
+
+  // Night lights only visible on the dark side (which is what we see from L2)
+  // The terminator is on the edge of the visible disk
+  float nightIntensity = smoothstep(0.2, -0.1, illumination);
+
+  // Atmospheric limb glow on the sun-facing edge
+  // This is the bright crescent we'd see from L2
+  // Calculate view direction (from object toward camera at origin)
+  vec3 viewDir = normalize(-vPosition);
+  float rimFactor = 1.0 - abs(dot(vNormal, viewDir));
+  rimFactor = pow(rimFactor, 3.0);
+
+  // Limb glow is brightest where the atmosphere catches sunlight
+  // This is the sun-facing edge
+  float sunEdge = smoothstep(-0.3, 0.5, illumination);
+
+  // Atmospheric glow colors (blue scattered light + golden sun edge)
+  vec3 atmosphereBlue = vec3(0.3, 0.5, 1.0);
+  vec3 atmosphereGold = vec3(1.0, 0.8, 0.5);
+  vec3 limbColor = mix(atmosphereBlue, atmosphereGold, sunEdge) * rimFactor * 2.5;
+
+  // Thin crescent of actual daylight at the very edge
+  float crescentEdge = smoothstep(0.0, 0.15, illumination) * rimFactor;
+  vec3 crescentLight = vec3(0.9, 0.95, 1.0) * crescentEdge * 3.0;
+
+  // Combine: dark base + city lights + atmospheric limb + crescent
+  vec3 finalColor = darkSide + boostedNight * nightIntensity + limbColor + crescentLight;
+
+  // Subtle overall blue tint for Earth's atmosphere
+  finalColor = mix(finalColor, finalColor * vec3(0.9, 0.95, 1.1), 0.2);
+
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// -----------------------------------------------------------------------------
+// JWST View Mode - Moon from L2 (earthshine illumination)
+// -----------------------------------------------------------------------------
+
+export const jwstMoonVertexShader = `
+varying vec3 vNormal;
+varying vec3 vPosition;
+
+void main() {
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export const jwstMoonFragmentShader = `
+uniform vec3 sunDirection;       // Direction FROM Moon TO Sun
+uniform vec3 earthDirection;     // Direction FROM Moon TO Earth
+uniform float earthPhase;        // Earth's illuminated fraction as seen from Moon (0-1)
+uniform vec3 moonColor;          // Base moon surface color
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+
+void main() {
+  // From L2, we see primarily the Moon's dark side (facing away from Sun)
+  // But the Moon is illuminated by earthshine (sunlight reflected from Earth)
+
+  // Direct sunlight illumination (for the thin crescent)
+  float sunIllum = dot(vNormal, sunDirection);
+
+  // Earthshine illumination
+  // Earth's brightness as seen from Moon varies with Earth's phase
+  // At "full Earth" (new moon from Earth), earthshine is brightest
+  float earthIllum = dot(vNormal, earthDirection);
+  earthIllum = max(0.0, earthIllum);
+
+  // Earthshine intensity based on Earth's phase
+  // When Earth shows full face to Moon (earthPhase = 1), earthshine is maximum
+  // Earthshine is about 0.1-0.2 lux at maximum (very dim)
+  float earthshineStrength = earthPhase * 0.15;
+
+  // Earthshine has a bluish tint (Earth reflects blue light from oceans/atmosphere)
+  vec3 earthshineColor = vec3(0.6, 0.7, 1.0);
+
+  // Thin crescent from direct sunlight on the sun-facing limb
+  // From L2, this is the edge facing away from us (toward the Sun)
+  float crescentFactor = smoothstep(0.0, 0.2, sunIllum);
+
+  // View direction for rim lighting calculation
+  vec3 viewDir = normalize(-vPosition);
+  float rimFactor = 1.0 - abs(dot(vNormal, viewDir));
+  rimFactor = pow(rimFactor, 4.0);
+
+  // Crescent is visible at the rim where sun illuminates
+  float crescent = crescentFactor * rimFactor * 3.0;
+
+  // Base dark moon (what we see from L2 is the shadowed side)
+  vec3 darkMoon = moonColor * 0.02;
+
+  // Earthshine illumination of the visible (dark) side
+  vec3 earthshine = moonColor * earthshineColor * earthshineStrength * earthIllum;
+
+  // Direct sun crescent (bright edge)
+  vec3 sunCrescent = moonColor * crescent;
+
+  // Very subtle ambient (starlight, etc.)
+  vec3 ambient = moonColor * 0.005;
+
+  // Combine all lighting
+  vec3 finalColor = darkMoon + earthshine + sunCrescent + ambient;
+
+  gl_FragColor = vec4(finalColor, 1.0);
 }
 `;
 

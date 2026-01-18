@@ -11,32 +11,50 @@
  * - Sun, Earth, and Moon cluster in same direction (blocked by sunshield)
  * - JWST always points away from this cluster
  * - Sun avoidance zone: ~45° half-angle cone that JWST cannot point toward
+ *
+ * Rendering from L2:
+ * - Earth: Night side visible with city lights + bright atmospheric limb glow
+ * - Moon: Primarily earthshine illumination (bluish) + thin sun crescent
  */
 
 import * as THREE from "three";
+import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { SKY_RADIUS } from "../constants";
 import {
-  earthVertexShader,
-  earthFragmentShader,
+  jwstEarthVertexShader,
+  jwstEarthFragmentShader,
+  jwstMoonVertexShader,
+  jwstMoonFragmentShader,
 } from "../shaders";
 
 // L2 distance from Earth in km
 const L2_DISTANCE_KM = 1_500_000;
 
+// Moon's orbital radius in km
+const MOON_ORBITAL_RADIUS_KM = 384_400;
+
+// Moon's angular diameter from L2 (about 0.1° - much smaller than from Earth)
+// Moon diameter: 3,474 km, distance from L2: ~1.5M km + orbital offset
+const MOON_ANGULAR_DIAMETER_RAD = 3_474 / (L2_DISTANCE_KM + MOON_ORBITAL_RADIUS_KM);
+
+// Maximum angular separation of Moon from Earth as seen from L2
+const MOON_MAX_SEPARATION_RAD = Math.atan(MOON_ORBITAL_RADIUS_KM / L2_DISTANCE_KM); // ~14.4°
+
 // Earth's diameter in km
 const EARTH_DIAMETER_KM = 12_742;
 
-// Earth's angular diameter from L2 in radians
-// arctan(diameter / distance) ≈ diameter / distance for small angles
-const EARTH_ANGULAR_DIAMETER_RAD = EARTH_DIAMETER_KM / L2_DISTANCE_KM;
+// Sun's diameter in km
+const SUN_DIAMETER_KM = 1_392_700;
 
-// LOD thresholds (matching bodies layer)
-const LOD_POINT_SOURCE_MAX_PX = 3;
-const LOD_SIMPLE_DISK_MAX_PX = 10;
-const LOD_BLEND_DISK_MAX_PX = 30;
+// Distance from L2 to Sun in km (Earth-Sun distance + L2 distance from Earth)
+const L2_TO_SUN_DISTANCE_KM = 149_597_870 + L2_DISTANCE_KM;
 
-// Earth color for sprite/simple disk rendering (blue marble)
-const EARTH_COLOR = new THREE.Color(0.2, 0.4, 0.8);
+// Angular diameters from L2 in radians
+const EARTH_ANGULAR_DIAMETER_RAD = EARTH_DIAMETER_KM / L2_DISTANCE_KM; // ~0.49°
+const SUN_ANGULAR_DIAMETER_RAD = SUN_DIAMETER_KM / L2_TO_SUN_DISTANCE_KM; // ~0.53°
+
+// LOD threshold - below this pixel size, show as point source
+const LOD_POINT_SOURCE_MAX_PX = 4;
 
 // JWST sun avoidance zone: field of regard is 85°-135° from Sun
 // This means a ~45° half-angle exclusion cone around the Sun
@@ -89,46 +107,10 @@ export interface JWSTLayer {
   setVisible(visible: boolean): void;
   /** Check if JWST layer is visible */
   isVisible(): boolean;
-  /** Update layer based on current FOV and sun position */
-  update(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, currentDate: Date): void;
+  /** Update layer based on current FOV, sun position, and moon position */
+  update(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, moonPosition: THREE.Vector3, currentDate: Date): void;
   /** Get Earth's current position as a unit vector (for search) */
   getEarthPosition(): THREE.Vector3 | null;
-}
-
-/**
- * Smoothstep interpolation for smooth LOD transitions.
- */
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
-
-/**
- * Create a glow texture for point source rendering.
- */
-function createGlowTexture(size = 128): THREE.Texture {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-
-  const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-
-  // Gaussian-like falloff for natural glow
-  gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(0.05, "rgba(255,255,255,0.95)");
-  gradient.addColorStop(0.1, "rgba(255,255,255,0.8)");
-  gradient.addColorStop(0.2, "rgba(255,255,255,0.5)");
-  gradient.addColorStop(0.4, "rgba(255,255,255,0.2)");
-  gradient.addColorStop(0.6, "rgba(255,255,255,0.05)");
-  gradient.addColorStop(1, "rgba(255,255,255,0)");
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
 }
 
 /**
@@ -144,56 +126,89 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
   group.visible = false;
   scene.add(group);
 
-  // Load Earth textures (same as Earth layer for Hubble mode)
+  // Load textures
   const textureLoader = new THREE.TextureLoader();
-  const dayTexture = textureLoader.load("/earth-day.jpg");
-  const nightTexture = textureLoader.load("/earth-night.jpg");
-  dayTexture.colorSpace = THREE.SRGBColorSpace;
-  nightTexture.colorSpace = THREE.SRGBColorSpace;
+  const earthNightTexture = textureLoader.load("/earth-night.jpg");
+  earthNightTexture.colorSpace = THREE.SRGBColorSpace;
 
-  // Create Earth sphere mesh for detailed view
-  const earthGeometry = new THREE.SphereGeometry(1, 64, 32);
+  // Earth sphere with JWST-specific shader (night side + limb glow)
+  const earthGeometry = new THREE.SphereGeometry(1, 48, 48);
   const earthMaterial = new THREE.ShaderMaterial({
-    vertexShader: earthVertexShader,
-    fragmentShader: earthFragmentShader,
+    vertexShader: jwstEarthVertexShader,
+    fragmentShader: jwstEarthFragmentShader,
     uniforms: {
-      dayTexture: { value: dayTexture },
-      nightTexture: { value: nightTexture },
+      nightTexture: { value: earthNightTexture },
       sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+      pixelSize: { value: 100.0 },
     },
-    transparent: true,
+    depthTest: false,
+    depthWrite: false,
   });
-  const earthMesh = new THREE.Mesh(earthGeometry, earthMaterial);
-  earthMesh.visible = false;
-  group.add(earthMesh);
+  const earthSphere = new THREE.Mesh(earthGeometry, earthMaterial);
+  earthSphere.renderOrder = 50;
+  group.add(earthSphere);
 
-  // Create Earth sprite for point source view
-  const glowTexture = createGlowTexture();
+  // Small point sprite for when Earth is too small to see as a sphere
   const earthSpriteMaterial = new THREE.SpriteMaterial({
-    map: glowTexture,
-    color: EARTH_COLOR,
+    color: 0x203060, // Dark blue with hint of city lights
     transparent: true,
-    blending: THREE.AdditiveBlending,
     depthTest: false,
     depthWrite: false,
   });
   const earthSprite = new THREE.Sprite(earthSpriteMaterial);
-  earthSprite.renderOrder = 10;
+  earthSprite.renderOrder = 50;
   group.add(earthSprite);
 
-  // Simple disk material for intermediate LOD (solid color with opacity)
-  const simpleDiskGeometry = new THREE.CircleGeometry(1, 32);
-  const simpleDiskMaterial = new THREE.MeshBasicMaterial({
-    color: EARTH_COLOR,
-    transparent: true,
-    side: THREE.DoubleSide,
+  // Moon sphere with JWST-specific shader (earthshine + crescent)
+  const moonGeometry = new THREE.SphereGeometry(1, 32, 32);
+  const moonMaterial = new THREE.ShaderMaterial({
+    vertexShader: jwstMoonVertexShader,
+    fragmentShader: jwstMoonFragmentShader,
+    uniforms: {
+      sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+      earthDirection: { value: new THREE.Vector3(1, 0, 0) },
+      earthPhase: { value: 0.5 },
+      moonColor: { value: new THREE.Vector3(0.9, 0.9, 0.85) },
+    },
     depthTest: false,
     depthWrite: false,
   });
-  const simpleDisk = new THREE.Mesh(simpleDiskGeometry, simpleDiskMaterial);
-  simpleDisk.visible = false;
-  simpleDisk.renderOrder = 5;
-  group.add(simpleDisk);
+  const moonSphere = new THREE.Mesh(moonGeometry, moonMaterial);
+  moonSphere.renderOrder = 51;
+  group.add(moonSphere);
+
+  // Moon sprite for when too small
+  const moonSpriteMaterial = new THREE.SpriteMaterial({
+    color: 0x444455, // Dark gray with slight blue (earthshine hint)
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const moonSprite = new THREE.Sprite(moonSpriteMaterial);
+  moonSprite.renderOrder = 51;
+  group.add(moonSprite);
+
+  // Moon label
+  const moonLabelDiv = document.createElement('div');
+  moonLabelDiv.className = 'body-label moon-label';
+  moonLabelDiv.textContent = 'Moon';
+  moonLabelDiv.style.color = '#aaaaaa';
+  moonLabelDiv.style.fontSize = '11px';
+  moonLabelDiv.style.pointerEvents = 'none';
+  const moonLabel = new CSS2DObject(moonLabelDiv);
+  moonLabel.layers.set(0);
+  group.add(moonLabel);
+
+  // Earth label
+  const earthLabelDiv = document.createElement('div');
+  earthLabelDiv.className = 'body-label earth-label';
+  earthLabelDiv.textContent = 'Earth';
+  earthLabelDiv.style.color = '#6699cc';
+  earthLabelDiv.style.fontSize = '11px';
+  earthLabelDiv.style.pointerEvents = 'none';
+  const earthLabel = new CSS2DObject(earthLabelDiv);
+  earthLabel.layers.set(0);
+  group.add(earthLabel);
 
   // Sun avoidance zone - a sphere with shader that only renders within the cone
   const avoidanceGeometry = new THREE.SphereGeometry(SKY_RADIUS - 2, 64, 32);
@@ -225,101 +240,136 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
   }
 
   /**
-   * Calculate sun direction for Earth's day/night terminator.
-   * From L2's perspective looking at Earth, the Sun is behind Earth.
+   * Calculate Earth's phase as seen from the Moon.
+   * This determines earthshine brightness.
+   * Returns 0 (new Earth from Moon = full moon from Earth) to 1 (full Earth from Moon = new moon from Earth)
    */
-  function getSunDirectionForEarth(earthPos: THREE.Vector3): THREE.Vector3 {
-    // Sun is behind Earth from L2's view, so sun direction is away from camera
-    return earthPos.clone().normalize();
+  function calculateEarthPhase(sunDir: THREE.Vector3, moonDir: THREE.Vector3): number {
+    // The angle between Sun and Moon as seen from Earth determines the Moon's phase
+    // From the Moon's perspective, when Sun-Earth-Moon angle is 0° (new moon), Earth appears full
+    // When angle is 180° (full moon), Earth appears new
+    const dotProduct = sunDir.dot(moonDir);
+    // Convert from cosine of angle to phase (0 = new Earth, 1 = full Earth)
+    // At new moon (dotProduct ≈ 1, same direction), Earth appears full
+    // At full moon (dotProduct ≈ -1, opposite), Earth appears new
+    const earthPhase = (dotProduct + 1) / 2; // Map [-1, 1] to [0, 1]
+    return earthPhase;
   }
 
-  function update(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, currentDate: Date): void {
+  function update(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, moonPosition: THREE.Vector3, _currentDate: Date): void {
     if (!visible) return;
 
     // Update sun avoidance zone direction
     const sunDir = sunPosition.clone().normalize();
     avoidanceMaterial.uniforms.uSunDirection.value.copy(sunDir);
 
-    // Calculate Earth position (toward Sun from L2)
+    // Calculate Earth position (toward Sun from L2, slightly in front)
     const earthPos = getEarthPosition(sunPosition);
+    const earthDir = earthPos.clone().normalize();
 
-    // Calculate apparent size in pixels
-    const angDiamArcsec = EARTH_ANGULAR_DIAMETER_RAD * (180 / Math.PI) * 3600;
-    const fovArcsec = fov * 3600;
-    const pixelSize = (angDiamArcsec / fovArcsec) * canvasHeight;
+    // Calculate Moon position from L2
+    // Moon's geocentric position tells us where it is in its orbit
+    // From L2, the Moon appears offset from Earth by up to ~14.4°
+    const moonDir = moonPosition.clone().normalize();
+    const sunDirNorm = sunPosition.clone().normalize();
 
-    // LOD transition factors
-    const diskBlend = smoothstep(LOD_POINT_SOURCE_MAX_PX, LOD_SIMPLE_DISK_MAX_PX, pixelSize);
-    const textureBlend = smoothstep(LOD_SIMPLE_DISK_MAX_PX, LOD_BLEND_DISK_MAX_PX, pixelSize);
+    // Calculate Moon's offset from Sun direction (represents its orbital position)
+    // This is the angular difference between Moon and Sun as seen from Earth
+    const moonOffsetFromSun = new THREE.Vector3().subVectors(moonDir, sunDirNorm);
 
-    // Calculate world scale for sphere (angular diameter to world units)
-    const worldScale = (EARTH_ANGULAR_DIAMETER_RAD * SKY_RADIUS) / 2;
+    // Scale the offset: from L2, max separation is ~14.4° vs geocentric max of ~180°
+    const scaleFactor = MOON_MAX_SEPARATION_RAD / Math.PI;
+    const scaledOffset = moonOffsetFromSun.multiplyScalar(scaleFactor * SKY_RADIUS);
 
-    // Update sun direction for Earth shader
-    const earthSunDir = getSunDirectionForEarth(earthPos);
-    earthMaterial.uniforms.sunDirection.value.copy(earthSunDir);
+    // Moon position = Earth position + scaled offset
+    const moonPos = earthPos.clone().add(scaledOffset);
+    // Keep on sky sphere
+    moonPos.normalize().multiplyScalar(SKY_RADIUS - 1);
 
-    // --- Full textured Earth (high LOD) ---
-    if (pixelSize >= LOD_SIMPLE_DISK_MAX_PX) {
-      earthMesh.position.copy(earthPos);
-      earthMesh.scale.setScalar(worldScale);
-      earthMesh.visible = true;
+    // Calculate Earth's phase as seen from Moon (for earthshine intensity)
+    const earthPhase = calculateEarthPhase(sunDirNorm, moonDir);
 
-      // Rotate Earth based on time (sidereal rotation)
-      // Earth rotates 360° per sidereal day (~23h 56m)
-      const msPerSiderealDay = 86164090.5;
-      const rotationAngle = ((currentDate.getTime() % msPerSiderealDay) / msPerSiderealDay) * Math.PI * 2;
-      earthMesh.rotation.y = rotationAngle;
+    // Calculate apparent sizes in pixels
+    const earthAngDiamDeg = EARTH_ANGULAR_DIAMETER_RAD * (180 / Math.PI);
+    const earthPixelSize = (earthAngDiamDeg / fov) * canvasHeight;
 
-      // Billboard the mesh to face the camera (approximate)
-      earthMesh.lookAt(0, 0, 0);
-      earthMesh.rotateY(rotationAngle);
+    const moonAngDiamDeg = MOON_ANGULAR_DIAMETER_RAD * (180 / Math.PI);
+    const moonPixelSize = (moonAngDiamDeg / fov) * canvasHeight;
 
-      // Fade in based on LOD
-      (earthMaterial as THREE.ShaderMaterial).transparent = true;
-      (earthMaterial as THREE.ShaderMaterial).opacity = textureBlend;
+    // Calculate world scales
+    const earthWorldRadius = (EARTH_ANGULAR_DIAMETER_RAD * SKY_RADIUS) / 2;
+    const moonWorldRadius = (MOON_ANGULAR_DIAMETER_RAD * SKY_RADIUS) / 2;
+
+    // Label offset
+    const labelOffset = 0.5;
+
+    // Update Earth shader uniforms
+    // Sun direction is FROM Earth toward Sun (for lighting calculation)
+    earthMaterial.uniforms.sunDirection.value.copy(sunDirNorm);
+    earthMaterial.uniforms.pixelSize.value = earthPixelSize;
+
+    // Render Earth
+    if (earthPixelSize >= LOD_POINT_SOURCE_MAX_PX) {
+      earthSphere.position.copy(earthPos);
+      earthSphere.scale.setScalar(earthWorldRadius);
+      earthSphere.visible = true;
+      earthSprite.visible = false;
     } else {
-      earthMesh.visible = false;
-    }
-
-    // --- Simple disk (medium LOD) ---
-    if (pixelSize >= LOD_POINT_SOURCE_MAX_PX && pixelSize < LOD_BLEND_DISK_MAX_PX) {
-      simpleDisk.position.copy(earthPos);
-      simpleDisk.scale.setScalar(worldScale);
-      simpleDisk.visible = true;
-      simpleDisk.lookAt(0, 0, 0);
-
-      // Fade based on LOD transitions
-      const opacity = diskBlend * (1 - textureBlend);
-      simpleDiskMaterial.opacity = opacity;
-    } else {
-      simpleDisk.visible = false;
-    }
-
-    // --- Point source sprite (low LOD) ---
-    if (pixelSize < LOD_SIMPLE_DISK_MAX_PX) {
       earthSprite.position.copy(earthPos);
-
-      // Keep sprite at minimum visible size
-      const minSizePx = 4;
+      const minSizePx = 6;
       const spriteAngularSize = (minSizePx / canvasHeight) * fov * (Math.PI / 180);
       const spriteScale = spriteAngularSize * SKY_RADIUS * 2;
       earthSprite.scale.set(spriteScale, spriteScale, 1);
-
       earthSprite.visible = true;
-      earthSpriteMaterial.opacity = 1 - diskBlend;
-    } else {
-      earthSprite.visible = false;
+      earthSphere.visible = false;
     }
+
+    // Earth label
+    const earthLabelPos = earthPos.clone().normalize().multiplyScalar(SKY_RADIUS - 1 + labelOffset);
+    earthLabel.position.copy(earthLabelPos);
+
+    // Update Moon shader uniforms
+    // Sun direction FROM Moon TO Sun (same as Earth's sun direction approximately)
+    moonMaterial.uniforms.sunDirection.value.copy(sunDirNorm);
+    // Earth direction FROM Moon TO Earth (Moon is offset from Earth, so calculate direction)
+    const earthDirFromMoon = earthDir.clone().sub(moonPos.clone().normalize()).normalize();
+    moonMaterial.uniforms.earthDirection.value.copy(earthDirFromMoon);
+    // Earthshine intensity based on Earth's phase
+    moonMaterial.uniforms.earthPhase.value = earthPhase;
+
+    // Render Moon
+    if (moonPixelSize >= LOD_POINT_SOURCE_MAX_PX) {
+      moonSphere.position.copy(moonPos);
+      moonSphere.scale.setScalar(moonWorldRadius);
+      moonSphere.visible = true;
+      moonSprite.visible = false;
+    } else {
+      moonSprite.position.copy(moonPos);
+      const minSizePx = 4;
+      const spriteAngularSize = (minSizePx / canvasHeight) * fov * (Math.PI / 180);
+      const spriteScale = spriteAngularSize * SKY_RADIUS * 2;
+      moonSprite.scale.set(spriteScale, spriteScale, 1);
+      moonSprite.visible = true;
+      moonSphere.visible = false;
+    }
+
+    // Moon label - show earthshine status
+    const earthshineStrength = earthPhase > 0.7 ? "bright" : earthPhase > 0.3 ? "moderate" : "dim";
+    moonLabelDiv.textContent = `Moon (${earthshineStrength} earthshine)`;
+
+    // Moon label position
+    const moonLabelPos = moonPos.clone().normalize().multiplyScalar(SKY_RADIUS - 1 + labelOffset);
+    moonLabel.position.copy(moonLabelPos);
   }
 
   function setVisible(isVisible: boolean): void {
     visible = isVisible;
     group.visible = isVisible;
     if (!isVisible) {
-      earthMesh.visible = false;
+      earthSphere.visible = false;
       earthSprite.visible = false;
-      simpleDisk.visible = false;
+      moonSphere.visible = false;
+      moonSprite.visible = false;
     }
   }
 
@@ -332,8 +382,8 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
 
   // Wrap update to track Earth position
   const originalUpdate = update;
-  function wrappedUpdate(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, currentDate: Date): void {
-    originalUpdate(fov, canvasHeight, sunPosition, currentDate);
+  function wrappedUpdate(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, moonPosition: THREE.Vector3, currentDate: Date): void {
+    originalUpdate(fov, canvasHeight, sunPosition, moonPosition, currentDate);
     // Store Earth position (normalized direction on sky sphere)
     if (visible) {
       lastEarthPosition = sunPosition.clone().normalize();

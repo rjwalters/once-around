@@ -941,7 +941,9 @@ async function main(): Promise<void> {
       if (!engine.has_satellite_ephemeris(index) || !engine.satellite_in_range(index)) return null;
       const pos = getSatellitePosition(engine, index);
       if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
-      return positionToRaDec({ x: pos.x, y: pos.y, z: pos.z });
+      // Convert from Rust/ECI coords (Z-up) to Three.js coords (Y-up) for positionToRaDec
+      // Same transform as rustToThreeJS: x=-rustX, y=rustZ, z=rustY
+      return positionToRaDec({ x: -pos.x, y: pos.z, z: pos.y });
     },
     // Earth position for JWST mode (dynamic lookup)
     getEarthPosition: () => {
@@ -953,6 +955,18 @@ async function main(): Promise<void> {
       const moonIndex = PLANETARY_MOONS.findIndex(m => m.name === name);
       if (moonIndex < 0) return null;
       const pos = getPlanetaryMoonPosition(moonIndex);
+      return pos ? positionToRaDec(pos) : null;
+    },
+    // JWST mode detection
+    isJWSTMode: () => viewModeManager.getMode() === 'jwst',
+    // Moon's geocentric position (for JWST mode offset calculation)
+    getMoonPosition: () => {
+      const pos = getBodyPositionsFromEngine(engine).get('Moon');
+      return pos ? positionToRaDec(pos) : null;
+    },
+    // Sun's geocentric position (for JWST mode offset calculation)
+    getSunPosition: () => {
+      const pos = getBodyPositionsFromEngine(engine).get('Sun');
       return pos ? positionToRaDec(pos) : null;
     },
   });
@@ -1197,10 +1211,11 @@ async function main(): Promise<void> {
     const currentFov = controls.getCameraState().fov;
     renderer.updateDeepFields(currentFov);
 
-    // Update JWST layer (Earth as distant planet)
+    // Update JWST layer (Earth and Moon as distant objects)
     if (viewModeManager.getMode() === 'jwst') {
       const sunPos = renderer.getSunPosition();
-      renderer.updateJWST(currentFov, sunPos, currentDate);
+      const moonPos = renderer.getMoonPosition();
+      renderer.updateJWST(currentFov, sunPos, moonPos, currentDate);
     }
 
     renderer.render();
@@ -1235,6 +1250,14 @@ async function main(): Promise<void> {
     if (initialSunMoonSep !== null) {
       renderer.updateEclipse(initialSunMoonSep);
     }
+
+    // Hide loading overlay
+    const loadingOverlay = document.getElementById("loading");
+    if (loadingOverlay) {
+      loadingOverlay.classList.add("hidden");
+      // Remove from DOM after fade out
+      setTimeout(() => loadingOverlay.remove(), 500);
+    }
   });
 
   console.log("Once Around ready!");
@@ -1242,6 +1265,11 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   console.error("Failed to initialize:", err);
+  // Hide loading overlay on error
+  const loadingOverlay = document.getElementById("loading");
+  if (loadingOverlay) {
+    loadingOverlay.remove();
+  }
   const container = document.getElementById("app");
   if (container) {
     container.innerHTML = `

@@ -39,7 +39,7 @@ pub struct SkyEngine {
     // Satellites (ISS, Hubble, etc.)
     // Using parallel arrays: one ephemeris per satellite, one position buffer per satellite
     satellite_ephemerides: Vec<Option<SatelliteEphemeris>>, // One per SatelliteId
-    satellites_pos: Vec<f32>, // N satellites * 5 floats: x, y, z, illuminated (0/1), visible (0/1)
+    satellites_pos: Vec<f32>, // N satellites * 6 floats: x, y, z, illuminated (0/1), visible (0/1), distance_km
 
     // Cached visible star count
     visible_count: usize,
@@ -80,7 +80,7 @@ impl SkyEngine {
             all_stars_pos: vec![0.0; star_count * 3],
             all_stars_meta: vec![0.0; star_count * 4],
             satellite_ephemerides: vec![None; SatelliteId::ALL.len()],
-            satellites_pos: vec![0.0; SatelliteId::ALL.len() * 5], // 5 floats per satellite
+            satellites_pos: vec![0.0; SatelliteId::ALL.len() * 6], // 6 floats per satellite
             visible_count: 0,
         };
 
@@ -133,6 +133,11 @@ impl SkyEngine {
     /// Get the observer's longitude in degrees.
     pub fn observer_lon(&self) -> f64 {
         self.observer_lon_rad * 180.0 / PI
+    }
+
+    /// Get the current Julian Date (TDB).
+    pub fn julian_date_tdb(&self) -> f64 {
+        self.time.julian_date_tdb()
     }
 
     /// Get total stars in catalog.
@@ -288,7 +293,7 @@ impl SkyEngine {
 
     fn recompute_satellites(&mut self) {
         for (i, ephemeris_opt) in self.satellite_ephemerides.iter().enumerate() {
-            let base_idx = i * 5;
+            let base_idx = i * 6;
             if let Some(ephemeris) = ephemeris_opt {
                 if let Some(pos) = compute_satellite_position(
                     ephemeris,
@@ -303,6 +308,7 @@ impl SkyEngine {
                     self.satellites_pos[base_idx + 2] = z;
                     self.satellites_pos[base_idx + 3] = if pos.illuminated { 1.0 } else { 0.0 };
                     self.satellites_pos[base_idx + 4] = if pos.above_horizon { 1.0 } else { 0.0 };
+                    self.satellites_pos[base_idx + 5] = pos.distance_km as f32;
                 } else {
                     // Outside ephemeris range or error
                     self.satellites_pos[base_idx] = 0.0;
@@ -310,6 +316,7 @@ impl SkyEngine {
                     self.satellites_pos[base_idx + 2] = 0.0;
                     self.satellites_pos[base_idx + 3] = 0.0;
                     self.satellites_pos[base_idx + 4] = 0.0;
+                    self.satellites_pos[base_idx + 5] = 0.0;
                 }
             } else {
                 // No ephemeris loaded for this satellite
@@ -318,6 +325,7 @@ impl SkyEngine {
                 self.satellites_pos[base_idx + 2] = 0.0;
                 self.satellites_pos[base_idx + 3] = 0.0;
                 self.satellites_pos[base_idx + 4] = 0.0;
+                self.satellites_pos[base_idx + 5] = 0.0;
             }
         }
     }
@@ -549,21 +557,27 @@ impl SkyEngine {
     }
 
     /// Get length of satellites position buffer.
-    /// satellites_count() * 5 floats.
+    /// satellites_count() * 6 floats.
     pub fn satellites_pos_len(&self) -> usize {
         self.satellites_pos.len()
     }
 
     /// Check if a satellite is currently illuminated (not in Earth's shadow).
     pub fn satellite_illuminated(&self, index: usize) -> bool {
-        let base_idx = index * 5;
+        let base_idx = index * 6;
         self.satellites_pos.get(base_idx + 3).map(|v| *v > 0.5).unwrap_or(false)
     }
 
     /// Check if a satellite is currently above the observer's horizon.
     pub fn satellite_above_horizon(&self, index: usize) -> bool {
-        let base_idx = index * 5;
+        let base_idx = index * 6;
         self.satellites_pos.get(base_idx + 4).map(|v| *v > 0.5).unwrap_or(false)
+    }
+
+    /// Get the distance to a satellite in kilometers.
+    pub fn satellite_distance_km(&self, index: usize) -> f32 {
+        let base_idx = index * 6;
+        self.satellites_pos.get(base_idx + 5).copied().unwrap_or(0.0)
     }
 
     /// Check if a satellite is visible (both illuminated and above horizon).

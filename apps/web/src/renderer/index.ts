@@ -67,10 +67,11 @@ export interface SkyRenderer {
   isOccludedByEarth(position: THREE.Vector3): boolean;
   // JWST mode methods
   setJWSTMode(enabled: boolean): void;
-  updateJWST(fov: number, sunPosition: THREE.Vector3, currentDate: Date): void;
+  updateJWST(fov: number, sunPosition: THREE.Vector3, moonPosition: THREE.Vector3, currentDate: Date): void;
   /** Get Earth's position in JWST mode (for search). Returns null if not in JWST mode. */
   getEarthPositionJWST(): { x: number; y: number; z: number } | null;
   getSunPosition(): THREE.Vector3;
+  getMoonPosition(): THREE.Vector3;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -121,7 +122,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     moonsLayer.update(engine, fov, labelsVisible, canvasHeight);
     cometsLayer.update(engine, bodiesLayer.getSunPosition(), labelsVisible);
     if (satellitesEnabled) {
-      satellitesLayer.update(engine, labelsVisible);
+      satellitesLayer.update(engine, labelsVisible, fov, canvasHeight);
     }
   }
 
@@ -282,10 +283,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     }
   }
 
-  function updateJWST(fov: number, sunPosition: THREE.Vector3, currentDate: Date): void {
+  function updateJWST(fov: number, sunPosition: THREE.Vector3, moonPosition: THREE.Vector3, currentDate: Date): void {
     if (!jwstModeEnabled) return;
     const canvasHeight = ctx.container.clientHeight;
-    jwstLayer.update(fov, canvasHeight, sunPosition, currentDate);
+    jwstLayer.update(fov, canvasHeight, sunPosition, moonPosition, currentDate);
   }
 
   function updateEarthPosition(nadirDirection: THREE.Vector3): void {
@@ -352,12 +353,23 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   function getEarthPositionJWST(): { x: number; y: number; z: number } | null {
     if (!jwstModeEnabled) return null;
     const pos = jwstLayer.getEarthPosition();
-    if (!pos) return null;
-    return { x: pos.x, y: pos.y, z: pos.z };
+    if (pos) {
+      return { x: pos.x, y: pos.y, z: pos.z };
+    }
+    // Fallback: if lastEarthPosition not set yet, use Sun direction directly
+    // (Earth appears in Sun's direction from L2)
+    const sunPos = bodiesLayer.getSunPosition();
+    const len = Math.sqrt(sunPos.x * sunPos.x + sunPos.y * sunPos.y + sunPos.z * sunPos.z);
+    if (len === 0) return null;
+    return { x: sunPos.x / len, y: sunPos.y / len, z: sunPos.z / len };
   }
 
   function getSunPosition(): THREE.Vector3 {
     return bodiesLayer.getSunPosition();
+  }
+
+  function getMoonPosition(): THREE.Vector3 {
+    return bodiesLayer.getMoonPosition();
   }
 
   function render(): void {
@@ -411,6 +423,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     updateJWST,
     getEarthPositionJWST,
     getSunPosition,
+    getMoonPosition,
     updateEarthPosition,
     updateEarthRotation,
     updateEarthSunDirection,

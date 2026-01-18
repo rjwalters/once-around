@@ -231,51 +231,27 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
   }
 
   // Add satellites (ISS, Hubble, etc.)
-  // Always add satellites to search index even if position is unavailable
-  if (satellites) {
+  // Always add satellites to search index - position is looked up dynamically when navigating
+  if (satellites && satellites.length > 0) {
     for (const sat of satellites) {
-      const pos = getSatellitePosition?.(sat.index);
-      // Use actual position if available, otherwise default to (0,0)
-      const { ra, dec } = pos ? positionToRaDec(pos) : { ra: 0, dec: 0 };
-      // Add by short name
+      // Add by short name only (full name is shown as subtitle)
       items.push({
         name: sat.name,
         type: "satellite",
-        ra,
-        dec,
+        ra: 0,  // Position looked up dynamically when navigating
+        dec: 0,
         subtitle: sat.fullName,
       });
-      // Also searchable by full name (if different)
-      if (sat.fullName !== sat.name) {
-        items.push({
-          name: sat.fullName,
-          type: "satellite",
-          ra,
-          dec,
-          subtitle: sat.name,
-        });
-      }
     }
   } else if (getISSPosition) {
     // Legacy fallback for ISS only
-    const issPos = getISSPosition();
-    if (issPos) {
-      const { ra, dec } = positionToRaDec(issPos);
-      items.push({
-        name: "ISS",
-        type: "satellite",
-        ra,
-        dec,
-        subtitle: "International Space Station",
-      });
-      items.push({
-        name: "International Space Station",
-        type: "satellite",
-        ra,
-        dec,
-        subtitle: "ISS",
-      });
-    }
+    items.push({
+      name: "ISS",
+      type: "satellite",
+      ra: 0,
+      dec: 0,
+      subtitle: "International Space Station",
+    });
   }
 
   // Add Earth (searchable in JWST mode where it appears as a distant planet)
