@@ -9,6 +9,7 @@ export interface KeyboardHandlerOptions {
   toggleVideos: () => void;
   toggleOrbits: () => void;
   toggleDSOs: () => void;
+  toggleDeepFields: () => void;
   toggleNightVision: () => void;
   toggleHorizon: () => void;
   // Action callbacks
@@ -32,6 +33,7 @@ export function setupKeyboardHandler(options: KeyboardHandlerOptions): void {
     toggleVideos,
     toggleOrbits,
     toggleDSOs,
+    toggleDeepFields,
     toggleNightVision,
     toggleHorizon,
     handleNextEclipse,
@@ -70,6 +72,9 @@ export function setupKeyboardHandler(options: KeyboardHandlerOptions): void {
         break;
       case "d":
         toggleDSOs();
+        break;
+      case "f":
+        toggleDeepFields();
         break;
       case "r":
         toggleNightVision();

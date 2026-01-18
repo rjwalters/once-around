@@ -18,25 +18,31 @@
             <span>Geocentric</span>
           </button>
           <button id="view-topocentric" class="view-mode-btn">
-            <span class="mode-icon">&#x25D1;</span>
+            <span class="mode-icon"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor"><rect x="0" y="14" width="24" height="3"/><circle cx="6" cy="6" r="1.5"/><circle cx="12" cy="9" r="1"/><circle cx="18" cy="4" r="1.2"/><circle cx="15" cy="7" r="0.8"/></svg></span>
             <span>Topocentric</span>
           </button>
-          <button id="view-orbital" class="view-mode-btn">
+          <button id="view-hubble" class="view-mode-btn">
             <span class="mode-icon">&#x1F6F0;</span>
-            <span>Orbital</span>
+            <span>Hubble</span>
+          </button>
+          <button id="view-jwst" class="view-mode-btn">
+            <span class="mode-icon">⬡</span>
+            <span>JWST</span>
           </button>
         </div>
       </div>
 
       <div class="control-group">
         <label>Date & Time (Local)</label>
-        <input type="datetime-local" id="datetime" />
+        <div class="datetime-row">
+          <input type="datetime-local" id="datetime" />
+          <button id="time-now" class="time-now-btn" title="Jump to current time (N)">NOW</button>
+        </div>
         <div class="time-step-controls">
-          <button id="time-now" class="time-step-btn time-now-btn" title="Jump to current time (N)">⊙</button>
-          <button id="time-back" class="time-step-btn" title="Step backward (←)">|◀</button>
-          <button id="time-play" class="time-step-btn time-play-btn" title="Play/Pause (P)">▶</button>
           <button id="time-step-unit" class="time-step-unit" title="Click to change step size">1h</button>
+          <button id="time-back" class="time-step-btn" title="Step backward (←)">|◀</button>
           <button id="time-forward" class="time-step-btn" title="Step forward (→)">▶|</button>
+          <button id="time-play" class="time-step-btn time-play-btn" title="Play/Pause (P)">▶</button>
         </div>
       </div>
 
@@ -84,6 +90,13 @@
         <label>
           <input type="checkbox" id="dsos" />
           Show deep sky objects <span class="shortcut">(D)</span>
+        </label>
+      </div>
+
+      <div class="control-group checkbox-group">
+        <label>
+          <input type="checkbox" id="deep-fields" />
+          Show deep field images <span class="shortcut">(F)</span>
         </label>
       </div>
 
@@ -141,11 +154,7 @@
             <label>Longitude</label>
             <input type="number" id="location-lon" step="0.0001" min="-180" max="180" />
           </div>
-        </div>
-        <div class="location-actions">
-          <button id="location-geolocate" class="location-btn" title="Use device GPS">
-            <span>📍</span> My Location
-          </button>
+          <button id="location-geolocate" class="location-here-btn" title="Use device GPS">HERE</button>
         </div>
         <div class="location-current">
           <div class="location-current-name" id="location-name">San Francisco, USA</div>

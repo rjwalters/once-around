@@ -209,3 +209,13 @@ export const MAJOR_STARS: [number, string][] = [
   [8322, "Deneb Algedi"], // δ Cap, mag 2.85 - Capricornus
   [8232, "Sadalsuud"],    // β Aqr, mag 2.90 - Aquarius
 ];
+
+// -----------------------------------------------------------------------------
+// Deep Field visibility thresholds
+// -----------------------------------------------------------------------------
+
+// Deep field images fade in based on their apparent size in pixels
+// Start fade-in: when image would be ~30px on screen (barely visible)
+// Fully visible: when image would be ~100px on screen (meaningful detail)
+export const DEEP_FIELD_FADE_START_PX = 30;
+export const DEEP_FIELD_FADE_END_PX = 100;

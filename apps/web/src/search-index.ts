@@ -24,6 +24,14 @@ export interface DSODataEntry {
   dec: number;
 }
 
+export interface DeepFieldDataEntry {
+  id: string;
+  name: string;
+  ra: number;
+  dec: number;
+  telescope: string;
+}
+
 export interface SatelliteData {
   index: number;
   name: string;
@@ -38,6 +46,7 @@ export interface SearchIndexOptions {
   constellationData: Record<string, ConstellationDataEntry>;
   constellationCenters: Record<string, { ra: number; dec: number }>;
   dsoData: readonly DSODataEntry[];
+  deepFieldData?: readonly DeepFieldDataEntry[];
   getBodyPositions: () => Map<string, { x: number; y: number; z: number }>;
   positionToRaDec: (pos: { x: number; y: number; z: number }) => { ra: number; dec: number };
   satellites?: SatelliteData[];
@@ -58,6 +67,7 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     constellationData,
     constellationCenters,
     dsoData,
+    deepFieldData,
     getBodyPositions,
     positionToRaDec,
     satellites,
@@ -154,6 +164,29 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     }
   }
 
+  // Add deep field images (Hubble, JWST)
+  if (deepFieldData) {
+    for (const df of deepFieldData) {
+      items.push({
+        name: df.name,
+        type: "deep_field",
+        ra: df.ra,
+        dec: df.dec,
+        subtitle: `${df.telescope} Deep Field`,
+      });
+      // Also add by ID for search (e.g., "HDF", "HUDF")
+      if (df.id !== df.name) {
+        items.push({
+          name: df.id,
+          type: "deep_field",
+          ra: df.ra,
+          dec: df.dec,
+          subtitle: df.name,
+        });
+      }
+    }
+  }
+
   // Add comets (positions from engine)
   for (const name of cometNames) {
     const pos = currentBodyPositions.get(name);
@@ -170,29 +203,29 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
   }
 
   // Add satellites (ISS, Hubble, etc.)
-  if (satellites && getSatellitePosition) {
+  // Always add satellites to search index even if position is unavailable
+  if (satellites) {
     for (const sat of satellites) {
-      const pos = getSatellitePosition(sat.index);
-      if (pos) {
-        const { ra, dec } = positionToRaDec(pos);
-        // Add by short name
+      const pos = getSatellitePosition?.(sat.index);
+      // Use actual position if available, otherwise default to (0,0)
+      const { ra, dec } = pos ? positionToRaDec(pos) : { ra: 0, dec: 0 };
+      // Add by short name
+      items.push({
+        name: sat.name,
+        type: "satellite",
+        ra,
+        dec,
+        subtitle: sat.fullName,
+      });
+      // Also searchable by full name (if different)
+      if (sat.fullName !== sat.name) {
         items.push({
-          name: sat.name,
+          name: sat.fullName,
           type: "satellite",
           ra,
           dec,
-          subtitle: sat.fullName,
+          subtitle: sat.name,
         });
-        // Also searchable by full name (if different)
-        if (sat.fullName !== sat.name) {
-          items.push({
-            name: sat.fullName,
-            type: "satellite",
-            ra,
-            dec,
-            subtitle: sat.name,
-          });
-        }
       }
     }
   } else if (getISSPosition) {

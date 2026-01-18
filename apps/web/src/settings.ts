@@ -10,7 +10,7 @@ const DEBOUNCE_MS = 500;
 // to invalidate old saved camera quaternions
 const SETTINGS_VERSION = 4;
 
-export type ViewMode = 'geocentric' | 'topocentric' | 'orbital';
+export type ViewMode = 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
 
 export interface Settings {
   // Settings schema version (for migration)
@@ -30,6 +30,7 @@ export interface Settings {
   videosVisible: boolean;
   orbitsVisible: boolean;
   dsosVisible: boolean;
+  deepFieldsVisible: boolean;
   issVisible: boolean;
   nightVisionEnabled: boolean;
   arModeEnabled: boolean;
@@ -58,6 +59,7 @@ const DEFAULT_SETTINGS: Settings = {
   videosVisible: true,
   orbitsVisible: false,
   dsosVisible: false,
+  deepFieldsVisible: false,
   issVisible: true,
   nightVisionEnabled: false,
   arModeEnabled: false,

@@ -20,6 +20,8 @@ import { createCometsLayer } from "./layers/comets";
 import { createEclipseLayer } from "./layers/eclipse";
 import { createSatellitesLayer } from "./layers/satellites";
 import { createEarthLayer } from "./layers/earth";
+import { createDeepFieldsLayer } from "./layers/deep-fields";
+import { createJWSTLayer } from "./layers/jwst";
 
 export interface SkyRenderer {
   scene: THREE.Scene;
@@ -34,6 +36,8 @@ export interface SkyRenderer {
   setMilkyWayVisibility(limitingMagnitude: number): void;
   updateDSOs(fov: number, magLimit: number): void;
   setDSOsVisible(visible: boolean): void;
+  updateDeepFields(fov: number): void;
+  setDeepFieldsVisible(visible: boolean): void;
   getRenderedStarCount(): number;
   updateEclipse(sunMoonSeparationDeg: number): void;
   setGroundPlaneVisible(visible: boolean): void;
@@ -53,14 +57,18 @@ export interface SkyRenderer {
   hasISSData(): boolean;
   setHorizonCulling(enabled: boolean): void;
   updateHorizonZenith(zenith: THREE.Vector3): void;
-  // Orbital mode methods
-  setOrbitalMode(enabled: boolean): void;
+  // Hubble mode methods
+  setHubbleMode(enabled: boolean): void;
   updateEarthPosition(nadirDirection: THREE.Vector3): void;
   updateEarthRotation(date: Date, longitudeDeg: number): void;
   updateEarthSunDirection(sunPosition: THREE.Vector3): void;
   updateLabelOcclusion(): void;
   /** Check if a position is occluded by Earth (for external layers) */
   isOccludedByEarth(position: THREE.Vector3): boolean;
+  // JWST mode methods
+  setJWSTMode(enabled: boolean): void;
+  updateJWST(fov: number, sunPosition: THREE.Vector3, currentDate: Date): void;
+  getSunPosition(): THREE.Vector3;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -82,12 +90,15 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const eclipseLayer = createEclipseLayer(scene);
   const satellitesLayer = createSatellitesLayer(scene, labelsGroup);
   const earthLayer = createEarthLayer(scene);
+  const deepFieldsLayer = createDeepFieldsLayer(scene);
+  const jwstLayer = createJWSTLayer(scene);
 
   // Track state
   let labelsVisible = true;
   let satellitesEnabled = true;
   let constellationStarMapInitialized = false;
-  let orbitalModeEnabled = false;
+  let hubbleModeEnabled = false;
+  let jwstModeEnabled = false;
 
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
     const effectiveFov = fov * 1.2;
@@ -104,7 +115,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     constellationsLayer.update(starsLayer.getConstellationStarPositionMap());
     starsLayer.updateLabels(labelsVisible);
     constellationsLayer.setLabelsVisible(labelsVisible);
-    bodiesLayer.update(engine);
+    bodiesLayer.update(engine, fov, canvasHeight);
     moonsLayer.update(engine, fov, labelsVisible, canvasHeight);
     cometsLayer.update(engine, bodiesLayer.getSunPosition(), labelsVisible);
     if (satellitesEnabled) {
@@ -146,6 +157,15 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     dsoLayer.setVisible(visible);
   }
 
+  function updateDeepFields(fov: number): void {
+    const canvasHeight = ctx.container.clientHeight;
+    deepFieldsLayer.update(fov, canvasHeight, camera);
+  }
+
+  function setDeepFieldsVisible(visible: boolean): void {
+    deepFieldsLayer.setVisible(visible);
+  }
+
   function getRenderedStarCount(): number {
     return starsLayer.getRenderedCount();
   }
@@ -176,14 +196,17 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   function setScintillationEnabled(enabled: boolean): void {
     starsLayer.setScintillationEnabled(enabled);
+    bodiesLayer.setScintillationEnabled(enabled);
   }
 
   function setScintillationIntensity(intensity: number): void {
     starsLayer.setScintillationIntensity(intensity);
+    bodiesLayer.setScintillationIntensity(intensity);
   }
 
   function updateScintillation(latitude: number, lst: number): void {
     starsLayer.updateScintillation(latitude, lst);
+    bodiesLayer.updateScintillation(latitude, lst);
   }
 
   function setSatellitesVisible(visible: boolean): void {
@@ -220,14 +243,14 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     bodiesLayer.setHorizonCulling(true, zenith);
   }
 
-  function setOrbitalMode(enabled: boolean): void {
-    orbitalModeEnabled = enabled;
+  function setHubbleMode(enabled: boolean): void {
+    hubbleModeEnabled = enabled;
     earthLayer.setVisible(enabled);
-    // Hide ground when in orbital mode
+    // Hide ground when in Hubble mode
     if (enabled) {
       groundLayer.setVisible(false);
     } else {
-      // When exiting orbital mode, reset all label visibility that may have been
+      // When exiting Hubble mode, reset all label visibility that may have been
       // hidden by Earth occlusion
       labelsGroup.traverse((obj) => {
         if (obj === labelsGroup) return;
@@ -244,30 +267,45 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
         }
       });
     }
-    // Enable depth testing on orbits in orbital mode so they're hidden behind Earth
+    // Enable depth testing on orbits in Hubble mode so they're hidden behind Earth
     orbitsLayer.setDepthTest(enabled);
   }
 
+  function setJWSTMode(enabled: boolean): void {
+    jwstModeEnabled = enabled;
+    jwstLayer.setVisible(enabled);
+    // Hide ground when in JWST mode
+    if (enabled) {
+      groundLayer.setVisible(false);
+    }
+  }
+
+  function updateJWST(fov: number, sunPosition: THREE.Vector3, currentDate: Date): void {
+    if (!jwstModeEnabled) return;
+    const canvasHeight = ctx.container.clientHeight;
+    jwstLayer.update(fov, canvasHeight, sunPosition, currentDate);
+  }
+
   function updateEarthPosition(nadirDirection: THREE.Vector3): void {
-    if (orbitalModeEnabled) {
+    if (hubbleModeEnabled) {
       earthLayer.updatePosition(nadirDirection);
     }
   }
 
   function updateEarthRotation(date: Date, longitudeDeg: number): void {
-    if (orbitalModeEnabled) {
+    if (hubbleModeEnabled) {
       earthLayer.updateRotation(date, longitudeDeg);
     }
   }
 
   function updateEarthSunDirection(sunPosition: THREE.Vector3): void {
-    if (orbitalModeEnabled) {
+    if (hubbleModeEnabled) {
       earthLayer.updateSunDirection(sunPosition);
     }
   }
 
   function updateLabelOcclusion(): void {
-    if (!orbitalModeEnabled) return;
+    if (!hubbleModeEnabled) return;
 
     // Reusable vector for world position
     const worldPos = new THREE.Vector3();
@@ -305,8 +343,12 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   function isOccludedByEarth(position: THREE.Vector3): boolean {
-    if (!orbitalModeEnabled) return false;
+    if (!hubbleModeEnabled) return false;
     return earthLayer.isOccluded(position);
+  }
+
+  function getSunPosition(): THREE.Vector3 {
+    return bodiesLayer.getSunPosition();
   }
 
   function render(): void {
@@ -335,6 +377,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     setMilkyWayVisibility,
     updateDSOs,
     setDSOsVisible,
+    updateDeepFields,
+    setDeepFieldsVisible,
     getRenderedStarCount,
     updateEclipse,
     setGroundPlaneVisible,
@@ -353,7 +397,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     hasISSData,
     setHorizonCulling,
     updateHorizonZenith,
-    setOrbitalMode,
+    setHubbleMode,
+    setJWSTMode,
+    updateJWST,
+    getSunPosition,
     updateEarthPosition,
     updateEarthRotation,
     updateEarthSunDirection,

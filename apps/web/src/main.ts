@@ -8,6 +8,7 @@ import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement } from "
 import { STAR_DATA } from "./starData";
 import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA } from "./dsoData";
+import { DEEP_FIELD_DATA } from "./deepFieldData";
 import { loadSettings, createSettingsSaver } from "./settings";
 import { createLocationManager, type ObserverLocation } from "./location";
 import { CONSTELLATION_CENTERS, type SearchItem } from "./search";
@@ -412,7 +413,8 @@ async function main(): Promise<void> {
   renderer.setMilkyWayVisibility(settings.magnitude);
 
   // Load satellite ephemerides in background (non-blocking)
-  loadAllSatelliteEphemerides(engine).then(() => {
+  // Store promise so search index can rebuild after satellites are available
+  const satellitesLoadedPromise = loadAllSatelliteEphemerides(engine).then(() => {
     console.log("Satellite ephemerides loaded - satellite tracking enabled");
     // Trigger an update to show satellites if they're currently visible
     renderer.updateFromEngine(engine, renderer.camera.fov);
@@ -587,6 +589,30 @@ async function main(): Promise<void> {
     });
   }
 
+  // Deep fields (Hubble/JWST imagery) checkbox
+  const deepFieldsCheckbox = document.getElementById("deep-fields") as HTMLInputElement | null;
+  if (deepFieldsCheckbox) {
+    // Restore from settings
+    deepFieldsCheckbox.checked = settings.deepFieldsVisible ?? false;
+    renderer.setDeepFieldsVisible(settings.deepFieldsVisible ?? false);
+
+    // Initialize deep field positions if restored as visible
+    if (settings.deepFieldsVisible) {
+      const currentFov = controls.getCameraState().fov;
+      renderer.updateDeepFields(currentFov);
+    }
+
+    deepFieldsCheckbox.addEventListener("change", () => {
+      renderer.setDeepFieldsVisible(deepFieldsCheckbox.checked);
+      // Update deep fields immediately when toggled on
+      if (deepFieldsCheckbox.checked) {
+        const currentFov = controls.getCameraState().fov;
+        renderer.updateDeepFields(currentFov);
+      }
+      settingsSaver.save({ deepFieldsVisible: deepFieldsCheckbox.checked });
+    });
+  }
+
   // ISS (International Space Station) checkbox
   const issCheckbox = document.getElementById("iss") as HTMLInputElement | null;
   if (issCheckbox) {
@@ -634,10 +660,10 @@ async function main(): Promise<void> {
     renderer.updateGroundPlaneOrientation(settings.observerLatitude, settings.observerLongitude);
 
     horizonCheckbox.addEventListener("change", () => {
-      const isOrbital = viewModeManager?.getMode() === 'orbital';
-      if (isOrbital) {
-        // In orbital mode, toggle Earth visibility
-        renderer.setOrbitalMode(horizonCheckbox.checked);
+      const isHubble = viewModeManager?.getMode() === 'hubble';
+      if (isHubble) {
+        // In Hubble mode, toggle Earth visibility
+        renderer.setHubbleMode(horizonCheckbox.checked);
       } else {
         // In other modes, toggle ground plane
         renderer.setGroundPlaneVisible(horizonCheckbox.checked);
@@ -700,9 +726,12 @@ async function main(): Promise<void> {
     setControlsViewMode: (mode) => controls.setViewMode(mode),
     setTopocentricParams: (latRad, lstRad) => controls.setTopocentricParams(latRad, lstRad),
     animateToAltAz: (alt, az, duration) => controls.animateToAltAz(alt, az, duration),
-    // Orbital mode callbacks
-    onOrbitalModeChange: (enabled) => {
-      renderer.setOrbitalMode(enabled);
+    // Space telescope mode callbacks
+    onHubbleModeChange: (enabled) => {
+      renderer.setHubbleMode(enabled);
+    },
+    onJWSTModeChange: (enabled) => {
+      renderer.setJWSTMode(enabled);
     },
     onScintillationChange: (enabled) => {
       renderer.setScintillationEnabled(enabled);
@@ -715,10 +744,11 @@ async function main(): Promise<void> {
 
   // Apply view mode from URL if specified (overrides saved settings)
   if (urlState.view) {
-    const viewModeMap: Record<string, 'geocentric' | 'topocentric' | 'orbital'> = {
+    const viewModeMap: Record<string, 'geocentric' | 'topocentric' | 'hubble' | 'jwst'> = {
       'geo': 'geocentric',
       'topo': 'topocentric',
-      'orbital': 'orbital',
+      'hubble': 'hubble',
+      'jwst': 'jwst',
     };
     const targetMode = viewModeMap[urlState.view];
     if (targetMode) {
@@ -729,7 +759,7 @@ async function main(): Promise<void> {
   // Show seeing control, LST display, and enable horizon culling if starting in topocentric mode
   // URL view param takes precedence over saved settings
   const effectiveViewMode = urlState.view
-    ? (urlState.view === 'topo' ? 'topocentric' : urlState.view === 'geo' ? 'geocentric' : 'orbital')
+    ? (urlState.view === 'topo' ? 'topocentric' : urlState.view === 'geo' ? 'geocentric' : urlState.view === 'hubble' ? 'hubble' : 'jwst')
     : settings.viewMode;
   if (effectiveViewMode === 'topocentric') {
     if (seeingControl) {
@@ -820,8 +850,8 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   let searchIndex: SearchItem[] = [];
 
-  // Initialize search index
-  buildSearchIndex({
+  // Helper to build search index (called initially and after satellites load)
+  const buildIndex = () => buildSearchIndex({
     bodyNames: BODY_NAMES,
     minorBodyNames: MINOR_BODY_NAMES,
     cometNames: COMET_NAMES,
@@ -829,6 +859,7 @@ async function main(): Promise<void> {
     constellationData: CONSTELLATION_DATA,
     constellationCenters: CONSTELLATION_CENTERS,
     dsoData: DSO_DATA,
+    deepFieldData: DEEP_FIELD_DATA,
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     positionToRaDec,
     satellites: SATELLITES.map(s => ({ index: s.index, name: s.name, fullName: s.fullName })),
@@ -838,7 +869,10 @@ async function main(): Promise<void> {
       if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
       return { x: pos.x, y: pos.y, z: pos.z };
     },
-  }).then(index => {
+  });
+
+  // Initialize search index
+  buildIndex().then(index => {
     searchIndex = index;
     console.log(`Search index built: ${index.length} items`);
 
@@ -854,6 +888,14 @@ async function main(): Promise<void> {
         }
       }, 0);
     }
+
+    // Rebuild index after satellites finish loading to include them in search
+    satellitesLoadedPromise.then(() => {
+      buildIndex().then(updatedIndex => {
+        searchIndex = updatedIndex;
+        console.log(`Search index rebuilt with satellites: ${updatedIndex.length} items`);
+      });
+    });
   });
 
   // Create search UI
@@ -978,15 +1020,26 @@ async function main(): Promise<void> {
         settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
       }
     },
+    toggleDeepFields: () => {
+      if (deepFieldsCheckbox) {
+        deepFieldsCheckbox.checked = !deepFieldsCheckbox.checked;
+        renderer.setDeepFieldsVisible(deepFieldsCheckbox.checked);
+        if (deepFieldsCheckbox.checked) {
+          const currentFov = controls.getCameraState().fov;
+          renderer.updateDeepFields(currentFov);
+        }
+        settingsSaver.save({ deepFieldsVisible: deepFieldsCheckbox.checked });
+      }
+    },
     toggleNightVision: () => {
       setNightVision(!document.body.classList.contains("night-vision"));
     },
     toggleHorizon: () => {
       if (horizonCheckbox) {
         horizonCheckbox.checked = !horizonCheckbox.checked;
-        const isOrbital = viewModeManager?.getMode() === 'orbital';
-        if (isOrbital) {
-          renderer.setOrbitalMode(horizonCheckbox.checked);
+        const isHubble = viewModeManager?.getMode() === 'hubble';
+        if (isHubble) {
+          renderer.setHubbleMode(horizonCheckbox.checked);
         } else {
           renderer.setGroundPlaneVisible(horizonCheckbox.checked);
         }
@@ -1074,8 +1127,8 @@ async function main(): Promise<void> {
       );
       renderer.updateHorizonZenith(zenith);
     }
-    // Update Earth position/rotation for orbital mode
-    if (viewModeManager.getMode() === 'orbital') {
+    // Update Earth position/rotation for Hubble mode
+    if (viewModeManager.getMode() === 'hubble') {
       // Get Hubble's position (index 1) to compute nadir direction
       const hubblePos = renderer.getSatellitePosition(1, engine);
       if (hubblePos) {
@@ -1098,6 +1151,14 @@ async function main(): Promise<void> {
       // Hide video markers occluded by Earth
       videoMarkers.updateOcclusion(renderer.isOccludedByEarth);
     }
+
+    // Update JWST layer (Earth as distant planet)
+    if (viewModeManager.getMode() === 'jwst') {
+      const fov = controls.getCameraState().fov;
+      const sunPos = renderer.getSunPosition();
+      renderer.updateJWST(fov, sunPos, currentDate);
+    }
+
     renderer.render();
   }
 
@@ -1106,9 +1167,14 @@ async function main(): Promise<void> {
     renderer.setScintillationEnabled(true);
   }
 
-  // Enable orbital mode if starting in that mode
-  if (settings.viewMode === 'orbital') {
-    renderer.setOrbitalMode(true);
+  // Enable Hubble mode if starting in that mode
+  if (settings.viewMode === 'hubble') {
+    renderer.setHubbleMode(true);
+  }
+
+  // Enable JWST mode if starting in that mode
+  if (settings.viewMode === 'jwst') {
+    renderer.setJWSTMode(true);
   }
 
   animate();

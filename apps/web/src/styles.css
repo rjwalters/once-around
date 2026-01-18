@@ -598,6 +598,16 @@ canvas {
 }
 
 /* Time Controls */
+.datetime-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.datetime-row input[type="datetime-local"] {
+  flex: 1;
+}
+
 .time-step-controls {
   display: flex;
   gap: 4px;
@@ -648,11 +658,21 @@ canvas {
 }
 
 .time-now-btn {
-  color: #7eb8ff;
+  padding: 6px 10px;
+  background: #2a3a4a;
+  border: 1px solid #4a9eff;
+  color: #4a9eff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .time-now-btn:hover {
-  color: #aad4ff;
+  background: #3a4a5a;
+  color: #7eb8ff;
   border-color: #7eb8ff;
 }
 
@@ -1967,6 +1987,30 @@ canvas {
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+  align-items: flex-end;
+}
+
+.location-here-btn {
+  padding: 4px 0;
+  width: 40px;
+  background: #2a3a4a;
+  border: 1px solid #4a9eff;
+  color: #4a9eff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
+  height: fit-content;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.location-here-btn:hover {
+  background: #3a4a5a;
+  color: #7eb8ff;
+  border-color: #7eb8ff;
 }
 
 .location-coord-input {
@@ -2328,6 +2372,11 @@ canvas {
 
 .view-mode-btn .mode-icon {
   font-size: 16px;
+}
+
+.view-mode-btn .mode-icon svg {
+  display: inline-block;
+  vertical-align: middle;
 }
 
 /* Help/Keyboard Shortcuts Modal */

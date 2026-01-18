@@ -165,7 +165,7 @@ void main() {
 `;
 
 // -----------------------------------------------------------------------------
-// Earth shader for orbital view (day/night terminator with city lights)
+// Earth shader for Hubble view (day/night terminator with city lights)
 // -----------------------------------------------------------------------------
 
 export const earthVertexShader = `
@@ -214,6 +214,53 @@ void main() {
   vec3 finalColor = dayColor * dayMix + boostedNightColor * nightIntensity * (1.0 - dayMix);
 
   gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+// -----------------------------------------------------------------------------
+// Earth cloud layer shader (uses texture brightness as alpha)
+// -----------------------------------------------------------------------------
+
+export const cloudVertexShader = `
+varying vec3 vNormal;
+varying vec2 vUv;
+
+void main() {
+  vNormal = normalize(mat3(modelMatrix) * normal);
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export const cloudFragmentShader = `
+uniform sampler2D cloudTexture;
+uniform vec3 sunDirection;
+
+varying vec3 vNormal;
+varying vec2 vUv;
+
+void main() {
+  // Sample cloud texture - grayscale where white = clouds
+  float cloudDensity = texture2D(cloudTexture, vUv).r;
+
+  // Compute illumination from sun direction
+  float illumination = dot(vNormal, sunDirection);
+
+  // Smooth lighting transition
+  float lit = smoothstep(-0.1, 0.3, illumination);
+
+  // Clouds are white, lit by the sun
+  // Ambient light on night side so clouds aren't invisible
+  float ambient = 0.15;
+  float brightness = ambient + (1.0 - ambient) * lit;
+
+  // Cloud color (slightly blue-tinted white)
+  vec3 cloudColor = vec3(0.95, 0.97, 1.0) * brightness;
+
+  // Use cloud density as alpha (threshold to reduce haze)
+  float alpha = smoothstep(0.1, 0.6, cloudDensity) * 0.9;
+
+  gl_FragColor = vec4(cloudColor, alpha);
 }
 `;
 
@@ -561,5 +608,46 @@ void main() {
   // Final output - subtle glow, not overpowering the stars
   float alpha = brightness * 0.4 * visibility;
   gl_FragColor = vec4(color * brightness * 0.5 * visibility, alpha);
+}
+`;
+
+// -----------------------------------------------------------------------------
+// Deep Field image shaders
+// -----------------------------------------------------------------------------
+
+export const deepFieldVertexShader = `
+varying vec2 vUv;
+
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export const deepFieldFragmentShader = `
+uniform sampler2D uTexture;
+uniform float uOpacity;
+
+varying vec2 vUv;
+
+void main() {
+  // Sample the deep field texture
+  vec4 texColor = texture2D(uTexture, vUv);
+
+  // Calculate distance from center for edge fade
+  vec2 centered = vUv - 0.5;
+  float dist = length(centered) * 2.0; // 0 at center, 1 at corners
+
+  // Smooth edge fade to blend with starfield background
+  // Start fading at 70% from center, fully faded at 100%
+  float edgeFade = 1.0 - smoothstep(0.7, 1.0, dist);
+
+  // Apply opacity and edge fade
+  float finalAlpha = texColor.a * uOpacity * edgeFade;
+
+  // Discard nearly transparent pixels
+  if (finalAlpha < 0.01) discard;
+
+  gl_FragColor = vec4(texColor.rgb, finalAlpha);
 }
 `;

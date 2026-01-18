@@ -171,18 +171,17 @@ export function createLocationUI(options: LocationUIOptions): LocationUI {
     if (locationGeolocateBtn) {
       locationGeolocateBtn.addEventListener("click", async () => {
         locationGeolocateBtn.setAttribute("disabled", "true");
-        const originalText = locationGeolocateBtn.innerHTML;
-        locationGeolocateBtn.innerHTML = "<span>⏳</span> Locating...";
+        locationGeolocateBtn.textContent = "...";
 
         const result = await requestGeolocation();
 
         locationGeolocateBtn.removeAttribute("disabled");
-        locationGeolocateBtn.innerHTML = originalText;
+        locationGeolocateBtn.textContent = "HERE";
 
         if (!result) {
-          locationGeolocateBtn.innerHTML = "<span>❌</span> Failed";
+          locationGeolocateBtn.textContent = "ERR";
           setTimeout(() => {
-            locationGeolocateBtn.innerHTML = originalText;
+            locationGeolocateBtn.textContent = "HERE";
           }, 2000);
         }
       });
