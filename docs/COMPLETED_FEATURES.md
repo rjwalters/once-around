@@ -33,19 +33,42 @@ Historical record of implemented features in Once Around the Night Sky.
 
 ## Guided Tours
 
-Planetarium-style guided tours with keyframe animation.
+Planetarium-style guided tours with keyframe animation. 18 tours available.
 
 **Features:**
 - Smooth camera transitions between keyframes
-- Time control during tours
-- Star/object overrides for special effects
-- Predefined tours: 2024 Eclipse, Jupiter's Moons, comet appearances
+- Time animation during tours
+- Star/object overrides for special effects (synthetic stars for supernovae)
+- Location changes per keyframe
+- URL deep linking (`?tour=sn-1054`)
+
+**Eclipse & Planetary Tours:**
+- 2024 Total Solar Eclipse (from Dallas, Texas)
+- Jupiter's Galilean Moons (watch Io orbit in 42 hours)
+- Betelgeuse Nova (hypothetical supernova)
 
 **Comet Tours:**
 - NEOWISE 2020
 - Hale-Bopp 1997
 - Halley 1986
-- Halley 2061 (future return)
+- Halley 2061 (preview the next return)
+
+**Historical Supernova Tours:**
+- SN 1054: Birth of the Crab Nebula (from Kaifeng, China)
+- SN 1572: Tycho's Supernova (from Hven Island, Denmark)
+- SN 1604: Kepler's Supernova (from Prague)
+- SN 1987A: Return of the Supernovae (from Chile)
+
+**Famous Transit Tours:**
+- 1769 Transit of Venus (Captain Cook's expedition to Tahiti)
+- 2012 Transit of Venus (last until 2117)
+- 2019 Transit of Mercury
+
+**Discovery Moment Tours:**
+- Galileo's Discovery (1610): Jupiter's moons over 8 nights
+- Discovery of Uranus (1781): Herschel in Bath, England
+- Discovery of Neptune (1846): Found by Le Verrier's math, seen by Galle
+- Discovery of Pluto (1930): Tombaugh's blink comparator
 
 ---
 

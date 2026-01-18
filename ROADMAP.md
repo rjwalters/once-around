@@ -8,68 +8,21 @@ For completed features, see [docs/COMPLETED_FEATURES.md](docs/COMPLETED_FEATURES
 
 ## High Priority
 
-### Historical Supernova Tours
+### More Guided Tours
 
-Guided tours of historical supernovae that changed astronomy.
+The tour system is now mature. Ideas for additional tours:
 
-**SN 1054 (Crab Nebula)** - July 4, 1054
-- Chinese and Arab astronomers recorded a "guest star" visible in daylight for 23 days
-- Show the sky from China, zoom to Taurus, show where the star appeared
-- End at the Crab Nebula today (M1 deep field image already in app)
+**Great Comets**
+- Comet of 1811 (visible for 9 months)
+- Comet Ikeya-Seki 1965 (sun-grazing, visible in daylight)
 
-**Tycho's Supernova (SN 1572)** - November 11, 1572
-- Tycho Brahe's observations proved stars could change, challenging Aristotelian cosmology
-- Show from Denmark (Hven island), the supernova in Cassiopeia
-- Reached magnitude -4 (brighter than Venus)
+**Historical Eclipses**
+- 1919 Eddington Eclipse (proved general relativity)
+- 585 BC Eclipse (stopped a battle)
 
-**Kepler's Supernova (SN 1604)** - October 9, 1604
-- Last Milky Way supernova visible to naked eye
-- Observed by Kepler in Prague, near Jupiter/Saturn/Mars conjunction
-- Show the rare planetary grouping that drew attention to that part of sky
-
-**SN 1987A** - February 23, 1987
-- First naked-eye supernova in 383 years
-- In the Large Magellanic Cloud (LMC deep field image already in app)
-- Show from Chile (where first observed), neutrino detection story
-
-### Famous Transit Tours
-
-Historic transits used to measure the solar system.
-
-**1769 Transit of Venus** - June 3, 1769
-- Captain Cook's expedition to Tahiti
-- Show the transit from Tahiti, explain how parallax measurements determined the AU
-- Multiple expeditions worldwide (coordinate with historical context)
-
-**2012 Transit of Venus** - June 5-6, 2012
-- Last Venus transit until 2117
-- Show the transit path across the Sun
-
-**Mercury Transits**
-- More frequent, good for demonstrating the concept
-- Recent: November 11, 2019
-
-### Discovery Moment Tours
-
-Recreate the night sky as seen during major discoveries.
-
-**Galileo's Jupiter Moons** - January 7-15, 1610
-- Already have this tour - could expand with more historical context
-- Show the nightly progression as Galileo tracked the "stars" moving
-
-**Discovery of Uranus** - March 13, 1781
-- William Herschel in Bath, England
-- Initially thought it was a comet
-- Show the star field in Gemini where he spotted the slow-moving object
-
-**Discovery of Neptune** - September 23, 1846
-- Mathematical prediction by Le Verrier, observed by Galle in Berlin
-- Triumph of Newtonian mechanics
-- Show Neptune's position among the stars
-
-**Discovery of Pluto** - February 18, 1930
-- Clyde Tombaugh at Lowell Observatory
-- Blink comparator technique - show the star field, highlight Pluto's motion
+**Space Mission Moments**
+- Apollo 8 Earthrise (December 24, 1968)
+- Voyager 1 Pale Blue Dot (February 14, 1990)
 
 ---
 
