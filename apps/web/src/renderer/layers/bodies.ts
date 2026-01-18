@@ -549,6 +549,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
 
       // ----- Resolved disk (sphere with LOD-aware shader) -----
       // Show disk once we're past the pure point-source regime
+      // Disk fades in from LOD_POINT_SOURCE_MAX_PX to LOD_SIMPLE_DISK_MAX_PX
       if (pixelSize >= LOD_POINT_SOURCE_MAX_PX && planetAboveHorizon) {
         // Use actual angular diameter for the sphere
         const displayScale = angularDiameterToScale(angDiam);
@@ -569,16 +570,22 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       }
 
       // ----- Point source (sprite) -----
-      // Show sprite when in point-source regime (fades out as we transition to disk)
-      // Sprite fades out completely by LOD_POINT_SOURCE_MAX_PX
-      const spriteFade = 1 - smoothstep(LOD_POINT_SOURCE_MAX_PX * 0.5, LOD_POINT_SOURCE_MAX_PX, pixelSize);
+      // Sprite fades out from LOD_POINT_SOURCE_MAX_PX to LOD_SIMPLE_DISK_MAX_PX
+      // This overlaps with the disk fade-in, ensuring smooth crossfade
+      const spriteFade = 1 - smoothstep(LOD_POINT_SOURCE_MAX_PX, LOD_SIMPLE_DISK_MAX_PX, pixelSize);
       if (spriteFade > 0.01 && planetAboveHorizon) {
         planetSprites[i].visible = true;
         planetSpriteMaterials[i].opacity = spriteFade;
 
-        // Scale sprite based on a minimum visible size
-        const pointSizeArcsec = Math.max(POINT_SOURCE_MIN_SIZE_PX * fov * 3600 / canvasHeight, 2);
-        const spriteWorldSize = (pointSizeArcsec / fovArcsec) * SKY_RADIUS * 4; // 4x for glow extent
+        // Scale sprite to transition smoothly from point-source size to actual angular size
+        // Below LOD_POINT_SOURCE_MAX_PX: use minimum point-source size
+        // At/above LOD_POINT_SOURCE_MAX_PX: scale toward actual angular diameter
+        const minSizeArcsec = Math.max(POINT_SOURCE_MIN_SIZE_PX * fov * 3600 / canvasHeight, 2);
+        const actualSizeArcsec = angDiamArcsec;
+        // Blend from min size to actual size as we approach and pass the transition point
+        const sizeBlend = smoothstep(LOD_POINT_SOURCE_MAX_PX * 0.5, LOD_SIMPLE_DISK_MAX_PX, pixelSize);
+        const effectiveSizeArcsec = minSizeArcsec + (actualSizeArcsec - minSizeArcsec) * sizeBlend;
+        const spriteWorldSize = (effectiveSizeArcsec / fovArcsec) * SKY_RADIUS * 4; // 4x for glow extent
         planetSprites[i].scale.set(spriteWorldSize, spriteWorldSize, 1);
       } else {
         planetSprites[i].visible = false;
@@ -622,8 +629,9 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       const aboveHorizon = isAboveHorizon(minorPos);
 
       // Calculate blend factors using same LOD thresholds as planets
+      // Both sprite and disk visible from LOD_POINT_SOURCE_MAX_PX to LOD_SIMPLE_DISK_MAX_PX for smooth crossfade
       const diskBlend = smoothstep(LOD_POINT_SOURCE_MAX_PX, LOD_SIMPLE_DISK_MAX_PX, pixelSize);
-      const spriteFade = 1 - smoothstep(LOD_POINT_SOURCE_MAX_PX * 0.5, LOD_POINT_SOURCE_MAX_PX, pixelSize);
+      const spriteFade = 1 - smoothstep(LOD_POINT_SOURCE_MAX_PX, LOD_SIMPLE_DISK_MAX_PX, pixelSize);
 
       // Position sprite
       minorBodySprites[i].position.copy(minorPos);
@@ -679,8 +687,12 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         minorBodySprites[i].visible = true;
         minorBodySpriteMaterials[i].opacity = spriteFade;
 
-        const pointSizeArcsec = Math.max(POINT_SOURCE_MIN_SIZE_PX * fov * 3600 / canvasHeight, 2);
-        const spriteWorldSize = (pointSizeArcsec / fovArcsec) * SKY_RADIUS * 4;
+        // Scale sprite to transition smoothly from point-source size to actual angular size
+        const minSizeArcsec = Math.max(POINT_SOURCE_MIN_SIZE_PX * fov * 3600 / canvasHeight, 2);
+        const actualSizeArcsec = angDiamArcsec;
+        const sizeBlend = smoothstep(LOD_POINT_SOURCE_MAX_PX * 0.5, LOD_SIMPLE_DISK_MAX_PX, pixelSize);
+        const effectiveSizeArcsec = minSizeArcsec + (actualSizeArcsec - minSizeArcsec) * sizeBlend;
+        const spriteWorldSize = (effectiveSizeArcsec / fovArcsec) * SKY_RADIUS * 4;
         minorBodySprites[i].scale.set(spriteWorldSize, spriteWorldSize, 1);
       } else {
         minorBodySprites[i].visible = false;

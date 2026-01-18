@@ -38,7 +38,7 @@ export function createCelestialControls(
   let dragStartY = 0;
 
   // FOV zoom settings
-  const minFov = 0.5;
+  const minFov = 0.05;
   const maxFov = 100;
   const zoomSpeed = 0.05;
 
@@ -139,11 +139,6 @@ export function createCelestialControls(
 
     const east = new THREE.Vector3().crossVectors(north, zenith).normalize();
 
-    console.log('[Camera] updateTopocentricCamera:',
-      'zenith:', zenith.x.toFixed(3), zenith.y.toFixed(3), zenith.z.toFixed(3),
-      'north:', north.x.toFixed(3), north.y.toFixed(3), north.z.toFixed(3),
-      'east:', east.x.toFixed(3), east.y.toFixed(3), east.z.toFixed(3));
-
     const cosAlt = Math.cos(topoAltitude);
     const sinAlt = Math.sin(topoAltitude);
     const cosAz = Math.cos(topoAzimuth);
@@ -154,11 +149,6 @@ export function createCelestialControls(
       .addScaledVector(east, cosAlt * sinAz)
       .addScaledVector(zenith, sinAlt)
       .normalize();
-
-    console.log('[Camera] viewDir:',
-      'alt:', (topoAltitude * 180 / Math.PI).toFixed(1),
-      'az:', (topoAzimuth * 180 / Math.PI).toFixed(1),
-      '-> dir:', viewDir.x.toFixed(3), viewDir.y.toFixed(3), viewDir.z.toFixed(3));
 
     camera.up.copy(zenith);
     camera.lookAt(viewDir.x * 100, viewDir.y * 100, viewDir.z * 100);
@@ -176,7 +166,8 @@ export function createCelestialControls(
 
   function applyRotation(angleX: number, angleY: number): void {
     if (viewMode === "topocentric") {
-      topoAzimuth = (topoAzimuth + angleX + 2 * Math.PI) % (2 * Math.PI);
+      // Negate angleX so dragging right moves stars right (matches geocentric behavior)
+      topoAzimuth = (topoAzimuth - angleX + 2 * Math.PI) % (2 * Math.PI);
       topoAltitude = Math.max(
         -Math.PI / 2,
         Math.min(Math.PI / 2, topoAltitude + angleY)
@@ -446,7 +437,6 @@ export function createCelestialControls(
     dec: number,
     durationMs: number = 1000
   ): void {
-    console.log('[Controls] animateToRaDec called, viewMode:', viewMode);
     if (viewMode === "topocentric") {
       // In topocentric mode, convert RA/Dec to Alt/Az and animate there
       // to keep the horizon horizontal
@@ -523,7 +513,6 @@ export function createCelestialControls(
   }
 
   function setViewMode(mode: ViewMode): void {
-    console.log('[Controls] setViewMode:', mode, 'from:', viewMode);
     if (mode === viewMode) return;
 
     const previousMode = viewMode;
@@ -533,7 +522,6 @@ export function createCelestialControls(
       const { ra, dec } = getRaDec();
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
-      console.log('[Controls] setViewMode topocentric with LST:', lstDeg.toFixed(2), 'Lat:', latDeg.toFixed(2));
       const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
       topoAzimuth = (altAz.azimuth * Math.PI) / 180;
       topoAltitude = (altAz.altitude * Math.PI) / 180;
@@ -565,8 +553,6 @@ export function createCelestialControls(
   }
 
   function setTopocentricParams(latitudeRad: number, lstRad: number): void {
-    console.log('[Controls] setTopocentricParams:', 'lat:', (latitudeRad * 180 / Math.PI).toFixed(2),
-      'LST:', (lstRad * 180 / Math.PI).toFixed(2));
     topoLatitude = latitudeRad;
     topoLST = lstRad;
 
