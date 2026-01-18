@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { computeGMST } from "./view-mode";
 import type { BodyPositions } from "./body-positions";
 import type { SkyEngine } from "./wasm/sky_engine";
+import { getHeliocentricPositions } from "./spacecraftPositions";
 
 export interface AnimationLoopDependencies {
   controls: {
@@ -31,7 +32,11 @@ export interface AnimationLoopDependencies {
     isOccludedByEarth: (position: THREE.Vector3) => boolean;
     getSunPosition: () => { x: number; y: number; z: number } | null;
     getMoonPosition: () => { x: number; y: number; z: number } | null;
-    updateRemoteView: (fov: number) => void;
+    updateRemoteView: (
+      fov: number,
+      heliocentricBodies?: Map<string, { x: number; y: number; z: number }>
+    ) => void;
+    isRemoteViewpointActive: () => boolean;
   };
   videoMarkers: {
     updateOcclusion: (isOccluded: (position: THREE.Vector3) => boolean) => void;
@@ -119,7 +124,13 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     renderer.updateDeepFields(currentFov);
 
     // Update remote view (for tour viewpoints like Pale Blue Dot)
-    renderer.updateRemoteView(currentFov);
+    if (renderer.isRemoteViewpointActive()) {
+      // Get heliocentric positions for the current date (if available)
+      const helioPositions = getHeliocentricPositions(currentDate);
+      renderer.updateRemoteView(currentFov, helioPositions ?? undefined);
+    } else {
+      renderer.updateRemoteView(currentFov);
+    }
 
     // Update JWST layer (Earth and Moon as distant objects)
     if (viewMode === "jwst") {

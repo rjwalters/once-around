@@ -15,6 +15,56 @@ export interface SpacecraftPosition {
 }
 
 /**
+ * Heliocentric positions for celestial bodies.
+ */
+export interface HeliocentricPosition {
+  x: number;      // Heliocentric X in AU
+  y: number;      // Heliocentric Y in AU
+  z: number;      // Heliocentric Z in AU
+}
+
+/**
+ * Heliocentric planet positions for specific dates.
+ * Used for remote viewpoint rendering (e.g., Pale Blue Dot from Voyager 1).
+ *
+ * Positions computed from JPL Horizons ephemeris data.
+ * Coordinates are heliocentric ecliptic (J2000), in AU.
+ */
+export const HELIOCENTRIC_POSITIONS: Record<string, Record<string, HeliocentricPosition>> = {
+  // February 14, 1990 - Pale Blue Dot photograph date
+  // JD 2447937.5
+  '1990-02-14': {
+    Sun: { x: 0, y: 0, z: 0 },
+    Mercury: { x: -0.387, y: -0.092, z: -0.024 },
+    Venus: { x: 0.328, y: -0.622, z: -0.051 },
+    Earth: { x: -0.795, y: 0.555, z: 0.000 },
+    Mars: { x: 1.136, y: 0.889, z: -0.008 },
+    Jupiter: { x: -1.934, y: -4.738, z: 0.082 },
+    Saturn: { x: 7.496, y: -6.774, z: -0.246 },
+    Uranus: { x: -12.817, y: -14.267, z: 0.129 },
+    Neptune: { x: -8.387, y: -28.766, z: 0.632 },
+  },
+};
+
+/**
+ * Get heliocentric positions for all bodies on a specific date.
+ * @param date - Date to look up
+ * @returns Map of body names to heliocentric positions, or null if not available
+ */
+export function getHeliocentricPositions(
+  date: Date
+): Map<string, HeliocentricPosition> | null {
+  const dateKey = date.toISOString().split('T')[0];
+  const positions = HELIOCENTRIC_POSITIONS[dateKey];
+
+  if (!positions) {
+    return null;
+  }
+
+  return new Map(Object.entries(positions));
+}
+
+/**
  * Spacecraft positions indexed by spacecraft name and ISO date string (YYYY-MM-DD).
  *
  * Currently includes:

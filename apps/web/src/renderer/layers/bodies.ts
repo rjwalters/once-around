@@ -95,6 +95,8 @@ export interface BodiesLayer {
   setScintillationIntensity(intensity: number): void;
   /** Update scintillation for current frame (call each frame when enabled) */
   updateScintillation(latitude: number, lst: number): void;
+  /** Enable/disable remote view mode (hides normal body renderings) */
+  setRemoteViewActive(active: boolean): void;
 }
 
 /**
@@ -429,6 +431,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   let currentMoonPos = new THREE.Vector3();
   let currentSunMoonSeparationDeg = 180;
   let horizonCullingEnabled = false;
+  let remoteViewActive = false;
   // Zenith direction for proper horizon culling (set by setHorizonCulling)
   const zenithDirection = new THREE.Vector3(0, 1, 0);
 
@@ -443,6 +446,29 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   }
 
   function update(engine: SkyEngine, fov: number, canvasHeight: number): void {
+    // If remote view is active, hide all normal body renderings
+    if (remoteViewActive) {
+      sunMesh.visible = false;
+      moonMesh.visible = false;
+      for (const mesh of planetMeshes) mesh.visible = false;
+      for (const sprite of planetSprites) sprite.visible = false;
+      for (const label of bodyLabels) label.visible = false;
+      bodyFlagLines.visible = false;
+      saturnRings.visible = false;
+      // Also hide minor bodies
+      plutoMesh.visible = false;
+      ceresMesh.visible = false;
+      vestaMesh.visible = false;
+      for (const sprite of minorBodySprites) sprite.visible = false;
+      for (const label of minorBodyLabels) label.visible = false;
+      minorBodyFlagLines.visible = false;
+      return;
+    }
+
+    // Restore flag line visibility when not in remote view
+    bodyFlagLines.visible = true;
+    minorBodyFlagLines.visible = true;
+
     const bodyPositions = getBodiesPositionBuffer(engine);
     const angularDiameters = getBodiesAngularDiametersBuffer(engine);
     const radius = SKY_RADIUS - 1;
@@ -786,6 +812,10 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     }
   }
 
+  function setRemoteViewActive(active: boolean): void {
+    remoteViewActive = active;
+  }
+
   return {
     sunMesh,
     moonMesh,
@@ -800,5 +830,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     setScintillationEnabled,
     setScintillationIntensity,
     updateScintillation,
+    setRemoteViewActive,
   };
 }

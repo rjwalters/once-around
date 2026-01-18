@@ -82,7 +82,10 @@ export interface SkyRenderer {
   setRemoteViewpoint(x: number, y: number, z: number, distanceAU: number): void;
   clearRemoteViewpoint(): void;
   isRemoteViewpointActive(): boolean;
-  updateRemoteView(fov: number): void;
+  updateRemoteView(
+    fov: number,
+    heliocentricBodies?: Map<string, { x: number; y: number; z: number }>
+  ): void;
   render(): void;
   resize(width: number, height: number): void;
 }
@@ -400,20 +403,25 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   // Remote viewpoint methods
   function setRemoteViewpoint(x: number, y: number, z: number, distanceAU: number): void {
     remoteViewLayer.setViewpoint(x, y, z, distanceAU);
+    bodiesLayer.setRemoteViewActive(true);  // Hide normal body renderings
   }
 
   function clearRemoteViewpoint(): void {
     remoteViewLayer.clearViewpoint();
+    bodiesLayer.setRemoteViewActive(false);  // Restore normal body renderings
   }
 
   function isRemoteViewpointActive(): boolean {
     return remoteViewLayer.isActive();
   }
 
-  function updateRemoteView(fov: number): void {
+  function updateRemoteView(
+    fov: number,
+    heliocentricBodies?: Map<string, { x: number; y: number; z: number }>
+  ): void {
     if (remoteViewLayer.isActive()) {
       const canvasHeight = ctx.container.clientHeight;
-      remoteViewLayer.update(fov, canvasHeight, camera);
+      remoteViewLayer.update(fov, canvasHeight, camera, heliocentricBodies);
     }
   }
 
