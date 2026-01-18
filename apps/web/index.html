@@ -9,9 +9,8 @@
   <body>
     <div id="app"></div>
 
-    <button id="mobile-panel-toggle" class="mobile-panel-toggle" aria-label="Toggle controls">☰</button>
-
     <div id="controls">
+      <button id="panel-toggle" class="panel-toggle" aria-label="Hide controls">hide</button>
       <div class="view-mode-section">
         <div class="view-mode-toggle">
           <button id="view-geocentric" class="view-mode-btn active">
@@ -169,6 +168,8 @@
 
       <button class="about-button" id="about-btn">About This Project</button>
     </div>
+
+    <button id="panel-toggle-collapsed" class="panel-toggle-collapsed" aria-label="Show controls">›</button>
 
     <!-- Star Info Modal -->
     <div class="star-modal hidden" id="star-modal">
@@ -386,6 +387,7 @@
           <h3>Other</h3>
           <div class="help-shortcuts">
             <div class="help-shortcut"><kbd>/</kbd><span>Focus search</span></div>
+            <div class="help-shortcut"><kbd>Tab</kbd><span>Toggle control panel</span></div>
             <div class="help-shortcut"><kbd>Esc</kbd><span>Stop tour / close modal</span></div>
             <div class="help-shortcut"><kbd>?</kbd><span>Show this help</span></div>
           </div>
@@ -468,15 +470,56 @@
         document.getElementById('debug').style.display = 'block';
       }
 
-      // Mobile panel toggle
-      const mobileToggle = document.getElementById('mobile-panel-toggle');
+      // Panel toggle - works on both mobile and desktop
+      const panelToggle = document.getElementById('panel-toggle');
+      const panelToggleCollapsed = document.getElementById('panel-toggle-collapsed');
       const controlsPanel = document.getElementById('controls');
-      if (mobileToggle && controlsPanel) {
-        mobileToggle.addEventListener('click', () => {
-          const isExpanded = controlsPanel.classList.toggle('expanded');
-          mobileToggle.classList.toggle('active', isExpanded);
-          mobileToggle.textContent = isExpanded ? '✕' : '☰';
+
+      if (panelToggle && panelToggleCollapsed && controlsPanel) {
+        const isMobile = () => window.innerWidth <= 600;
+
+        function updateMobileToggleText() {
+          if (isMobile()) {
+            const isExpanded = controlsPanel.classList.contains('expanded');
+            panelToggleCollapsed.textContent = isExpanded ? '✕' : '☰';
+          } else {
+            panelToggleCollapsed.textContent = '›';
+          }
+        }
+
+        function togglePanel() {
+          if (isMobile()) {
+            controlsPanel.classList.toggle('expanded');
+          } else {
+            controlsPanel.classList.toggle('collapsed');
+          }
+          updateMobileToggleText();
+        }
+
+        // Both toggles do the same thing
+        panelToggle.addEventListener('click', togglePanel);
+        panelToggleCollapsed.addEventListener('click', togglePanel);
+
+        // Handle resize between mobile/desktop
+        window.addEventListener('resize', () => {
+          if (isMobile()) {
+            controlsPanel.classList.remove('collapsed');
+          } else {
+            controlsPanel.classList.remove('expanded');
+          }
+          updateMobileToggleText();
         });
+
+        // Keyboard shortcut: Tab to toggle panel (when not in an input)
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Tab' && !e.target.matches('input, textarea, select')) {
+            e.preventDefault();
+            togglePanel();
+          }
+        });
+
+        // Initialize
+        updateMobileToggleText();
       }
     </script>
 

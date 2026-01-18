@@ -456,10 +456,10 @@
     background: linear-gradient(135deg, #3a3a4a 0%, #4a3a4a 100%);
   }
 
-  /* AR Mode button */
+  /* AR Mode button - hidden on desktop, shown on mobile */
   .ar-mode-btn {
     @apply mt-2 px-3 py-2 border border-[#447744] text-[#88cc88] rounded-md cursor-pointer
-           text-xs w-full transition-all duration-150 flex items-center justify-center gap-2;
+           text-xs w-full transition-all duration-150 hidden items-center justify-center gap-2;
     background: linear-gradient(135deg, #2a3a2a 0%, #2a4a3a 100%);
   }
 
@@ -2069,42 +2069,100 @@ canvas {
   font-weight: 500;
 }
 
-/* Mobile Panel Toggle */
-.mobile-panel-toggle {
+/* Panel Toggle - header bar inside the control panel */
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 4px;
+  color: #666;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.panel-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #4a9eff;
+}
+
+/* Collapsed toggle - small button visible when panel is hidden */
+.panel-toggle-collapsed {
   display: none;
   position: fixed;
   top: 20px;
-  left: 20px;
-  width: 44px;
-  height: 44px;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid #444;
-  border-radius: 8px;
+  left: 0;
+  width: 28px;
+  height: 36px;
+  background: rgba(40, 40, 50, 0.9);
+  border: 1px solid #555;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
   color: #888;
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: bold;
   cursor: pointer;
   z-index: 101;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
 }
 
-.mobile-panel-toggle:hover {
-  background: rgba(0, 0, 0, 0.85);
-  border-color: #666;
-  color: #fff;
-}
-
-.mobile-panel-toggle.active {
-  background: rgba(74, 158, 255, 0.2);
+.panel-toggle-collapsed:hover {
+  background: rgba(60, 60, 80, 0.95);
   border-color: #4a9eff;
   color: #4a9eff;
 }
 
+/* Desktop: panel collapse behavior */
+@media (min-width: 601px) {
+  #controls {
+    transition: transform 0.3s ease;
+  }
+
+  #controls.collapsed {
+    transform: translateX(calc(-100% - 20px));
+  }
+
+  /* Show collapsed toggle when panel is hidden */
+  #controls.collapsed ~ .panel-toggle-collapsed {
+    display: flex;
+  }
+}
+
 /* Responsive Mobile Styles */
 @media (max-width: 600px) {
-  .mobile-panel-toggle {
+  /* Mobile: hide the inline panel toggle, use collapsed toggle as hamburger */
+  .panel-toggle {
+    display: none;
+  }
+
+  /* Mobile: hamburger menu style */
+  .panel-toggle-collapsed {
     display: flex;
+    top: 20px;
+    left: 20px;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #444;
+    border-radius: 8px;
+    font-size: 20px;
+    box-shadow: none;
+  }
+
+  /* When panel is expanded on mobile, change hamburger to X */
+  #controls.expanded ~ .panel-toggle-collapsed {
+    background: rgba(74, 158, 255, 0.2);
+    border-color: #4a9eff;
+    color: #4a9eff;
   }
 
   #controls {
@@ -2125,6 +2183,11 @@ canvas {
     overflow-y: auto;
     opacity: 1;
     padding: 16px;
+  }
+
+  /* Show AR mode button on mobile */
+  .ar-mode-btn {
+    display: flex;
   }
 
   /* Larger touch targets */

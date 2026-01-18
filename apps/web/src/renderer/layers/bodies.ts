@@ -570,16 +570,13 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       }
 
       // ----- Point source (sprite) -----
-      // Sprite fades out faster than disk fades in, so it doesn't linger
-      // Sprite gone by ~6px while disk reaches full opacity by 10px
-      const spriteFadeEnd = LOD_POINT_SOURCE_MAX_PX + (LOD_SIMPLE_DISK_MAX_PX - LOD_POINT_SOURCE_MAX_PX) * 0.4;
-      const spriteFade = 1 - smoothstep(LOD_POINT_SOURCE_MAX_PX, spriteFadeEnd, pixelSize);
-      if (spriteFade > 0.01 && planetAboveHorizon) {
+      // Hide sprite completely once disk is visible to avoid glow obscuring moons/details
+      // Sprite uses additive blending, so even faint glow can obscure nearby objects
+      if (pixelSize < LOD_POINT_SOURCE_MAX_PX && planetAboveHorizon) {
         planetSprites[i].visible = true;
-        planetSpriteMaterials[i].opacity = spriteFade;
+        planetSpriteMaterials[i].opacity = 1.0;
 
-        // Keep sprite at fixed star-like size (don't scale toward actual planet size)
-        // This keeps screen size constant until we switch to the detailed mesh
+        // Keep sprite at fixed star-like size
         const pointSizeArcsec = Math.max(POINT_SOURCE_MIN_SIZE_PX * fov * 3600 / canvasHeight, 2);
         const spriteWorldSize = (pointSizeArcsec / fovArcsec) * SKY_RADIUS * 4; // 4x for glow extent
         planetSprites[i].scale.set(spriteWorldSize, spriteWorldSize, 1);
@@ -624,11 +621,8 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       // Check horizon culling
       const aboveHorizon = isAboveHorizon(minorPos);
 
-      // Calculate blend factors using same LOD thresholds as planets
-      // Sprite fades out faster than disk fades in
+      // Calculate disk blend for opacity transition
       const diskBlend = smoothstep(LOD_POINT_SOURCE_MAX_PX, LOD_SIMPLE_DISK_MAX_PX, pixelSize);
-      const spriteFadeEnd = LOD_POINT_SOURCE_MAX_PX + (LOD_SIMPLE_DISK_MAX_PX - LOD_POINT_SOURCE_MAX_PX) * 0.4;
-      const spriteFade = 1 - smoothstep(LOD_POINT_SOURCE_MAX_PX, spriteFadeEnd, pixelSize);
 
       // Position sprite
       minorBodySprites[i].position.copy(minorPos);
@@ -680,11 +674,12 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       }
 
       // Point source sprite for all minor bodies
-      if (spriteFade > 0.01 && aboveHorizon) {
+      // Hide sprite completely once disk is visible to avoid glow obscuring details
+      if (pixelSize < LOD_POINT_SOURCE_MAX_PX && aboveHorizon) {
         minorBodySprites[i].visible = true;
-        minorBodySpriteMaterials[i].opacity = spriteFade;
+        minorBodySpriteMaterials[i].opacity = 1.0;
 
-        // Keep sprite at fixed star-like size (don't scale toward actual size)
+        // Keep sprite at fixed star-like size
         const pointSizeArcsec = Math.max(POINT_SOURCE_MIN_SIZE_PX * fov * 3600 / canvasHeight, 2);
         const spriteWorldSize = (pointSizeArcsec / fovArcsec) * SKY_RADIUS * 4;
         minorBodySprites[i].scale.set(spriteWorldSize, spriteWorldSize, 1);
