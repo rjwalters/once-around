@@ -1473,6 +1473,12 @@ canvas {
   justify-content: center;
   z-index: 2000;
   padding: 20px;
+  transition: opacity 0.2s ease;
+}
+
+.dwarf-planet-modal.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .dwarf-planet-modal-content {
