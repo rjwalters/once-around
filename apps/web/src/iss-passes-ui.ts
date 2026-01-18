@@ -27,6 +27,7 @@ export class ISSPassesUI {
   private minAltitude: number;
   private maxPasses: number;
   private isComputing = false;
+  private visible = false;
 
   constructor(options: ISSPassesUIOptions) {
     this.container = document.getElementById(options.containerId);
@@ -35,7 +36,19 @@ export class ISSPassesUI {
     this.maxPasses = options.maxPasses ?? 10;
 
     if (this.container) {
+      this.container.style.display = 'none';
       this.render();
+    }
+  }
+
+  /**
+   * Set visibility of the passes panel.
+   * Only show in topocentric view mode.
+   */
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    if (this.container) {
+      this.container.style.display = visible ? '' : 'none';
     }
   }
 

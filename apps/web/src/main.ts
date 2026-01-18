@@ -442,6 +442,10 @@ async function main(): Promise<void> {
       maxPasses: 10
     });
     issPassesUI.setEngine(engine);
+    // Show if already in topocentric mode (viewModeManager may have been set up by now)
+    const currentMode = settings.viewMode ?? 'geocentric';
+    const urlViewMode = urlState.view === 'topo' ? 'topocentric' : urlState.view === 'geo' ? 'geocentric' : urlState.view;
+    issPassesUI.setVisible((urlViewMode || currentMode) === 'topocentric');
   });
 
   // Track current date for orbit computation (updated in onTimeChange)
@@ -756,6 +760,10 @@ async function main(): Promise<void> {
       if (lstContainer) {
         lstContainer.style.display = mode === 'topocentric' ? 'block' : 'none';
       }
+      // Show/hide ISS pass predictions (only relevant in topocentric mode)
+      if (issPassesUI) {
+        issPassesUI.setVisible(mode === 'topocentric');
+      }
       settingsSaver.save({ viewMode: mode });
     },
     onHorizonChange: (visible) => {
@@ -804,7 +812,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // Show seeing control, LST display, and enable horizon culling if starting in topocentric mode
+  // Show seeing control, LST display, ISS passes, and enable horizon culling if starting in topocentric mode
   // URL view param takes precedence over saved settings
   const effectiveViewMode = urlState.view
     ? (urlState.view === 'topo' ? 'topocentric' : urlState.view === 'geo' ? 'geocentric' : urlState.view === 'hubble' ? 'hubble' : 'jwst')
@@ -818,6 +826,10 @@ async function main(): Promise<void> {
       lstContainer.style.display = 'block';
     }
     renderer.setHorizonCulling(true);
+    // Show ISS passes panel (will be populated once ephemeris loads)
+    if (issPassesUI) {
+      issPassesUI.setVisible(true);
+    }
   }
 
   // Handle seeing control changes
