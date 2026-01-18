@@ -30,6 +30,7 @@ import { setupKeyboardHandler } from "./keyboard-handler";
 import { buildSearchIndex } from "./search-index";
 import { setupOrbitFocus } from "./orbit-focus";
 import { readUrlState, createUrlStateUpdater } from "./url-state";
+import { ISSPassesUI } from "./iss-passes-ui";
 import {
   BODY_NAMES,
   MINOR_BODY_NAMES,
@@ -412,12 +413,35 @@ async function main(): Promise<void> {
   renderer.updateFromEngine(engine, settings.fov);
   renderer.setMilkyWayVisibility(settings.magnitude);
 
+  // ISS Passes UI (initialized after ephemerides load)
+  let issPassesUI: ISSPassesUI | null = null;
+
   // Load satellite ephemerides in background (non-blocking)
   // Store promise so search index can rebuild after satellites are available
   const satellitesLoadedPromise = loadAllSatelliteEphemerides(engine).then(() => {
     console.log("Satellite ephemerides loaded - satellite tracking enabled");
     // Trigger an update to show satellites if they're currently visible
     renderer.updateFromEngine(engine, renderer.camera.fov);
+
+    // Initialize ISS pass predictions UI
+    issPassesUI = new ISSPassesUI({
+      containerId: 'iss-passes-section',
+      onPassClick: (pass) => {
+        // Jump to the pass rise time
+        const datetimeInput = document.getElementById("datetime") as HTMLInputElement;
+        if (datetimeInput) {
+          // Format date for datetime-local input
+          const d = pass.riseTime;
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          datetimeInput.value = dateStr;
+          datetimeInput.dispatchEvent(new Event('change'));
+        }
+      },
+      minAltitude: 10,
+      maxPasses: 10
+    });
+    issPassesUI.setEngine(engine);
   });
 
   // Track current date for orbit computation (updated in onTimeChange)
@@ -851,6 +875,10 @@ async function main(): Promise<void> {
           lat: location.latitude,
           lon: location.longitude,
         });
+        // Refresh ISS pass predictions for new location
+        if (issPassesUI) {
+          issPassesUI.refresh();
+        }
       },
     }
   );

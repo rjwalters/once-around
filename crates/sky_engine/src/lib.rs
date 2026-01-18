@@ -1,10 +1,10 @@
 use sky_engine_core::{
     catalog::StarCatalog,
     comets::{compute_all_comet_positions, Comet},
-    coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, ra_dec_to_cartesian},
+    coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, compute_lst, ra_dec_to_cartesian},
     minor_bodies::{compute_all_minor_body_positions, MinorBody},
     planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
-    planets::{compute_all_body_positions_full, compute_moon_position_full, CelestialBody},
+    planets::{compute_all_body_positions_full, compute_moon_position_full, compute_sun_position, CelestialBody},
     satellites::{compute_satellite_position, SatelliteEphemeris, SatelliteId},
     time::SkyTime,
 };
@@ -629,6 +629,43 @@ impl SkyEngine {
     /// Check if ISS is visible (legacy - use satellite_visible).
     pub fn iss_visible(&self) -> bool {
         self.satellite_visible(SatelliteId::ISS.index())
+    }
+
+    // --- Sun altitude for ISS pass visibility calculations ---
+
+    /// Get Sun altitude in degrees for current time and observer location.
+    /// Negative = below horizon. Used to determine if sky is dark enough for satellite viewing.
+    /// Returns the altitude of the Sun above/below the horizon.
+    pub fn sun_altitude(&self) -> f64 {
+        // Get Sun's geocentric position
+        let sun_dir = compute_sun_position(&self.time);
+        let (ra, dec) = cartesian_to_ra_dec(&sun_dir);
+
+        // Compute GMST and LST
+        let jd_ut1 = self.time.julian_date_utc();
+        let gmst = compute_gmst(jd_ut1);
+        let lst = compute_lst(gmst, self.observer_lon_rad);
+
+        // Hour angle: H = LST - RA
+        let hour_angle = lst - ra;
+
+        // Compute altitude using the standard formula:
+        // sin(alt) = sin(dec)*sin(lat) + cos(dec)*cos(lat)*cos(H)
+        let sin_alt = dec.sin() * self.observer_lat_rad.sin()
+            + dec.cos() * self.observer_lat_rad.cos() * hour_angle.cos();
+
+        // Return altitude in degrees
+        sin_alt.asin() * 180.0 / PI
+    }
+
+    /// Get ephemeris time range for a satellite as [start_jd, end_jd].
+    /// Returns None if no ephemeris is loaded for this satellite.
+    pub fn satellite_ephemeris_range(&self, index: usize) -> Option<Vec<f64>> {
+        self.satellite_ephemerides
+            .get(index)
+            .and_then(|opt| opt.as_ref())
+            .and_then(|e| e.time_range())
+            .map(|(start, end)| vec![start, end])
     }
 
     // --- All stars buffer accessors (for constellation drawing, not magnitude-filtered) ---

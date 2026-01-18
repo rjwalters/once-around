@@ -2612,3 +2612,212 @@ canvas {
   font-size: 14px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+/* ============================================
+   ISS Pass Predictions Styles
+   ============================================ */
+
+.iss-passes-section {
+  margin: 8px 0;
+  background: rgba(30, 40, 60, 0.6);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.iss-passes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.iss-passes-header:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.iss-passes-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.iss-passes-toggle {
+  color: #666;
+  font-size: 10px;
+}
+
+.iss-passes-loading,
+.iss-passes-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Next pass card */
+.iss-next-pass {
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(74, 158, 255, 0.15) 0%, rgba(74, 158, 255, 0.05) 100%);
+  border-left: 3px solid #4a9eff;
+}
+
+.iss-next-pass-label {
+  font-size: 10px;
+  color: #4a9eff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.iss-next-pass-time {
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.iss-next-pass-date {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+.iss-next-pass-countdown {
+  font-size: 11px;
+  color: #4a9eff;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.iss-next-pass-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.iss-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.iss-detail-label {
+  font-size: 9px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.iss-detail-value {
+  font-size: 12px;
+  color: #ccc;
+}
+
+.iss-goto-pass-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(74, 158, 255, 0.2);
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  border-radius: 4px;
+  color: #4a9eff;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.iss-goto-pass-btn:hover {
+  background: rgba(74, 158, 255, 0.3);
+  border-color: #4a9eff;
+}
+
+/* Upcoming passes list */
+.iss-passes-list {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.iss-passes-list-header {
+  padding: 8px 12px;
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.iss-pass-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.iss-pass-item:last-child {
+  border-bottom: none;
+}
+
+.iss-pass-item:hover {
+  background: rgba(74, 158, 255, 0.1);
+}
+
+.iss-pass-item-date {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.iss-pass-item-time {
+  font-size: 12px;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.iss-pass-item-details {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  color: #666;
+  justify-content: flex-end;
+}
+
+/* Night vision mode overrides */
+body.night-vision .iss-passes-section {
+  background: rgba(30, 10, 10, 0.6);
+}
+
+body.night-vision .iss-next-pass {
+  background: linear-gradient(135deg, rgba(180, 60, 60, 0.15) 0%, rgba(180, 60, 60, 0.05) 100%);
+  border-left-color: #b43c3c;
+}
+
+body.night-vision .iss-next-pass-label,
+body.night-vision .iss-next-pass-countdown,
+body.night-vision .iss-goto-pass-btn {
+  color: #b43c3c;
+}
+
+body.night-vision .iss-goto-pass-btn {
+  background: rgba(180, 60, 60, 0.2);
+  border-color: rgba(180, 60, 60, 0.3);
+}
+
+body.night-vision .iss-goto-pass-btn:hover {
+  background: rgba(180, 60, 60, 0.3);
+  border-color: #b43c3c;
+}
+
+body.night-vision .iss-pass-item:hover {
+  background: rgba(180, 60, 60, 0.1);
+}
