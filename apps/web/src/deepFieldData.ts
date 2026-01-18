@@ -6,8 +6,8 @@
  */
 
 export interface DeepField {
-  id: string;              // "HDF", "HUDF", "JWST-SMACS"
-  name: string;            // "Hubble Deep Field"
+  id: string;              // "HDF", "HUDF", "JWST-SMACS", "M51"
+  name: string;            // "Hubble Deep Field", "Whirlpool Galaxy"
   ra: number;              // Right ascension in degrees
   dec: number;             // Declination in degrees
   sizeArcmin: number;      // Angular size in arcminutes
@@ -15,6 +15,7 @@ export interface DeepField {
   rotationAngle: number;   // Sky orientation in degrees
   description: string;     // For info popups
   telescope: "HST" | "JWST";
+  category?: "deep_field" | "messier";  // Optional category for filtering
 }
 
 /**
@@ -85,6 +86,53 @@ export const DEEP_FIELD_DATA: DeepField[] = [
     rotationAngle: 0,
     description: "JWST's near-infrared view of the iconic Pillars of Creation in the Eagle Nebula (M16). These towering structures of gas and dust are about 5 light-years tall and are actively forming new stars. The infrared view reveals young stars hidden within the pillars.",
     telescope: "JWST",
+    category: "deep_field",
+  },
+
+  // ============================================
+  // MESSIER OBJECTS - Iconic imagery
+  // ============================================
+
+  // M51 - Whirlpool Galaxy
+  {
+    id: "M51",
+    name: "Whirlpool Galaxy",
+    ra: 202.47,             // 13h 29m 52.7s
+    dec: 47.195,            // +47° 11' 43"
+    sizeArcmin: 11,         // ~11' x 7', using major axis
+    textureUrl: "/messier/m51.jpg",
+    rotationAngle: 163,     // Position angle ~163°
+    description: "The Whirlpool Galaxy (M51) and its companion NGC 5195 form one of the most famous interacting galaxy pairs. Located 23 million light-years away in Canes Venatici, its grand-design spiral arms are sites of intense star formation triggered by the gravitational interaction with its smaller companion.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M104 - Sombrero Galaxy
+  {
+    id: "M104",
+    name: "Sombrero Galaxy",
+    ra: 189.998,            // 12h 39m 59.4s
+    dec: -11.623,           // -11° 37' 23"
+    sizeArcmin: 9,          // ~9' x 4', using major axis
+    textureUrl: "/messier/m104.jpg",
+    rotationAngle: 90,      // Nearly edge-on, PA ~90°
+    description: "The Sombrero Galaxy (M104) is an unbarred spiral galaxy 31 million light-years away in Virgo. Its distinctive appearance comes from its nearly edge-on orientation, prominent dust lane, and unusually large central bulge containing several hundred billion stars. The galaxy also hosts a supermassive black hole of about 1 billion solar masses.",
+    telescope: "HST",
+    category: "messier",
+  },
+
+  // M57 - Ring Nebula (Hubble)
+  {
+    id: "M57",
+    name: "Ring Nebula",
+    ra: 283.396,            // 18h 53m 35s
+    dec: 33.029,            // +33° 01' 45"
+    sizeArcmin: 1.5,        // ~1.4' x 1.0', small but detailed
+    textureUrl: "/messier/m57.jpg",
+    rotationAngle: 0,
+    description: "The Ring Nebula (M57) is a planetary nebula in Lyra, about 2,300 light-years away. This Hubble image reveals the intricate structure of gas ejected by a dying Sun-like star. The central white dwarf, faintly visible at the center, ionizes the surrounding gas creating the colorful glow. The nebula is expanding at about 20 km/s and is approximately 4,000 years old.",
+    telescope: "HST",
+    category: "messier",
   },
 ];
 
