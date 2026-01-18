@@ -767,6 +767,331 @@ export const SN_1054_TOUR: TourDefinition = {
 };
 
 /**
+ * SN 1572 Tour - Tycho's Supernova
+ *
+ * On November 11, 1572, Tycho Brahe observed a "new star" in Cassiopeia.
+ * His meticulous observations proved that the heavens could change,
+ * challenging the Aristotelian view of an unchanging celestial sphere.
+ *
+ * Position: RA 0h 25m 19s (6.33°), Dec +64° 08' (+64.14°)
+ * Peak magnitude: approximately -4 (as bright as Venus)
+ * Type: Ia supernova (thermonuclear)
+ * Distance: ~8,000 light-years
+ */
+export const SN_1572_TOUR: TourDefinition = {
+  id: 'sn-1572',
+  name: "SN 1572: Tycho's Supernova",
+  description: 'The star that shattered the unchanging heavens',
+  keyframes: [
+    {
+      // Keyframe 1: The night sky before the supernova
+      // Viewing from Hven island, Denmark (Tycho's observatory)
+      ra: 6.33,
+      dec: 64.14,
+      fov: 50,
+      datetime: '1572-11-10T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 55.91,
+        longitude: 12.70,
+        name: 'Hven Island, Denmark',
+      },
+      caption: 'November 10, 1572 - Hven Island, Denmark. Cassiopeia wheels overhead in the autumn sky...',
+    },
+    {
+      // Keyframe 2: First sighting
+      ra: 6.33,
+      dec: 64.14,
+      fov: 30,
+      datetime: '1572-11-11T19:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'November 11, 1572 - Tycho Brahe spots a brilliant new star where none had been before',
+      starOverrides: [{ starHR: -1572, ra: 6.33, dec: 64.14, magnitude: 0, bvColor: -0.2, scale: 2 }],
+    },
+    {
+      // Keyframe 3: Peak brightness
+      ra: 6.33,
+      dec: 64.14,
+      fov: 25,
+      datetime: '1572-11-16T19:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Mid-November: At magnitude -4, it rivals Venus and is visible in daylight',
+      starOverrides: [{ starHR: -1572, ra: 6.33, dec: 64.14, magnitude: -4, bvColor: -0.1, scale: 5 }],
+    },
+    {
+      // Keyframe 4: Still bright after a month
+      ra: 6.33,
+      dec: 64.14,
+      fov: 35,
+      datetime: '1572-12-15T19:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'December 1572 - Tycho measures its position nightly, finding no parallax - it must be among the stars',
+      starOverrides: [{ starHR: -1572, ra: 6.33, dec: 64.14, magnitude: -1, bvColor: 0.2, scale: 3 }],
+    },
+    {
+      // Keyframe 5: Changing color as it fades
+      ra: 6.33,
+      dec: 64.14,
+      fov: 35,
+      datetime: '1573-03-01T20:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'March 1573 - The star turns yellow, then red as it fades',
+      starOverrides: [{ starHR: -1572, ra: 6.33, dec: 64.14, magnitude: 2, bvColor: 1.2, scale: 1.5 }],
+    },
+    {
+      // Keyframe 6: Last visibility
+      ra: 6.33,
+      dec: 64.14,
+      fov: 40,
+      datetime: '1574-03-01T20:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'March 1574 - After 16 months, the "new star" fades from view',
+      starOverrides: [{ starHR: -1572, ra: 6.33, dec: 64.14, magnitude: 6, bvColor: 1.5, scale: 1 }],
+    },
+    {
+      // Keyframe 7: Present day - the remnant
+      ra: 6.33,
+      dec: 64.14,
+      fov: 15,
+      datetime: '2024-11-11T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: "Today: Tycho's SNR - an expanding shell of gas, proof that stars are born and die",
+    },
+  ],
+};
+
+/**
+ * SN 1604 Tour - Kepler's Supernova
+ *
+ * On October 9, 1604, a new star appeared in Ophiuchus near a rare
+ * Jupiter-Saturn-Mars conjunction. Johannes Kepler observed it from Prague,
+ * writing "De Stella Nova" about his findings.
+ *
+ * This was the last supernova visible to the naked eye in our galaxy.
+ *
+ * Position: RA 17h 30m 36s (262.65°), Dec -21° 29' (-21.48°)
+ * Peak magnitude: approximately -2.5
+ * Type: Ia supernova (thermonuclear)
+ * Distance: ~20,000 light-years
+ */
+export const SN_1604_TOUR: TourDefinition = {
+  id: 'sn-1604',
+  name: "SN 1604: Kepler's Supernova",
+  description: 'The last supernova seen in our galaxy',
+  keyframes: [
+    {
+      // Keyframe 1: The planetary conjunction that drew attention to this region
+      // Viewing from Prague (Kepler's location)
+      ra: 262.65,
+      dec: -21.48,
+      fov: 40,
+      datetime: '1604-10-08T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 50.09,
+        longitude: 14.42,
+        name: 'Prague, Bohemia',
+      },
+      caption: 'October 8, 1604 - Prague. Astronomers watch a rare Jupiter-Saturn-Mars conjunction in Ophiuchus...',
+    },
+    {
+      // Keyframe 2: First sighting
+      ra: 262.65,
+      dec: -21.48,
+      fov: 25,
+      datetime: '1604-10-09T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'October 9, 1604 - A new star appears! Kepler is initially clouded out but soon observes it',
+      starOverrides: [{ starHR: -1604, ra: 262.65, dec: -21.48, magnitude: 0, bvColor: -0.2, scale: 2 }],
+    },
+    {
+      // Keyframe 3: Peak brightness
+      ra: 262.65,
+      dec: -21.48,
+      fov: 20,
+      datetime: '1604-10-17T04:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Mid-October: At magnitude -2.5, the nova outshines Jupiter nearby',
+      starOverrides: [{ starHR: -1604, ra: 262.65, dec: -21.48, magnitude: -2.5, bvColor: -0.1, scale: 4 }],
+    },
+    {
+      // Keyframe 4: Context with planets
+      ra: 262.65,
+      dec: -21.48,
+      fov: 35,
+      datetime: '1604-11-15T04:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'November 1604 - The new star amid the planetary gathering sparks debate across Europe',
+      starOverrides: [{ starHR: -1604, ra: 262.65, dec: -21.48, magnitude: 0, bvColor: 0.3, scale: 2.5 }],
+    },
+    {
+      // Keyframe 5: Fading through winter
+      ra: 262.65,
+      dec: -21.48,
+      fov: 35,
+      datetime: '1605-03-01T05:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'March 1605 - Kepler continues observations as the star fades',
+      starOverrides: [{ starHR: -1604, ra: 262.65, dec: -21.48, magnitude: 3, bvColor: 1.0, scale: 1.5 }],
+    },
+    {
+      // Keyframe 6: Last visibility
+      ra: 262.65,
+      dec: -21.48,
+      fov: 40,
+      datetime: '1605-10-01T04:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'October 1605 - After one year, the stella nova fades from naked-eye visibility',
+      starOverrides: [{ starHR: -1604, ra: 262.65, dec: -21.48, magnitude: 6, bvColor: 1.3, scale: 1 }],
+    },
+    {
+      // Keyframe 7: Present day
+      ra: 262.65,
+      dec: -21.48,
+      fov: 15,
+      datetime: '2024-07-15T04:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: "Today: Kepler's SNR - No supernova has been seen in our galaxy since. We are overdue.",
+    },
+  ],
+};
+
+/**
+ * SN 1987A Tour - Supernova in the Large Magellanic Cloud
+ *
+ * On February 23, 1987, a supernova was observed in the Large Magellanic Cloud,
+ * the first naked-eye supernova since Kepler's in 1604 - a gap of 383 years.
+ * It was also the first supernova from which neutrinos were detected.
+ *
+ * Position: RA 5h 35m 28s (83.87°), Dec -69° 16' (-69.27°)
+ * Peak magnitude: approximately +3
+ * Type: II supernova (core collapse)
+ * Distance: ~168,000 light-years (in the LMC)
+ */
+export const SN_1987A_TOUR: TourDefinition = {
+  id: 'sn-1987a',
+  name: 'SN 1987A: Return of the Supernovae',
+  description: 'The first naked-eye supernova in 383 years',
+  keyframes: [
+    {
+      // Keyframe 1: The LMC before the supernova
+      // Viewing from Las Campanas Observatory, Chile
+      ra: 83.87,
+      dec: -69.27,
+      fov: 40,
+      datetime: '1987-02-23T01:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: -29.01,
+        longitude: -70.69,
+        name: 'Las Campanas Observatory, Chile',
+      },
+      caption: 'February 23, 1987 - Las Campanas Observatory, Chile. The Large Magellanic Cloud hangs in the southern sky...',
+    },
+    {
+      // Keyframe 2: Neutrino burst (3 hours before visible light)
+      ra: 83.87,
+      dec: -69.27,
+      fov: 25,
+      datetime: '1987-02-23T07:35:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'animate',
+      caption: '7:35 UTC - Deep underground, neutrino detectors in Japan and USA record a burst of particles. The core has collapsed.',
+    },
+    {
+      // Keyframe 3: First light detected
+      ra: 83.87,
+      dec: -69.27,
+      fov: 15,
+      datetime: '1987-02-24T03:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'February 24 - Ian Shelton photographs a new star in the LMC. After 383 years, a supernova is visible to the naked eye!',
+      starOverrides: [{ starHR: -1987, ra: 83.87, dec: -69.27, magnitude: 4.5, bvColor: 0.0, scale: 2 }],
+    },
+    {
+      // Keyframe 4: Peak brightness
+      ra: 83.87,
+      dec: -69.27,
+      fov: 20,
+      datetime: '1987-05-20T03:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'May 1987 - SN 1987A reaches peak brightness at magnitude +3, easily visible to the naked eye',
+      starOverrides: [{ starHR: -1987, ra: 83.87, dec: -69.27, magnitude: 2.9, bvColor: 0.5, scale: 3 }],
+    },
+    {
+      // Keyframe 5: Fading but still bright
+      ra: 83.87,
+      dec: -69.27,
+      fov: 25,
+      datetime: '1987-10-01T03:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'October 1987 - Astronomers worldwide study the supernova as it fades',
+      starOverrides: [{ starHR: -1987, ra: 83.87, dec: -69.27, magnitude: 5, bvColor: 1.0, scale: 1.5 }],
+    },
+    {
+      // Keyframe 6: Below naked-eye visibility
+      ra: 83.87,
+      dec: -69.27,
+      fov: 25,
+      datetime: '1988-02-23T03:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'February 1988 - One year later, SN 1987A has faded below naked-eye visibility',
+      starOverrides: [{ starHR: -1987, ra: 83.87, dec: -69.27, magnitude: 8, bvColor: 1.2, scale: 1 }],
+    },
+    {
+      // Keyframe 7: Present day - the expanding ring
+      ra: 83.87,
+      dec: -69.27,
+      fov: 10,
+      datetime: '2024-02-23T03:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Today: SN 1987A\'s expanding rings are studied by Hubble and JWST. We await the next galactic supernova.',
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
@@ -778,6 +1103,9 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   HALLEY_2061_TOUR,
   BETELGEUSE_NOVA_TOUR,
   SN_1054_TOUR,
+  SN_1572_TOUR,
+  SN_1604_TOUR,
+  SN_1987A_TOUR,
 ];
 
 /**
