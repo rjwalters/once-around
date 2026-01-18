@@ -71,20 +71,96 @@ void main() {
 export const texturedPlanetFragmentShader = `
 uniform vec3 sunDirection;
 uniform sampler2D planetTexture;
+uniform float time;
+uniform vec3 zenith;
+uniform float scintillationIntensity;
+uniform bool scintillationEnabled;
+uniform float planetId;
+uniform float opacity;
+// LOD uniforms
+uniform float pixelSize;   // Apparent size in pixels
+uniform vec3 bodyColor;    // Planet's characteristic color
 
 varying vec3 vNormal;
 varying vec3 vPosition;
 varying vec2 vUv;
 
-void main() {
-  vec3 texColor = texture2D(planetTexture, vUv).rgb;
+// LOD thresholds (must match bodies.ts constants)
+const float LOD_SIMPLE_DISK_MAX = 10.0;   // Below this: solid color only
+const float LOD_BLEND_DISK_MAX = 30.0;    // Below this: blend color and texture
 
+// Compute altitude of planet above horizon (0 to 1 for 0° to 90°)
+float computeAltitude(vec3 pos, vec3 zenithDir) {
+  vec3 dir = normalize(pos);
+  float sinAlt = dot(dir, zenithDir);
+  return max(0.0, sinAlt);
+}
+
+// Compute airmass approximation (Kasten-Young simplified)
+float computeAirmass(float altitude) {
+  float sinAlt = max(0.01, altitude);
+  return 1.0 / sinAlt;
+}
+
+void main() {
+  // Calculate phase lighting (used at all LOD levels)
   float illumination = dot(vNormal, sunDirection);
   float lit = smoothstep(-0.1, 0.1, illumination);
   float ambient = 0.03;
   float brightness = ambient + (1.0 - ambient) * lit;
 
-  gl_FragColor = vec4(texColor * brightness, 1.0);
+  // LOD-based color selection:
+  // Level 1 (< 10px): pure body color, no texture
+  // Level 2 (10-30px): blend between body color and texture
+  // Level 3 (> 30px): full texture
+  vec3 baseColor;
+
+  if (pixelSize < LOD_SIMPLE_DISK_MAX) {
+    // Level 1: Simple solid color disk - texture detail would be wasted
+    baseColor = bodyColor;
+  } else if (pixelSize < LOD_BLEND_DISK_MAX) {
+    // Level 2: Blend between solid color and texture
+    // As we zoom in, gradually introduce texture detail
+    float texBlend = (pixelSize - LOD_SIMPLE_DISK_MAX) / (LOD_BLEND_DISK_MAX - LOD_SIMPLE_DISK_MAX);
+    vec3 texColor = texture2D(planetTexture, vUv).rgb;
+    baseColor = mix(bodyColor, texColor, texBlend);
+  } else {
+    // Level 3: Full texture detail
+    baseColor = texture2D(planetTexture, vUv).rgb;
+  }
+
+  vec3 finalColor = baseColor * brightness;
+
+  // Apply scintillation when enabled (planets twinkle like bright stars when small)
+  if (scintillationEnabled && scintillationIntensity > 0.0) {
+    float altitude = computeAltitude(vPosition, zenith);
+    float airmass = computeAirmass(altitude);
+
+    // Planets are bright, so they twinkle noticeably
+    float amplitude = min(airmass / 8.0, 0.6) * scintillationIntensity;
+
+    // Use planet ID for phase offset (each planet twinkles differently)
+    float phase = fract(planetId * 1234.5678) * 6.28318;
+    float freq1 = 8.0 + mod(planetId, 7.0);
+    float freq2 = 13.0 + mod(planetId, 11.0);
+    float t = time;
+
+    // Brightness modulation
+    float scintBrightness = 1.0 + amplitude * 0.5 * (
+      sin(freq1 * t + phase) +
+      0.5 * sin(freq2 * t + phase * 1.7)
+    );
+
+    // Chromatic modulation (R/G/B at slightly different frequencies)
+    float colorAmp = amplitude * 0.25;
+    float r = 1.0 + colorAmp * sin(freq1 * 0.9 * t + phase);
+    float g = 1.0 + colorAmp * sin(freq1 * t + phase + 0.5);
+    float b = 1.0 + colorAmp * sin(freq1 * 1.1 * t + phase + 1.0);
+
+    finalColor = finalColor * scintBrightness * vec3(r, g, b);
+  }
+
+  gl_FragColor = vec4(finalColor, opacity);
 }
 `;
 

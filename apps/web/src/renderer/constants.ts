@@ -57,6 +57,38 @@ export const BODY_COLORS: THREE.Color[] = [
 export const CONSTELLATION_COLOR = new THREE.Color(0.2, 0.4, 0.6);
 
 // -----------------------------------------------------------------------------
+// Minor body configuration (dwarf planets and asteroids)
+// -----------------------------------------------------------------------------
+
+// Minor body names in order from WASM buffer
+export const MINOR_BODY_NAMES = [
+  "Pluto", "Ceres", "Eris", "Makemake", "Haumea",
+  "Sedna", "Quaoar", "Gonggong", "Orcus", "Varuna",
+  "Vesta", "Pallas", "Hygiea", "Apophis", "Bennu"
+] as const;
+
+export const MINOR_BODY_COUNT = 15;
+
+// Colors for minor bodies based on actual observed surface colors
+export const MINOR_BODY_COLORS: THREE.Color[] = [
+  new THREE.Color(0.85, 0.80, 0.75),  // Pluto - pinkish-tan (nitrogen ice + tholins)
+  new THREE.Color(0.75, 0.75, 0.70),  // Ceres - gray (rocky, some ice)
+  new THREE.Color(0.90, 0.88, 0.85),  // Eris - pale white (methane ice)
+  new THREE.Color(0.85, 0.60, 0.50),  // Makemake - reddish (tholins)
+  new THREE.Color(0.70, 0.55, 0.50),  // Haumea - reddish-brown (dark spot)
+  new THREE.Color(0.75, 0.40, 0.35),  // Sedna - very red (most red known object)
+  new THREE.Color(0.70, 0.55, 0.50),  // Quaoar - reddish-brown
+  new THREE.Color(0.70, 0.50, 0.45),  // Gonggong - red
+  new THREE.Color(0.70, 0.70, 0.65),  // Orcus - neutral gray (water ice)
+  new THREE.Color(0.65, 0.50, 0.45),  // Varuna - reddish
+  new THREE.Color(0.80, 0.80, 0.75),  // Vesta - light gray (basaltic)
+  new THREE.Color(0.60, 0.60, 0.55),  // Pallas - darker gray (B-type)
+  new THREE.Color(0.50, 0.50, 0.50),  // Hygiea - dark gray (C-type)
+  new THREE.Color(0.65, 0.60, 0.55),  // Apophis - gray (S-type asteroid)
+  new THREE.Color(0.35, 0.35, 0.35),  // Bennu - very dark (B-type, carbonaceous)
+];
+
+// -----------------------------------------------------------------------------
 // Planetary moon configuration
 // -----------------------------------------------------------------------------
 
