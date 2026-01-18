@@ -140,6 +140,10 @@ export interface StarOverrideData {
   magnitude?: number;
   bvColor?: number;
   scale?: number;
+  /** For synthetic stars: Right Ascension in degrees */
+  ra?: number;
+  /** For synthetic stars: Declination in degrees */
+  dec?: number;
 }
 
 export interface StarsLayer {
@@ -161,8 +165,8 @@ export interface StarsLayer {
   update(engine: SkyEngine, fov: number, canvasHeight: number): void;
   /** Update star label visibility and positions */
   updateLabels(labelsVisible: boolean): void;
-  /** Set star overrides for special effects */
-  setOverrides(overrides: Array<{ starHR: number; magnitude?: number; bvColor?: number; scale?: number }>): void;
+  /** Set star overrides for special effects (supports synthetic stars with ra/dec) */
+  setOverrides(overrides: Array<{ starHR: number; magnitude?: number; bvColor?: number; scale?: number; ra?: number; dec?: number }>): void;
   /** Clear all star overrides */
   clearOverrides(): void;
   /** Get number of rendered stars (after LOD culling) */
@@ -508,6 +512,30 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
       }
     }
 
+    // Handle synthetic stars (negative HR numbers with ra/dec positions)
+    for (const [id, override] of starOverrideMap) {
+      // Synthetic stars have negative IDs and ra/dec coordinates
+      if (id < 0 && override.ra !== undefined && override.dec !== undefined) {
+        const vmag = override.magnitude ?? 0;
+        const bv = override.bvColor ?? 0;
+
+        const pos = raDecToPosition(override.ra, override.dec, SKY_RADIUS);
+        starPositionMap.set(id, pos);
+
+        // Add to main star arrays so it renders with other stars
+        scaledPositions.push(pos.x, pos.y, pos.z);
+        const color = bvToColor(bv);
+        colors.push(color.r, color.g, color.b);
+        starIds.push(id);
+        magnitudes.push(vmag);
+
+        // Also add to override arrays for the glow sprite rendering
+        overridePositions.push(pos.x, pos.y, pos.z);
+        overrideColors.push(color.r, color.g, color.b);
+        overrideScales.push(override.scale ?? 1);
+      }
+    }
+
     updateOverrideStars(overridePositions, overrideColors, overrideScales, fov, canvasHeight);
 
     starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(scaledPositions), 3));
@@ -550,13 +578,15 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     starFlagLines.visible = labelsVisible;
   }
 
-  function setOverrides(overrides: Array<{ starHR: number; magnitude?: number; bvColor?: number; scale?: number }>): void {
+  function setOverrides(overrides: Array<{ starHR: number; magnitude?: number; bvColor?: number; scale?: number; ra?: number; dec?: number }>): void {
     starOverrideMap.clear();
     for (const override of overrides) {
       starOverrideMap.set(override.starHR, {
         magnitude: override.magnitude,
         bvColor: override.bvColor,
         scale: override.scale,
+        ra: override.ra,
+        dec: override.dec,
       });
     }
     if (lastEngine) {

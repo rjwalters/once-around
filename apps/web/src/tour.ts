@@ -49,9 +49,15 @@ export interface TourLocation {
 /**
  * Star property override for special effects during tours.
  * Used for hypothetical events like supernovae.
+ *
+ * Can either modify an existing star (by starHR) or create a synthetic star
+ * at a specific position (by ra/dec with a negative starHR as identifier).
  */
 export interface StarOverride {
-  /** Harvard Revised catalog number (e.g., 2061 for Betelgeuse) */
+  /**
+   * Harvard Revised catalog number for existing stars (e.g., 2061 for Betelgeuse).
+   * For synthetic stars, use a unique negative number (e.g., -1054 for SN 1054).
+   */
   starHR: number;
 
   /** Override apparent magnitude */
@@ -62,6 +68,18 @@ export interface StarOverride {
 
   /** Size multiplier (1.0 = normal) */
   scale?: number;
+
+  /**
+   * Right Ascension in degrees (0-360) for synthetic stars.
+   * Only used when starHR is negative.
+   */
+  ra?: number;
+
+  /**
+   * Declination in degrees (-90 to +90) for synthetic stars.
+   * Only used when starHR is negative.
+   */
+  dec?: number;
 }
 
 /**

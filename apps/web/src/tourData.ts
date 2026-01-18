@@ -647,6 +647,126 @@ export const BETELGEUSE_NOVA_TOUR: TourDefinition = {
 };
 
 /**
+ * SN 1054 Tour - The Crab Nebula Supernova
+ *
+ * On July 4, 1054 CE, Chinese astronomers recorded a "guest star" near Zeta Tauri.
+ * It was visible in daylight for 23 days and remained visible at night for nearly 2 years.
+ * Today, the remnant is known as the Crab Nebula (M1).
+ *
+ * Position: RA 5h 34m 32s (83.63°), Dec +22° 00' 52" (+22.01°)
+ * Peak magnitude: approximately -6 (brighter than Venus)
+ * Distance: ~6,500 light-years
+ */
+export const SN_1054_TOUR: TourDefinition = {
+  id: 'sn-1054',
+  name: 'SN 1054: Birth of the Crab Nebula',
+  description: 'Witness the supernova that Chinese astronomers called a "guest star"',
+  keyframes: [
+    {
+      // Keyframe 1: The night sky before the supernova (July 3, 1054)
+      // Viewing from Kaifeng, China (Song dynasty capital)
+      ra: 83.63,
+      dec: 22.01,
+      fov: 40,
+      datetime: '1054-07-03T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 34.79,
+        longitude: 114.35,
+        name: 'Kaifeng, China',
+      },
+      caption: 'July 3, 1054 CE - Kaifeng, capital of the Song Dynasty. The constellation Taurus rises in the pre-dawn sky...',
+    },
+    {
+      // Keyframe 2: First light of the supernova (July 4, 1054 pre-dawn)
+      ra: 83.63,
+      dec: 22.01,
+      fov: 20,
+      datetime: '1054-07-04T03:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'July 4, 1054 - A new star appears! Court astronomers record a "guest star" near Tianguan (Zeta Tauri)',
+      starOverrides: [{ starHR: -1054, ra: 83.63, dec: 22.01, magnitude: 0, bvColor: -0.2, scale: 2 }],
+    },
+    {
+      // Keyframe 3: Brightening rapidly
+      ra: 83.63,
+      dec: 22.01,
+      fov: 15,
+      datetime: '1054-07-05T03:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 2000,
+      timeMode: 'animate',
+      caption: 'The guest star brightens rapidly, outshining every star in the sky',
+      starOverrides: [{ starHR: -1054, ra: 83.63, dec: 22.01, magnitude: -4, bvColor: -0.2, scale: 4 }],
+    },
+    {
+      // Keyframe 4: Peak brightness - visible in daylight
+      ra: 83.63,
+      dec: 22.01,
+      fov: 20,
+      datetime: '1054-07-10T12:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'At magnitude -6, the "guest star" is visible in broad daylight for 23 days',
+      starOverrides: [{ starHR: -1054, ra: 83.63, dec: 22.01, magnitude: -6, bvColor: -0.1, scale: 6 }],
+    },
+    {
+      // Keyframe 5: Still brilliant after a month
+      ra: 83.63,
+      dec: 22.01,
+      fov: 25,
+      datetime: '1054-08-15T20:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'August 1054 - No longer visible by day, but still brilliant at night',
+      starOverrides: [{ starHR: -1054, ra: 83.63, dec: 22.01, magnitude: -2, bvColor: 0.2, scale: 3 }],
+    },
+    {
+      // Keyframe 6: Fading over months
+      ra: 83.63,
+      dec: 22.01,
+      fov: 30,
+      datetime: '1055-01-15T20:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'January 1055 - Six months later, the guest star continues to fade',
+      starOverrides: [{ starHR: -1054, ra: 83.63, dec: 22.01, magnitude: 2, bvColor: 0.8, scale: 1.5 }],
+    },
+    {
+      // Keyframe 7: Last visibility (April 1056)
+      ra: 83.63,
+      dec: 22.01,
+      fov: 30,
+      datetime: '1056-04-06T20:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'April 1056 - After 653 days, the guest star finally fades from naked-eye visibility',
+      starOverrides: [{ starHR: -1054, ra: 83.63, dec: 22.01, magnitude: 6, bvColor: 1.0, scale: 1 }],
+    },
+    {
+      // Keyframe 8: The Crab Nebula today
+      ra: 83.63,
+      dec: 22.01,
+      fov: 8,
+      datetime: '2024-01-15T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Today: The Crab Nebula (M1) - a pulsar and expanding shell of gas, 6,500 light-years away',
+      // No star override - show the actual nebula via deep field image
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
@@ -657,6 +777,7 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   HALLEY_1986_TOUR,
   HALLEY_2061_TOUR,
   BETELGEUSE_NOVA_TOUR,
+  SN_1054_TOUR,
 ];
 
 /**
