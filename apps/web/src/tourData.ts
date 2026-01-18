@@ -1092,6 +1092,332 @@ export const SN_1987A_TOUR: TourDefinition = {
 };
 
 /**
+ * 1769 Transit of Venus Tour - Captain Cook's Expedition
+ *
+ * On June 3, 1769, Captain James Cook observed the transit of Venus from Tahiti
+ * as part of a worldwide effort to measure the distance to the Sun (the AU).
+ * This expedition later led to Cook's exploration of Australia and New Zealand.
+ *
+ * The transit lasted about 6 hours. Venus appeared as a small black dot
+ * crossing the Sun's disk - a rare event that wouldn't repeat until 1874.
+ *
+ * Contact times (approximate UTC):
+ * - First contact (ingress): 21:25 June 3
+ * - Maximum transit: 00:25 June 4
+ * - Fourth contact (egress): 03:25 June 4
+ */
+export const VENUS_TRANSIT_1769_TOUR: TourDefinition = {
+  id: 'venus-transit-1769',
+  name: '1769 Transit of Venus',
+  description: "Captain Cook's expedition to measure the solar system",
+  keyframes: [
+    {
+      // Keyframe 1: Setting the scene - Point Venus, Tahiti
+      target: 'sun',
+      fov: 30,
+      datetime: '1769-06-03T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: -17.4849,
+        longitude: -149.4983,
+        name: 'Point Venus, Tahiti',
+      },
+      caption: "June 3, 1769 - Point Venus, Tahiti. Captain Cook's HMS Endeavour has sailed halfway around the world for this moment...",
+    },
+    {
+      // Keyframe 2: First contact - Venus begins crossing the Sun's limb
+      target: 'sun',
+      fov: 8,
+      datetime: '1769-06-03T21:25:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'First contact - Venus begins its journey across the face of the Sun',
+    },
+    {
+      // Keyframe 3: Ingress complete - the "black drop" effect
+      target: 'sun',
+      fov: 5,
+      datetime: '1769-06-03T21:45:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'The infamous "black drop effect" makes precise timing difficult',
+    },
+    {
+      // Keyframe 4: Transit in progress
+      target: 'sun',
+      fov: 6,
+      datetime: '1769-06-03T23:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Venus crosses the solar disk - observers worldwide time the same event to calculate parallax',
+    },
+    {
+      // Keyframe 5: Maximum transit
+      target: 'sun',
+      fov: 5,
+      datetime: '1769-06-04T00:25:00Z',
+      holdDuration: 4000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Maximum transit - Venus at its closest to the Sun\'s center',
+    },
+    {
+      // Keyframe 6: Approaching egress
+      target: 'sun',
+      fov: 6,
+      datetime: '1769-06-04T02:30:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'The transit nears its end. From the timing differences, astronomers calculated the Sun is 93 million miles away',
+    },
+    {
+      // Keyframe 7: Fourth contact - egress complete
+      target: 'sun',
+      fov: 8,
+      datetime: '1769-06-04T03:25:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Fourth contact - Venus exits the solar disk. The next transit won\'t occur until 1874',
+    },
+    {
+      // Keyframe 8: Closing context
+      target: 'sun',
+      fov: 25,
+      datetime: '1769-06-04T03:30:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: "Cook's expedition continued on to chart New Zealand and Australia, changing world maps forever",
+    },
+  ],
+};
+
+/**
+ * 2012 Transit of Venus Tour
+ *
+ * The last transit of Venus until December 2117 occurred on June 5-6, 2012.
+ * Venus transits come in pairs 8 years apart, separated by over a century.
+ * The previous pair was in 2004 and 2012; the next pair will be in 2117 and 2125.
+ *
+ * This was the first Venus transit in the age of modern space telescopes.
+ * SDO, Hubble, and ground-based observatories all captured the event.
+ *
+ * Contact times (UTC):
+ * - First contact: 22:09 June 5
+ * - Maximum: 01:29 June 6
+ * - Fourth contact: 04:49 June 6
+ */
+export const VENUS_TRANSIT_2012_TOUR: TourDefinition = {
+  id: 'venus-transit-2012',
+  name: '2012 Transit of Venus',
+  description: 'The last Venus transit until 2117',
+  keyframes: [
+    {
+      // Keyframe 1: Setting the scene - Hawaii
+      target: 'sun',
+      fov: 30,
+      datetime: '2012-06-05T21:45:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 19.8208,
+        longitude: -155.4681,
+        name: 'Mauna Kea, Hawaii',
+      },
+      caption: 'June 5, 2012 - Mauna Kea, Hawaii. The last transit of Venus for 105 years is about to begin...',
+    },
+    {
+      // Keyframe 2: First contact
+      target: 'sun',
+      fov: 8,
+      datetime: '2012-06-05T22:09:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'First contact - Venus touches the solar limb',
+    },
+    {
+      // Keyframe 3: Second contact - fully on disk
+      target: 'sun',
+      fov: 5,
+      datetime: '2012-06-05T22:27:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Venus fully on the solar disk - NASA\'s SDO captures stunning images from orbit',
+    },
+    {
+      // Keyframe 4: Transit in progress
+      target: 'sun',
+      fov: 6,
+      datetime: '2012-06-06T00:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Millions worldwide watch the transit live via webcasts',
+    },
+    {
+      // Keyframe 5: Maximum transit
+      target: 'sun',
+      fov: 5,
+      datetime: '2012-06-06T01:29:00Z',
+      holdDuration: 4000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Maximum transit - the geometric center of the event',
+    },
+    {
+      // Keyframe 6: Late transit
+      target: 'sun',
+      fov: 6,
+      datetime: '2012-06-06T03:30:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Venus approaches the far limb of the Sun',
+    },
+    {
+      // Keyframe 7: Fourth contact - egress complete
+      target: 'sun',
+      fov: 8,
+      datetime: '2012-06-06T04:49:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Fourth contact - Venus exits. No one alive today will see another Venus transit',
+    },
+    {
+      // Keyframe 8: Closing
+      target: 'sun',
+      fov: 25,
+      datetime: '2012-06-06T05:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'The next transit of Venus: December 10-11, 2117. Mark your calendar... in 105 years',
+    },
+  ],
+};
+
+/**
+ * 2019 Transit of Mercury Tour
+ *
+ * Mercury transits the Sun about 13 times per century, making them much more
+ * common than Venus transits. The November 11, 2019 transit was visible from
+ * the Americas, Europe, and Africa.
+ *
+ * Mercury appears much smaller than Venus during transit - only about 1/150th
+ * the Sun's diameter (Venus is 1/30th). A telescope was needed to see it clearly.
+ *
+ * Contact times (UTC):
+ * - First contact: 12:35
+ * - Maximum: 15:20
+ * - Fourth contact: 18:04
+ *
+ * The next Mercury transit visible from Earth: November 13, 2032
+ */
+export const MERCURY_TRANSIT_2019_TOUR: TourDefinition = {
+  id: 'mercury-transit-2019',
+  name: '2019 Transit of Mercury',
+  description: 'A tiny planet crosses the face of our star',
+  keyframes: [
+    {
+      // Keyframe 1: Setting the scene - Washington DC
+      target: 'sun',
+      fov: 25,
+      datetime: '2019-11-11T12:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 38.9072,
+        longitude: -77.0369,
+        name: 'Washington, DC',
+      },
+      caption: 'November 11, 2019 - A crisp fall morning. Mercury is about to transit the Sun...',
+    },
+    {
+      // Keyframe 2: First contact - zoom in close
+      target: 'sun',
+      fov: 6,
+      datetime: '2019-11-11T12:35:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'First contact - Mercury touches the solar limb. At 1/150th the Sun\'s diameter, you need a telescope to see it',
+    },
+    {
+      // Keyframe 3: Ingress complete
+      target: 'sun',
+      fov: 4,
+      datetime: '2019-11-11T12:37:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'animate',
+      caption: 'Mercury fully on the solar disk - a tiny black dot against the brilliant photosphere',
+    },
+    {
+      // Keyframe 4: Early transit
+      target: 'sun',
+      fov: 5,
+      datetime: '2019-11-11T13:30:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Mercury transits the Sun about 13 times per century - far more often than Venus',
+    },
+    {
+      // Keyframe 5: Maximum transit
+      target: 'sun',
+      fov: 4,
+      datetime: '2019-11-11T15:20:00Z',
+      holdDuration: 4000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Maximum transit - Mercury at closest approach to the Sun\'s center',
+    },
+    {
+      // Keyframe 6: Late transit
+      target: 'sun',
+      fov: 5,
+      datetime: '2019-11-11T17:00:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Approaching egress - Mercury\'s 5.5-hour journey across the Sun nears its end',
+    },
+    {
+      // Keyframe 7: Fourth contact
+      target: 'sun',
+      fov: 6,
+      datetime: '2019-11-11T18:04:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Fourth contact - Mercury exits the solar disk',
+    },
+    {
+      // Keyframe 8: Closing
+      target: 'sun',
+      fov: 20,
+      datetime: '2019-11-11T18:10:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      caption: 'Next Mercury transit: November 13, 2032. But for Venus, we must wait until 2117',
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
@@ -1106,6 +1432,9 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   SN_1572_TOUR,
   SN_1604_TOUR,
   SN_1987A_TOUR,
+  VENUS_TRANSIT_1769_TOUR,
+  VENUS_TRANSIT_2012_TOUR,
+  MERCURY_TRANSIT_2019_TOUR,
 ];
 
 /**
