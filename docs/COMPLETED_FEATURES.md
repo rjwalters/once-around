@@ -15,13 +15,13 @@ Historical record of implemented features in Once Around the Night Sky.
 - [UI Framework](#ui-framework)
 - [Astronomical Corrections](#astronomical-corrections)
 - [Solar System Objects](#solar-system-objects)
-- [ISS Tracking](#iss-tracking)
+- [Satellite Tracking](#satellite-tracking)
 
 ---
 
 ## Core Features
 
-- **Search / Go-to** - Fuzzy matching and autocomplete for stars, planets, constellations, DSOs
+- **Search / Go-to** - Fuzzy matching and autocomplete for stars, planets, constellations, DSOs, satellites. Enter key selects first result.
 - **URL deep linking** - Share specific views with ra, dec, fov, t, mag parameters
 - **Keyboard shortcuts** - L/C/V/O/D/E/N/P, arrows, space, /
 - **Night vision mode** - Red-only color scheme for outdoor observing (toggle with R key)
@@ -428,9 +428,16 @@ Refactored from vanilla CSS to Tailwind CSS v4 with modern utility-first styling
 
 ---
 
-## ISS Tracking
+## Satellite Tracking
 
-Real-time International Space Station position with visibility indication.
+Real-time satellite positions with visibility indication.
+
+### Satellites Supported
+
+| Satellite | Horizons ID | Altitude |
+|-----------|-------------|----------|
+| ISS (International Space Station) | -125544 | ~420 km |
+| Hubble Space Telescope | -48 | ~540 km |
 
 ### Implementation
 
@@ -438,14 +445,16 @@ Real-time International Space Station position with visibility indication.
 - **Cubic spline interpolation** - Smooth position between tabulated points (Catmull-Rom)
 - **Earth shadow calculation** - Cylindrical approximation for umbra detection
 - **Topocentric conversion** - ECI to observer-relative coordinates
-- **Horizon culling** - ISS hidden when below observer's horizon
+- **Horizon culling** - Satellites hidden when below observer's horizon
+- **Cache-busting** - Ephemeris fetch includes timestamp to ensure fresh data
 
 ### Visual Features
 
 - Bright yellow-white marker when illuminated by Sun
 - Dim blue-gray when in Earth's shadow (still shown if above horizon)
-- "ISS" label with shadow state indication
-- Searchable as "ISS" or "International Space Station"
+- Labels show name, shadow state, and distance (e.g., "ISS (412 km)")
+- LOD system: detailed sprites when zoomed in (ISS shows actual image)
+- Searchable by name or full name
 
 ### Data Pipeline
 
@@ -455,11 +464,15 @@ NASA Horizons API → Python script → Binary ephemeris file → WASM loader
 
 Binary format: `[count: u32][jd: f64, x: f64, y: f64, z: f64]...`
 
+Ephemeris regeneration script: `scripts/generate_satellite_ephemeris.py`
+
 ### Visibility Rules
 
-ISS is displayed when ALL conditions are met:
+Satellites are displayed when ALL conditions are met:
 1. Ephemeris data loaded and date in range
 2. Above observer's horizon (topocentric mode)
 3. Position successfully interpolated
 
-Illumination state shown but doesn't hide the ISS (observers may want to see where it is even in shadow).
+When date is outside ephemeris range, search displays toast notification explaining the issue.
+
+Illumination state shown but doesn't hide the satellite (observers may want to see where it is even in shadow).

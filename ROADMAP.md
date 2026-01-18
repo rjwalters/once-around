@@ -68,6 +68,10 @@ Refactored ISS-specific code into a flexible multi-satellite system.
 - ✓ Added Hubble Space Telescope (Horizons ID: -48)
 - ✓ Single frontend renderer handles all satellites
 - ✓ All satellites searchable and visible in topocentric mode
+- ✓ LOD system with detail sprites when zoomed in (ISS shows detailed image)
+- ✓ Distance displayed in satellite labels (e.g., "ISS (412 km)")
+- ✓ Toast notifications when satellite position unavailable (ephemeris out of range)
+- ✓ Cache-busting for ephemeris loading to ensure fresh data
 
 ### Phase 2: Space Telescope View Modes
 
@@ -98,6 +102,9 @@ Observer at L2 Lagrange point, ~1.5 million km from Earth.
 - ✓ Quaternion-based free navigation
 - ✓ Scintillation disabled (in space)
 - ✓ Earth rendered with LOD system (sprite → disk → textured sphere based on zoom)
+- ✓ Earth night side with city lights + atmospheric limb glow
+- ✓ Moon with earthshine illumination (bluish tint, dynamic intensity based on Earth's phase)
+- ✓ Moon label shows earthshine strength (bright/moderate/dim)
 - ✓ Sun avoidance zone overlay (~45° half-angle cone with gradient)
 - Deep field images prominently featured (already available via DSO layer toggle)
 
@@ -219,7 +226,7 @@ Features that enhance the experience but are not essential:
 
 Items to address for long-term maintainability:
 
-- **ISS ephemeris date range** - Current tabulated data covers limited period. Need strategy for keeping current (cron regeneration) or switch to TLE propagation. Should show message when date is out of range.
+- **Satellite ephemeris date range** - Current tabulated data covers ~30 days. Need strategy for keeping current (cron regeneration) or switch to TLE/SGP4 propagation. ✓ Toast message now shown when date is out of range.
 - **Test coverage** - Astronomy calculations should have regression tests against known positions (JPL Horizons, etc.)
 
 ---
