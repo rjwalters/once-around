@@ -78,7 +78,7 @@ function deviceOrientationToQuaternion(
   // Create Euler angles for device orientation
   // The standard device orientation uses ZXY order
   const euler = new THREE.Euler();
-  euler.set(betaRad, alphaRad, -gammaRad, "YXZ");
+  euler.set(-betaRad, alphaRad, -gammaRad, "YXZ");
 
   quaternion.setFromEuler(euler);
 
