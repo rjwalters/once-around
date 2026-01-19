@@ -63,11 +63,11 @@
         margin: 16px auto 0;
         line-height: 1.4;
         min-height: 40px;
-        opacity: 1;
-        transition: opacity 0.3s ease-in-out;
-      }
-      .loading-quote.fade {
         opacity: 0;
+        transition: opacity 0.6s ease-in-out;
+      }
+      .loading-quote.visible {
+        opacity: 1;
       }
       .loading-attribution {
         color: #666;
@@ -110,23 +110,30 @@
         const quoteEl = document.getElementById('loading-quote');
         if (!quoteEl) return;
 
-        // Show a random quote immediately
+        // Show a random quote with fade in
         let currentIndex = Math.floor(Math.random() * quotes.length);
         function showQuote(index) {
           const q = quotes[index];
           quoteEl.innerHTML = '"' + q.text + '"<div class="loading-attribution">— ' + q.author + '</div>';
         }
         showQuote(currentIndex);
+        // Fade in after a brief delay
+        setTimeout(function() {
+          quoteEl.classList.add('visible');
+        }, 50);
 
-        // Rotate quotes every 4 seconds with fade transition
+        // Rotate quotes every 10 seconds with fade in/out
         setInterval(function() {
-          quoteEl.classList.add('fade');
+          // Fade out
+          quoteEl.classList.remove('visible');
           setTimeout(function() {
+            // Change quote while hidden
             currentIndex = (currentIndex + 1) % quotes.length;
             showQuote(currentIndex);
-            quoteEl.classList.remove('fade');
-          }, 300);
-        }, 4000);
+            // Fade in
+            quoteEl.classList.add('visible');
+          }, 600);
+        }, 10000);
       })();
     </script>
 
