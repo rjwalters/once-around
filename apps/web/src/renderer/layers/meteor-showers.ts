@@ -18,6 +18,8 @@ import {
 import { SKY_RADIUS, LABEL_OFFSET } from "../constants";
 import { raDecToPosition } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
+import type { LabelManager } from "../label-manager";
+import { LABEL_PRIORITY } from "../label-manager";
 
 // Radiant marker size in pixels
 const RADIANT_SIZE = 12;
@@ -69,7 +71,7 @@ export interface MeteorShowerLayer {
   /** Set visibility of meteor shower radiants */
   setVisible(visible: boolean): void;
   /** Update radiants for current date */
-  update(currentDate: Date, labelsVisible: boolean): void;
+  update(currentDate: Date, labelsVisible: boolean, labelManager?: LabelManager): void;
   /** Get active showers for the current date */
   getActiveShowers(): MeteorShower[];
 }
@@ -138,7 +140,7 @@ export function createMeteorShowerLayer(
     }
   }
 
-  function update(currentDate: Date, labelsVisible: boolean): void {
+  function update(currentDate: Date, labelsVisible: boolean, labelManager?: LabelManager): void {
     const month = currentDate.getMonth() + 1;
     const day = currentDate.getDate();
 
@@ -184,6 +186,16 @@ export function createMeteorShowerLayer(
           }
 
           label.visible = visible && labelsVisible;
+
+          // Register meteor shower label with label manager
+          if (visible && labelsVisible && labelManager) {
+            labelManager.registerLabel({
+              id: `meteor-shower-${shower.id}`,
+              worldPos: labelPos,
+              priority: LABEL_PRIORITY.METEOR_SHOWER,
+              label: label,
+            });
+          }
         }
       } else {
         // Hide inactive showers

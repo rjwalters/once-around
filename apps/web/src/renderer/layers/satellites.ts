@@ -18,6 +18,8 @@ import { getSatellitePosition, SATELLITES, type SatelliteInfo } from "../../engi
 import { SKY_RADIUS, LABEL_OFFSET } from "../constants";
 import { rustToThreeJS } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
+import type { LabelManager } from "../label-manager";
+import { LABEL_PRIORITY } from "../label-manager";
 
 // Visual configuration
 const COLOR_ILLUMINATED = new THREE.Color(1.0, 0.95, 0.8); // Bright yellowish-white
@@ -67,7 +69,7 @@ export interface SatellitesLayer {
   /** All satellite states */
   satellites: SatelliteState[];
   /** Update all satellite positions and visibility */
-  update(engine: SkyEngine, labelsVisible: boolean, fov: number, canvasHeight: number): void;
+  update(engine: SkyEngine, labelsVisible: boolean, fov: number, canvasHeight: number, labelManager?: LabelManager): void;
   /** Set whether satellites layer is enabled */
   setEnabled(enabled: boolean): void;
   /** Get position for a specific satellite (for search) */
@@ -231,9 +233,9 @@ export function createSatellitesLayer(scene: THREE.Scene, labelsGroup: THREE.Gro
     createSatelliteMesh(info, scene, labelsGroup)
   );
 
-  function update(engine: SkyEngine, labelsVisible: boolean, fov: number, canvasHeight: number): void {
+  function update(engine: SkyEngine, labelsVisible: boolean, fov: number, canvasHeight: number, labelManager?: LabelManager): void {
     for (const sat of satelliteStates) {
-      updateSatellite(sat, engine, labelsVisible, enabled, fov, canvasHeight);
+      updateSatellite(sat, engine, labelsVisible, enabled, fov, canvasHeight, labelManager);
     }
   }
 
@@ -317,7 +319,8 @@ function updateSatellite(
   labelsVisible: boolean,
   enabled: boolean,
   fov: number,
-  canvasHeight: number
+  canvasHeight: number,
+  labelManager?: LabelManager
 ): void {
   const { info, mesh, label, labelDiv, glowSprite, glowMaterial, detailSprite, detailMaterial } = sat;
   const geometry = mesh.geometry as THREE.BufferGeometry;
@@ -427,6 +430,16 @@ function updateSatellite(
     const labelPos = calculateLabelOffset(satPos, LABEL_OFFSET);
     label.position.copy(labelPos);
     label.visible = true;
+
+    // Register satellite label with label manager
+    if (labelManager) {
+      labelManager.registerLabel({
+        id: `satellite-${info.index}`,
+        worldPos: labelPos,
+        priority: LABEL_PRIORITY.SATELLITE,
+        label: label,
+      });
+    }
 
     // Update label text with status and distance
     const distText = pos.distanceKm > 0 ? ` (${Math.round(pos.distanceKm)} km)` : '';

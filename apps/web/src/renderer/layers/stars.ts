@@ -25,6 +25,7 @@ import {
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { bvToColor, angularSizeToPixels, starIdHash } from "../utils/colors";
 import { calculateLabelOffset } from "../utils/labels";
+import type { LabelManager } from "../label-manager";
 
 // -----------------------------------------------------------------------------
 // Scintillation Shader
@@ -162,7 +163,7 @@ export interface StarsLayer {
   /** Build the constellation star map (called once at init) */
   buildConstellationStarMap(engine: SkyEngine): void;
   /** Update star positions and LOD */
-  update(engine: SkyEngine, fov: number, canvasHeight: number): void;
+  update(engine: SkyEngine, fov: number, canvasHeight: number, labelManager?: LabelManager): void;
   /** Update star label visibility and positions */
   updateLabels(labelsVisible: boolean): void;
   /** Set star overrides for special effects (supports synthetic stars with ra/dec) */
@@ -289,6 +290,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   let lastEngine: SkyEngine | null = null;
   let lastFov: number = 60;
   let lastCanvasHeight: number = 800;
+  let currentLabelManager: LabelManager | undefined = undefined;
 
   function buildConstellationStarMap(engine: SkyEngine): void {
     const positions = getAllStarsPositionBuffer(engine);
@@ -370,10 +372,11 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     activeSpriteCount = starCount;
   }
 
-  function update(engine: SkyEngine, fov: number, canvasHeight: number): void {
+  function update(engine: SkyEngine, fov: number, canvasHeight: number, labelManager?: LabelManager): void {
     lastEngine = engine;
     lastFov = fov;
     lastCanvasHeight = canvasHeight;
+    currentLabelManager = labelManager;
 
     // Update point size uniform based on FOV
     scintillationUniforms.pointSize.value = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, canvasHeight);
@@ -549,7 +552,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   function updateLabels(labelsVisible: boolean): void {
     let flagIndex = 0;
 
-    for (const [hr] of MAJOR_STARS) {
+    for (let starIdx = 0; starIdx < MAJOR_STARS.length; starIdx++) {
+      const [hr] = MAJOR_STARS[starIdx];
       const label = starLabels.get(hr);
       if (!label) continue;
 
@@ -558,6 +562,20 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
         const labelPos = calculateLabelOffset(pos, LABEL_OFFSET);
         label.position.copy(labelPos);
         label.visible = labelsVisible;
+
+        // Register star label with label manager
+        // MAJOR_STARS is sorted by brightness, so use index to calculate priority
+        // First stars (Sirius, Canopus, etc.) get priority 500, later ones decrease
+        if (labelsVisible && currentLabelManager) {
+          const priority = Math.max(300, 500 - starIdx * 5);
+          currentLabelManager.registerLabel({
+            id: `star-${hr}`,
+            worldPos: labelPos,
+            priority: priority,
+            label: label,
+            flagLine: starFlagLines,
+          });
+        }
 
         // Add flag line from star to label
         const idx = flagIndex * 6;

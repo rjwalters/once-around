@@ -12,6 +12,8 @@ import { SKY_RADIUS, LABEL_OFFSET, COMET_NAMES, COMET_COLOR } from "../constants
 import { cometTailVertexShader, cometTailFragmentShader } from "../shaders";
 import { rustToThreeJS } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
+import type { LabelManager } from "../label-manager";
+import { LABEL_PRIORITY } from "../label-manager";
 
 // Visibility thresholds
 const COMET_VISIBILITY_MAG = 12.0; // Only show comets brighter than this
@@ -23,7 +25,7 @@ export interface CometsLayer {
   /** Comet labels */
   labels: CSS2DObject[];
   /** Update comet positions and tails */
-  update(engine: SkyEngine, sunPos: THREE.Vector3, labelsVisible: boolean): void;
+  update(engine: SkyEngine, sunPos: THREE.Vector3, labelsVisible: boolean, labelManager?: LabelManager): void;
 }
 
 /**
@@ -72,7 +74,7 @@ export function createCometsLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     scene.add(mesh);
   }
 
-  function update(engine: SkyEngine, sunPos: THREE.Vector3, labelsVisible: boolean): void {
+  function update(engine: SkyEngine, sunPos: THREE.Vector3, labelsVisible: boolean, labelManager?: LabelManager): void {
     const cometsBuffer = getCometsBuffer(engine);
     const radius = SKY_RADIUS - 0.5;
 
@@ -87,6 +89,16 @@ export function createCometsLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         const labelPos = calculateLabelOffset(cometPos, LABEL_OFFSET);
         labels[i].position.copy(labelPos);
         labels[i].visible = true;
+
+        // Register comet label with label manager
+        if (labelManager) {
+          labelManager.registerLabel({
+            id: `comet-${i}`,
+            worldPos: labelPos,
+            priority: LABEL_PRIORITY.COMET,
+            label: labels[i],
+          });
+        }
 
         // Update label text with magnitude info
         const labelDiv = labels[i].element as HTMLDivElement;

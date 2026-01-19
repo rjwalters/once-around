@@ -24,6 +24,7 @@ import { createDeepFieldsLayer } from "./layers/deep-fields";
 import { createJWSTLayer } from "./layers/jwst";
 import { createMeteorShowerLayer } from "./layers/meteor-showers";
 import { createRemoteViewLayer } from "./layers/remote-view";
+import { LabelManager } from "./label-manager";
 import type { MeteorShower } from "../meteorShowerData";
 
 export interface SkyRenderer {
@@ -94,6 +95,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   const ctx = createRendererContext(container);
   const { scene, camera, renderer, labelRenderer, labelsGroup } = ctx;
 
+  // Create label manager for priority-based label culling
+  const labelManager = new LabelManager();
+
   // Create all layers
   const milkyWayLayer = createMilkyWayLayer(scene);
   const groundLayer = createGroundLayer(scene);
@@ -118,10 +122,19 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   let constellationStarMapInitialized = false;
   let hubbleModeEnabled = false;
   let jwstModeEnabled = false;
+  let lastUpdateTime = performance.now();
 
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
     const effectiveFov = fov * 1.2;
     const canvasHeight = ctx.container.clientHeight;
+
+    // Calculate delta time for smooth animations
+    const now = performance.now();
+    const deltaTime = (now - lastUpdateTime) / 1000;
+    lastUpdateTime = now;
+
+    // Begin label manager frame
+    labelManager.beginFrame(camera, fov, ctx.container);
 
     // Build constellation star map once on first call
     if (!constellationStarMapInitialized) {
@@ -130,15 +143,20 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     }
 
     // Update all layers
-    starsLayer.update(engine, effectiveFov, canvasHeight);
+    starsLayer.update(engine, effectiveFov, canvasHeight, labelManager);
     constellationsLayer.update(starsLayer.getConstellationStarPositionMap());
     starsLayer.updateLabels(labelsVisible);
     constellationsLayer.setLabelsVisible(labelsVisible);
-    bodiesLayer.update(engine, fov, canvasHeight);
-    moonsLayer.update(engine, fov, labelsVisible, canvasHeight);
-    cometsLayer.update(engine, bodiesLayer.getSunPosition(), labelsVisible);
+    bodiesLayer.update(engine, fov, canvasHeight, labelManager);
+    moonsLayer.update(engine, fov, labelsVisible, canvasHeight, labelManager);
+    cometsLayer.update(engine, bodiesLayer.getSunPosition(), labelsVisible, labelManager);
     if (satellitesEnabled) {
-      satellitesLayer.update(engine, labelsVisible, fov, canvasHeight);
+      satellitesLayer.update(engine, labelsVisible, fov, canvasHeight, labelManager);
+    }
+
+    // End label manager frame - resolves overlaps and applies fades
+    if (labelsVisible) {
+      labelManager.endFrame(deltaTime);
     }
   }
 
@@ -169,7 +187,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   function updateDSOs(fov: number, magLimit: number): void {
     const canvasHeight = ctx.container.clientHeight;
-    dsoLayer.update(fov, magLimit, labelsVisible, canvasHeight);
+    dsoLayer.update(fov, magLimit, labelsVisible, canvasHeight, labelManager);
   }
 
   function setDSOsVisible(visible: boolean): void {
@@ -190,7 +208,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   function updateMeteorShowers(currentDate: Date): void {
-    meteorShowerLayer.update(currentDate, labelsVisible);
+    meteorShowerLayer.update(currentDate, labelsVisible, labelManager);
   }
 
   function getActiveMeteorShowers(): MeteorShower[] {

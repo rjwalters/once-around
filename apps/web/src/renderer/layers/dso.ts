@@ -12,6 +12,8 @@ import { dsoVertexShader, dsoFragmentShader } from "../shaders";
 import { raDecToPosition } from "../utils/coordinates";
 import { getDSOColor, dsoSizeToPixels } from "../utils/colors";
 import { calculateLabelOffset } from "../utils/labels";
+import type { LabelManager } from "../label-manager";
+import { dsoPriorityFromMagnitude } from "../label-manager";
 
 export interface DSOLayer {
   /** The DSO points mesh */
@@ -23,7 +25,7 @@ export interface DSOLayer {
   /** Set DSO visibility on/off */
   setVisible(visible: boolean): void;
   /** Update DSO sizes and labels based on FOV and magnitude limit */
-  update(fov: number, magLimit: number, labelsVisible: boolean, canvasHeight: number): void;
+  update(fov: number, magLimit: number, labelsVisible: boolean, canvasHeight: number, labelManager?: LabelManager): void;
 }
 
 /**
@@ -131,7 +133,7 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
     }
   }
 
-  function update(fov: number, magLimit: number, labelsVisible: boolean, canvasHeight: number): void {
+  function update(fov: number, magLimit: number, labelsVisible: boolean, canvasHeight: number, labelManager?: LabelManager): void {
     if (!visible) return;
 
     const sizeAttr = geometry.getAttribute("size") as THREE.BufferAttribute;
@@ -159,6 +161,17 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
         if (label) {
           label.position.copy(labelPos);
           label.visible = labelsVisible;
+
+          // Register DSO label with label manager
+          if (labelsVisible && labelManager) {
+            labelManager.registerLabel({
+              id: `dso-${dso.id}`,
+              worldPos: labelPos,
+              priority: dsoPriorityFromMagnitude(dso.magnitude),
+              label: label,
+              flagLine: flagLines,
+            });
+          }
         }
 
         // Update flag line

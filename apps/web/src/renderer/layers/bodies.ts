@@ -13,6 +13,8 @@ import { SKY_RADIUS, BODY_COLORS, BODY_NAMES, LABEL_OFFSET, POINT_SOURCE_MIN_SIZ
 import { moonVertexShader, moonFragmentShader, texturedPlanetVertexShader, texturedPlanetFragmentShader } from "../shaders";
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
+import type { LabelManager } from "../label-manager";
+import { LABEL_PRIORITY } from "../label-manager";
 
 // Planet indices in body buffer (Mercury through Neptune)
 const PLANET_INDICES = [2, 3, 4, 5, 6, 7, 8]; // Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune
@@ -86,7 +88,7 @@ export interface BodiesLayer {
   /** Get Sun-Moon separation in degrees */
   getSunMoonSeparationDeg(): number;
   /** Update body positions and rendering */
-  update(engine: SkyEngine, fov: number, canvasHeight: number): void;
+  update(engine: SkyEngine, fov: number, canvasHeight: number, labelManager?: LabelManager): void;
   /** Enable/disable horizon culling (hide objects below horizon) */
   setHorizonCulling(enabled: boolean, zenith?: THREE.Vector3): void;
   /** Enable/disable scintillation (topocentric mode) */
@@ -445,7 +447,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     return pos.clone().normalize().dot(zenithDirection) > -0.01; // Small tolerance for objects near horizon
   }
 
-  function update(engine: SkyEngine, fov: number, canvasHeight: number): void {
+  function update(engine: SkyEngine, fov: number, canvasHeight: number, labelManager?: LabelManager): void {
     // If remote view is active, hide all normal body renderings
     if (remoteViewActive) {
       sunMesh.visible = false;
@@ -515,6 +517,17 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     sunMesh.visible = sunAboveHorizon;
     bodyLabels[0].visible = sunAboveHorizon;
 
+    // Register Sun label with label manager
+    if (sunAboveHorizon && labelManager) {
+      labelManager.registerLabel({
+        id: 'body-sun',
+        worldPos: sunLabelPos,
+        priority: LABEL_PRIORITY.SUN,
+        label: bodyLabels[0],
+        flagLine: bodyFlagLines,
+      });
+    }
+
     // Update Moon (no minimum - Moon is always large enough)
     const moonPos = readPositionFromBuffer(bodyPositions, 1, radius);
     currentMoonPos.copy(moonPos);
@@ -545,6 +558,17 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const moonAboveHorizon = isAboveHorizon(moonPos);
     moonMesh.visible = moonAboveHorizon;
     bodyLabels[1].visible = moonAboveHorizon;
+
+    // Register Moon label with label manager
+    if (moonAboveHorizon && labelManager) {
+      labelManager.registerLabel({
+        id: 'body-moon',
+        worldPos: moonLabelPos,
+        priority: LABEL_PRIORITY.MOON,
+        label: bodyLabels[1],
+        flagLine: bodyFlagLines,
+      });
+    }
 
     // Update planets with multi-LOD rendering
     // LOD levels based on pixel size:
@@ -615,6 +639,17 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       bodyLabels[bodyIdx].position.copy(labelPos);
       setFlagLine(bodyIdx, planetPos, labelPos);
       bodyLabels[bodyIdx].visible = planetAboveHorizon;
+
+      // Register planet label with label manager
+      if (planetAboveHorizon && labelManager) {
+        labelManager.registerLabel({
+          id: `body-planet-${bodyIdx}`,
+          worldPos: labelPos,
+          priority: LABEL_PRIORITY.PLANET,
+          label: bodyLabels[bodyIdx],
+          flagLine: bodyFlagLines,
+        });
+      }
     }
 
     // Saturn's rings visibility follows the sphere (show when disk is visible)
@@ -717,6 +752,19 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       const labelPos = calculateLabelOffset(minorPos, LABEL_OFFSET);
       minorBodyLabels[i].position.copy(labelPos);
       minorBodyLabels[i].visible = aboveHorizon;
+
+      // Register minor body label with label manager
+      if (aboveHorizon && labelManager) {
+        // Pluto (index 0) gets higher priority
+        const priority = i === 0 ? LABEL_PRIORITY.MINOR_BODY_HIGH : LABEL_PRIORITY.MINOR_BODY_LOW;
+        labelManager.registerLabel({
+          id: `body-minor-${i}`,
+          worldPos: labelPos,
+          priority: priority,
+          label: minorBodyLabels[i],
+          flagLine: minorBodyFlagLines,
+        });
+      }
 
       // Flag line for minor body
       const color = MINOR_BODY_COLORS[i];

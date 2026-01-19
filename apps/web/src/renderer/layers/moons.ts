@@ -21,6 +21,8 @@ import {
 import { rustToThreeJS } from "../utils/coordinates";
 import { angularSizeToPixels } from "../utils/colors";
 import { calculateLabelOffset } from "../utils/labels";
+import type { LabelManager } from "../label-manager";
+import { LABEL_PRIORITY } from "../label-manager";
 
 const MOON_LABEL_OFFSET = 0.4;
 
@@ -32,7 +34,7 @@ export interface PlanetaryMoonsLayer {
   /** Moon labels */
   labels: CSS2DObject[];
   /** Update moon positions */
-  update(engine: SkyEngine, fov: number, labelsVisible: boolean, canvasHeight: number): void;
+  update(engine: SkyEngine, fov: number, labelsVisible: boolean, canvasHeight: number, labelManager?: LabelManager): void;
 }
 
 /**
@@ -104,7 +106,7 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
     labelsGroup.add(label);
   }
 
-  function update(engine: SkyEngine, fov: number, labelsVisible: boolean, canvasHeight: number): void {
+  function update(engine: SkyEngine, fov: number, labelsVisible: boolean, canvasHeight: number, labelManager?: LabelManager): void {
     const visible = fov < PLANETARY_MOONS_FOV_THRESHOLD;
 
     // Hide if FOV is too wide
@@ -139,6 +141,17 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
       const labelPos = calculateLabelOffset(moonPos, MOON_LABEL_OFFSET);
       labels[i].position.copy(labelPos);
       labels[i].visible = labelsVisible;
+
+      // Register planetary moon label with label manager
+      if (labelsVisible && labelManager) {
+        labelManager.registerLabel({
+          id: `planetary-moon-${i}`,
+          worldPos: labelPos,
+          priority: LABEL_PRIORITY.MAJOR_MOON,
+          label: labels[i],
+          flagLine: flagLines,
+        });
+      }
 
       // Update flag line
       const color = PLANETARY_MOON_COLORS[i];
