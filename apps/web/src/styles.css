@@ -2412,19 +2412,26 @@ canvas {
     font-size: 16px;
   }
 
-  /* Adjust info text */
+  /* Stack info and coordinates vertically on mobile */
   #info {
     font-size: 10px;
     left: 10px;
     right: 10px;
+    bottom: 52px; /* Above coordinates */
     text-align: center;
   }
 
-  /* Adjust coordinates display */
   #coordinates {
+    left: 10px;
     right: 10px;
+    bottom: 10px;
     font-size: 11px;
     padding: 4px 8px;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
   }
 
   /* Adjust eclipse banner for mobile */
