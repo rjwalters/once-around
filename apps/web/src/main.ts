@@ -963,6 +963,7 @@ async function main(): Promise<void> {
     tourEngine,
     onNextEclipse: handleNextEclipseClick,
     stopTimePlayback: () => timeControls?.stopPlayback(),
+    disableARMode: () => arModeManager.disable(),
   });
 
   // Coordinate display
@@ -1039,6 +1040,7 @@ async function main(): Promise<void> {
       const tour = getTourById(urlState.tour);
       if (tour) {
         console.log(`Starting tour from URL: ${urlState.tour}`);
+        arModeManager.disable();
         tourEngine.play(tour);
       } else {
         console.warn(`Tour not found: ${urlState.tour}`);

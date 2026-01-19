@@ -9,6 +9,7 @@ export interface TourUIOptions {
   tourEngine: TourEngine;
   onNextEclipse: () => void;
   stopTimePlayback: () => void;
+  disableARMode?: () => void;
 }
 
 /**
@@ -25,7 +26,7 @@ function getTourIcon(tourId: string): string {
  * Set up tour UI - list generation and playback controls.
  */
 export function setupTourUI(options: TourUIOptions): void {
-  const { tourEngine, onNextEclipse, stopTimePlayback } = options;
+  const { tourEngine, onNextEclipse, stopTimePlayback, disableARMode } = options;
 
   // Generate tour list
   const tourList = document.getElementById('tour-list');
@@ -77,6 +78,7 @@ export function setupTourUI(options: TourUIOptions): void {
         const tour = getTourById(tourId);
         if (tour) {
           stopTimePlayback();
+          disableARMode?.();
           tourEngine.play(tour);
         }
       }

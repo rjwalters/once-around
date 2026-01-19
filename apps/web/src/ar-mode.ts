@@ -14,6 +14,7 @@ export interface ARModeOptions {
 export interface ARModeManager {
   isEnabled: () => boolean;
   toggle: () => Promise<void>;
+  disable: () => void;
   setupEventListeners: () => void;
 }
 
@@ -54,6 +55,15 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
     }
   }
 
+  function disable(): void {
+    if (!enabled) return;
+    deviceOrientation.stop();
+    setControlsEnabled(true);
+    enabled = false;
+    updateUI(false);
+    onModeChange(false);
+  }
+
   async function toggle(): Promise<void> {
     if (!deviceOrientation.isSupported()) {
       updateUI(false, "Not supported on this device");
@@ -63,11 +73,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
 
     if (enabled) {
       // Disable AR mode
-      deviceOrientation.stop();
-      setControlsEnabled(true);
-      enabled = false;
-      updateUI(false);
-      onModeChange(false);
+      disable();
       return;
     }
 
@@ -104,6 +110,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
   return {
     isEnabled: () => enabled,
     toggle,
+    disable,
     setupEventListeners,
   };
 }
