@@ -281,8 +281,10 @@ async function main(): Promise<void> {
   // Store promise so search index can rebuild after satellites are available
   const satellitesLoadedPromise = loadAllSatelliteEphemerides(engine).then(() => {
     console.log("Satellite ephemerides loaded - satellite tracking enabled");
-    // Trigger an update to show satellites if they're currently visible
-    renderer.updateFromEngine(engine, renderer.camera.fov);
+    // Defer heavy update to avoid blocking interaction
+    setTimeout(() => {
+      renderer.updateFromEngine(engine, renderer.camera.fov);
+    }, 0);
 
     // Initialize ISS pass predictions UI
     issPassesUI = new ISSPassesUI({
@@ -1014,42 +1016,50 @@ async function main(): Promise<void> {
 
   animate();
 
-  // Hide loading overlay immediately after animation loop starts
-  // This allows immediate interaction - the starfield is already visible and controls are ready
-  const loadingOverlay = document.getElementById("loading");
-  if (loadingOverlay) {
-    loadingOverlay.classList.add("hidden");
-    // Remove from DOM after fade out
-    setTimeout(() => loadingOverlay.remove(), 500);
-  }
-
-  // Defer heavy initialization work to avoid blocking interaction
-  // Using setTimeout(0) to yield to the browser so touch events are processed first
-  setTimeout(() => {
-    // Force a full update to ensure everything is initialized
-    // This fixes issues where planetary moons or other elements don't render until interaction
-    renderer.updateFromEngine(engine, settings.fov);
-    updateRenderedStars();
-
-    // Initial eclipse detection
-    const initialBodyPos = getBodyPositionsFromEngine(engine);
-    const initialSunMoonSep = calculateSunMoonSeparation(initialBodyPos);
-    if (initialSunMoonSep !== null) {
-      renderer.updateEclipse(initialSunMoonSep);
+  // Wait for a few render frames before dismissing overlay
+  // This ensures shaders are compiled and GPU is warmed up for smooth interaction
+  let frameCount = 0;
+  const waitForFrames = () => {
+    frameCount++;
+    if (frameCount < 3) {
+      requestAnimationFrame(waitForFrames);
+      return;
     }
 
-    // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
-    if (urlState.tour) {
-      const tour = getTourById(urlState.tour);
-      if (tour) {
-        console.log(`Starting tour from URL: ${urlState.tour}`);
-        arModeManager.disable();
-        tourEngine.play(tour);
-      } else {
-        console.warn(`Tour not found: ${urlState.tour}`);
+    // Now the renderer is warmed up - dismiss the overlay
+    const loadingOverlay = document.getElementById("loading");
+    if (loadingOverlay) {
+      loadingOverlay.classList.add("hidden");
+      setTimeout(() => loadingOverlay.remove(), 500);
+    }
+
+    // Defer additional initialization to avoid blocking interaction
+    setTimeout(() => {
+      // Force a full update to ensure everything is initialized
+      renderer.updateFromEngine(engine, settings.fov);
+      updateRenderedStars();
+
+      // Initial eclipse detection
+      const initialBodyPos = getBodyPositionsFromEngine(engine);
+      const initialSunMoonSep = calculateSunMoonSeparation(initialBodyPos);
+      if (initialSunMoonSep !== null) {
+        renderer.updateEclipse(initialSunMoonSep);
       }
-    }
-  }, 0);
+
+      // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
+      if (urlState.tour) {
+        const tour = getTourById(urlState.tour);
+        if (tour) {
+          console.log(`Starting tour from URL: ${urlState.tour}`);
+          arModeManager.disable();
+          tourEngine.play(tour);
+        } else {
+          console.warn(`Tour not found: ${urlState.tour}`);
+        }
+      }
+    }, 0);
+  };
+  requestAnimationFrame(waitForFrames);
 
   console.log("Once Around ready!");
 }
