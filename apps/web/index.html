@@ -54,6 +54,27 @@
         font-size: 14px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       }
+      .loading-quote {
+        color: #aaa;
+        font-size: 13px;
+        font-style: italic;
+        font-family: Georgia, 'Times New Roman', serif;
+        max-width: 300px;
+        margin: 16px auto 0;
+        line-height: 1.4;
+        min-height: 40px;
+        opacity: 1;
+        transition: opacity 0.3s ease-in-out;
+      }
+      .loading-quote.fade {
+        opacity: 0;
+      }
+      .loading-attribution {
+        color: #666;
+        font-size: 11px;
+        margin-top: 8px;
+        font-style: normal;
+      }
     </style>
   </head>
   <body>
@@ -62,8 +83,52 @@
       <div class="loading-content">
         <div class="loading-spinner"></div>
         <div class="loading-text">Loading sky engine...</div>
+        <div id="loading-quote" class="loading-quote"></div>
       </div>
     </div>
+    <script>
+      // Astronomy quotes to display during loading
+      (function() {
+        const quotes = [
+          { text: "The nitrogen in our DNA, the calcium in our teeth, the iron in our blood, the carbon in our apple pies were made in the interiors of collapsing stars.", author: "Carl Sagan" },
+          { text: "We are all made of star stuff.", author: "Carl Sagan" },
+          { text: "Somewhere, something incredible is waiting to be known.", author: "Carl Sagan" },
+          { text: "The universe is under no obligation to make sense to you.", author: "Neil deGrasse Tyson" },
+          { text: "For small creatures such as we, the vastness is bearable only through love.", author: "Carl Sagan" },
+          { text: "Look up at the stars and not down at your feet.", author: "Stephen Hawking" },
+          { text: "Two things are infinite: the universe and human stupidity; and I'm not sure about the universe.", author: "Albert Einstein" },
+          { text: "We are a way for the cosmos to know itself.", author: "Carl Sagan" },
+          { text: "The cosmos is within us. We are made of star stuff.", author: "Carl Sagan" },
+          { text: "In the beginning the Universe was created. This has made a lot of people very angry and been widely regarded as a bad move.", author: "Douglas Adams" },
+          { text: "Space is big. Really big. You just won't believe how vastly, hugely, mind-bogglingly big it is.", author: "Douglas Adams" },
+          { text: "Not only is the universe stranger than we imagine, it is stranger than we can imagine.", author: "Arthur Eddington" },
+          { text: "The universe is not only queerer than we suppose, but queerer than we can suppose.", author: "J.B.S. Haldane" },
+          { text: "Equipped with his five senses, man explores the universe around him and calls the adventure Science.", author: "Edwin Hubble" },
+          { text: "We live in a society exquisitely dependent on science and technology, in which hardly anyone knows anything about science and technology.", author: "Carl Sagan" },
+        ];
+
+        const quoteEl = document.getElementById('loading-quote');
+        if (!quoteEl) return;
+
+        // Show a random quote immediately
+        let currentIndex = Math.floor(Math.random() * quotes.length);
+        function showQuote(index) {
+          const q = quotes[index];
+          quoteEl.innerHTML = '"' + q.text + '"<div class="loading-attribution">— ' + q.author + '</div>';
+        }
+        showQuote(currentIndex);
+
+        // Rotate quotes every 4 seconds with fade transition
+        setInterval(function() {
+          quoteEl.classList.add('fade');
+          setTimeout(function() {
+            currentIndex = (currentIndex + 1) % quotes.length;
+            showQuote(currentIndex);
+            quoteEl.classList.remove('fade');
+          }, 300);
+        }, 4000);
+      })();
+    </script>
 
     <div id="app"></div>
 

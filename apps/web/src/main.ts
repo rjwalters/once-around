@@ -1027,6 +1027,15 @@ async function main(): Promise<void> {
       renderer.updateEclipse(initialSunMoonSep);
     }
 
+    // Hide loading overlay after first render is complete
+    // This allows immediate interaction while satellites continue loading in background
+    const loadingOverlay = document.getElementById("loading");
+    if (loadingOverlay) {
+      loadingOverlay.classList.add("hidden");
+      // Remove from DOM after fade out
+      setTimeout(() => loadingOverlay.remove(), 500);
+    }
+
     // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
     if (urlState.tour) {
       const tour = getTourById(urlState.tour);
@@ -1037,17 +1046,6 @@ async function main(): Promise<void> {
       } else {
         console.warn(`Tour not found: ${urlState.tour}`);
       }
-    }
-  });
-
-  // Hide loading overlay after satellite ephemerides are loaded
-  // This ensures the app is fully ready before dismissing the spinner
-  satellitesLoadedPromise.then(() => {
-    const loadingOverlay = document.getElementById("loading");
-    if (loadingOverlay) {
-      loadingOverlay.classList.add("hidden");
-      // Remove from DOM after fade out
-      setTimeout(() => loadingOverlay.remove(), 500);
     }
   });
 
