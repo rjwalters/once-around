@@ -2353,9 +2353,9 @@ canvas {
     box-shadow: none;
   }
 
-  /* When panel is expanded on mobile, change hamburger to X */
+  /* When panel is expanded on mobile, change hamburger to X with solid background */
   #controls.expanded ~ .panel-toggle-collapsed {
-    background: rgba(74, 158, 255, 0.2);
+    background: rgba(30, 45, 70, 0.95);
     border-color: #4a9eff;
     color: #4a9eff;
   }
