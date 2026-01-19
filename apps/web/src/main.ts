@@ -1032,6 +1032,11 @@ async function main(): Promise<void> {
     // Now the renderer is warmed up - dismiss the overlay
     const loadingOverlay = document.getElementById("loading");
     if (loadingOverlay) {
+      // Hide the quote first to prevent it lingering during fade
+      const quote = document.getElementById("loading-quote");
+      if (quote) {
+        quote.classList.remove("visible");
+      }
       loadingOverlay.classList.add("hidden");
       setTimeout(() => loadingOverlay.remove(), 500);
     }
