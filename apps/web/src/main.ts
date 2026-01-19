@@ -1019,67 +1019,51 @@ async function main(): Promise<void> {
 
   animate();
 
-  // Wait for a few render frames before dismissing overlay
-  // This ensures shaders are compiled and GPU is warmed up for smooth interaction
-  let frameCount = 0;
-  const waitForFrames = () => {
-    frameCount++;
-    if (frameCount < 3) {
-      requestAnimationFrame(waitForFrames);
-      return;
+  // Do heavy initialization work first, then dismiss overlay
+  // This ensures the app is truly ready before removing the loading screen
+  requestAnimationFrame(() => {
+    // Force a full update to ensure everything is initialized
+    renderer.updateFromEngine(engine, settings.fov);
+    updateRenderedStars();
+
+    // Initial eclipse detection
+    const initialBodyPos = getBodyPositionsFromEngine(engine);
+    const initialSunMoonSep = calculateSunMoonSeparation(initialBodyPos);
+    if (initialSunMoonSep !== null) {
+      renderer.updateEclipse(initialSunMoonSep);
     }
 
-    // Now the renderer is warmed up - dismiss the overlay
+    // Now dismiss the loading overlay - app is ready
     const loadingOverlay = document.getElementById("loading");
     if (loadingOverlay) {
-      // Hide the quote first to prevent it lingering during fade
-      const quote = document.getElementById("loading-quote");
-      if (quote) {
-        quote.classList.remove("visible");
-      }
-      loadingOverlay.classList.add("hidden");
-      setTimeout(() => loadingOverlay.remove(), 500);
+      // Remove immediately to prevent any lingering elements
+      loadingOverlay.remove();
     }
 
-    // Defer additional initialization to avoid blocking interaction
-    setTimeout(() => {
-      // Force a full update to ensure everything is initialized
-      renderer.updateFromEngine(engine, settings.fov);
-      updateRenderedStars();
-
-      // Initial eclipse detection
-      const initialBodyPos = getBodyPositionsFromEngine(engine);
-      const initialSunMoonSep = calculateSunMoonSeparation(initialBodyPos);
-      if (initialSunMoonSep !== null) {
-        renderer.updateEclipse(initialSunMoonSep);
+    // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
+    if (urlState.tour) {
+      const tour = getTourById(urlState.tour);
+      if (tour) {
+        console.log(`Starting tour from URL: ${urlState.tour}`);
+        arModeManager.disable();
+        tourEngine.play(tour);
+      } else {
+        console.warn(`Tour not found: ${urlState.tour}`);
       }
+    }
 
-      // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
-      if (urlState.tour) {
-        const tour = getTourById(urlState.tour);
-        if (tour) {
-          console.log(`Starting tour from URL: ${urlState.tour}`);
-          arModeManager.disable();
-          tourEngine.play(tour);
-        } else {
-          console.warn(`Tour not found: ${urlState.tour}`);
-        }
+    // Compute deferred orbits using requestIdleCallback to avoid blocking
+    if (deferredOrbitsCompute) {
+      const computeOrbits = () => {
+        void renderer.computeOrbits(engine, currentDate);
+      };
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(computeOrbits, { timeout: 2000 });
+      } else {
+        setTimeout(computeOrbits, 100);
       }
-
-      // Compute deferred orbits using requestIdleCallback to avoid blocking
-      if (deferredOrbitsCompute) {
-        const computeOrbits = () => {
-          void renderer.computeOrbits(engine, currentDate);
-        };
-        if ('requestIdleCallback' in window) {
-          requestIdleCallback(computeOrbits, { timeout: 2000 });
-        } else {
-          setTimeout(computeOrbits, 100);
-        }
-      }
-    }, 0);
-  };
-  requestAnimationFrame(waitForFrames);
+    }
+  });
 
   console.log("Once Around ready!");
 }
