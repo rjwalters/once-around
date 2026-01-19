@@ -170,6 +170,7 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
               priority: dsoPriorityFromMagnitude(dso.magnitude),
               label: label,
               flagLine: flagLines,
+              flagLineIndex: i,
             });
           }
         }

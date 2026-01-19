@@ -574,6 +574,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
             priority: priority,
             label: label,
             flagLine: starFlagLines,
+            flagLineIndex: flagIndex,
           });
         }
 

@@ -349,16 +349,80 @@ export class LabelManager {
     }
 
     // Apply to flag line if present
-    // Note: For multi-segment flag lines, we'd need to modify vertex colors
-    // For now, we apply to the material opacity if it's a dedicated flag line
-    if (flagLine && flagLineIndex === undefined) {
-      const material = flagLine.material as THREE.LineBasicMaterial;
-      if (material && 'opacity' in material) {
-        // Store original opacity if not set
-        if (material.userData.originalOpacity === undefined) {
-          material.userData.originalOpacity = material.opacity;
+    if (flagLine) {
+      if (flagLineIndex !== undefined) {
+        // Multi-segment flag line: modify vertex colors or positions for this specific segment
+        const geometry = flagLine.geometry as THREE.BufferGeometry;
+        const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute;
+        const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
+
+        if (colorAttr) {
+          // Has vertex colors: scale colors by opacity
+          const v0 = flagLineIndex * 2;
+          const v1 = flagLineIndex * 2 + 1;
+
+          // Store original colors if we're showing (opacity > 0.5) or if not yet stored
+          const colorArray = colorAttr.array as Float32Array;
+          const userData = colorAttr.userData;
+          const key = `origColor_${flagLineIndex}`;
+
+          if (targetOpacity > 0.5 || userData[key] === undefined) {
+            // Store the current colors as original
+            userData[key] = [
+              colorArray[v0 * 3], colorArray[v0 * 3 + 1], colorArray[v0 * 3 + 2],
+              colorArray[v1 * 3], colorArray[v1 * 3 + 1], colorArray[v1 * 3 + 2],
+            ];
+          }
+
+          // Scale colors by opacity
+          const orig = userData[key] as number[];
+          colorAttr.setXYZ(v0, orig[0] * newOpacity, orig[1] * newOpacity, orig[2] * newOpacity);
+          colorAttr.setXYZ(v1, orig[3] * newOpacity, orig[4] * newOpacity, orig[5] * newOpacity);
+          colorAttr.needsUpdate = true;
+        } else if (posAttr) {
+          // No vertex colors: collapse positions to hide segment when opacity is low
+          const v0 = flagLineIndex * 2;
+          const v1 = flagLineIndex * 2 + 1;
+          const posArray = posAttr.array as Float32Array;
+          const userData = posAttr.userData;
+          const key = `origPos_${flagLineIndex}`;
+
+          // Store original positions if we're showing or if not yet stored
+          if (targetOpacity > 0.5 || userData[key] === undefined) {
+            userData[key] = [
+              posArray[v0 * 3], posArray[v0 * 3 + 1], posArray[v0 * 3 + 2],
+              posArray[v1 * 3], posArray[v1 * 3 + 1], posArray[v1 * 3 + 2],
+            ];
+          }
+
+          const orig = userData[key] as number[];
+          // Interpolate positions toward each other (collapse to midpoint when hidden)
+          const midX = (orig[0] + orig[3]) / 2;
+          const midY = (orig[1] + orig[4]) / 2;
+          const midZ = (orig[2] + orig[5]) / 2;
+
+          posAttr.setXYZ(v0,
+            orig[0] * newOpacity + midX * (1 - newOpacity),
+            orig[1] * newOpacity + midY * (1 - newOpacity),
+            orig[2] * newOpacity + midZ * (1 - newOpacity)
+          );
+          posAttr.setXYZ(v1,
+            orig[3] * newOpacity + midX * (1 - newOpacity),
+            orig[4] * newOpacity + midY * (1 - newOpacity),
+            orig[5] * newOpacity + midZ * (1 - newOpacity)
+          );
+          posAttr.needsUpdate = true;
         }
-        material.opacity = (material.userData.originalOpacity as number) * newOpacity;
+      } else {
+        // Dedicated flag line: apply material opacity
+        const material = flagLine.material as THREE.LineBasicMaterial;
+        if (material && 'opacity' in material) {
+          // Store original opacity if not set
+          if (material.userData.originalOpacity === undefined) {
+            material.userData.originalOpacity = material.opacity;
+          }
+          material.opacity = (material.userData.originalOpacity as number) * newOpacity;
+        }
       }
     }
   }

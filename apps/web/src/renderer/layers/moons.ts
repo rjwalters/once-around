@@ -150,6 +150,7 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
           priority: LABEL_PRIORITY.MAJOR_MOON,
           label: labels[i],
           flagLine: flagLines,
+          flagLineIndex: i,
         });
       }
 

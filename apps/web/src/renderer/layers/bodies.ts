@@ -525,6 +525,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         priority: LABEL_PRIORITY.SUN,
         label: bodyLabels[0],
         flagLine: bodyFlagLines,
+        flagLineIndex: 0,
       });
     }
 
@@ -567,6 +568,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         priority: LABEL_PRIORITY.MOON,
         label: bodyLabels[1],
         flagLine: bodyFlagLines,
+        flagLineIndex: 1,
       });
     }
 
@@ -648,6 +650,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
           priority: LABEL_PRIORITY.PLANET,
           label: bodyLabels[bodyIdx],
           flagLine: bodyFlagLines,
+          flagLineIndex: bodyIdx,
         });
       }
     }
@@ -763,6 +766,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
           priority: priority,
           label: minorBodyLabels[i],
           flagLine: minorBodyFlagLines,
+          flagLineIndex: i,
         });
       }
 
