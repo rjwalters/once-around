@@ -44,21 +44,31 @@ export class ISSPassesUI {
   /**
    * Set visibility of the passes panel.
    * Only show in topocentric view mode.
+   * Only computes passes when first made visible (lazy computation).
    */
   setVisible(visible: boolean): void {
+    const wasVisible = this.visible;
     this.visible = visible;
     if (this.container) {
       this.container.style.display = visible ? '' : 'none';
+    }
+    // Lazy compute: only compute passes when becoming visible for the first time
+    if (visible && !wasVisible && this.engine && this.passes.length === 0 && !this.isComputing) {
+      this.computePasses();
     }
   }
 
   /**
    * Initialize with an engine instance.
    * Call this after satellite ephemeris is loaded.
+   * Note: passes are computed lazily when the UI becomes visible.
    */
   setEngine(engine: SkyEngine): void {
     this.engine = engine;
-    this.computePasses();
+    // Only compute immediately if already visible (topocentric mode)
+    if (this.visible) {
+      this.computePasses();
+    }
   }
 
   /**
