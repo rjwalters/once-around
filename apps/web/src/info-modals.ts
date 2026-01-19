@@ -7,8 +7,12 @@ import { CONSTELLATION_DATA } from "./constellationData";
 import { DSO_DATA, type DSOType } from "./dsoData";
 import { COMET_INFO } from "./comet-info";
 import { DWARF_PLANET_INFO } from "./dwarf-planet-info";
+import { PLANET_INFO } from "./planet-info";
 import { formatRAForDSO, formatDecForDSO } from "./coordinate-utils";
 import { setupModalClose, showModal, setupDelegatedModalTrigger } from "./modal-utils";
+
+// Body names must match the order used in the engine (from renderer/constants.ts)
+const BODY_NAMES = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
 
 // Comet names must match the order used in the engine
 const COMET_NAMES = [
@@ -216,6 +220,47 @@ function setupCometModal(): void {
 }
 
 /**
+ * Set up the planet info modal (Sun, Moon, major planets).
+ */
+function setupPlanetModal(): void {
+  const modal = document.getElementById("planet-modal");
+  const modalClose = document.getElementById("planet-modal-close");
+  const modalName = document.getElementById("planet-modal-name");
+  const modalTypeBadge = document.getElementById("planet-modal-type-badge");
+  const modalDiameter = document.getElementById("planet-modal-diameter");
+  const modalDistance = document.getElementById("planet-modal-distance");
+  const modalPeriod = document.getElementById("planet-modal-period");
+  const modalRotation = document.getElementById("planet-modal-rotation");
+  const modalMoons = document.getElementById("planet-modal-moons");
+  const modalDescription = document.getElementById("planet-modal-description");
+
+  function showPlanetInfo(bodyIndex: number): void {
+    const bodyName = BODY_NAMES[bodyIndex];
+    const info = PLANET_INFO[bodyName];
+    if (!info || !modal) return;
+
+    if (modalName) modalName.textContent = info.name;
+    if (modalTypeBadge) modalTypeBadge.textContent = info.type;
+    if (modalDiameter) modalDiameter.textContent = info.diameter;
+    if (modalDistance) modalDistance.textContent = info.distance;
+    if (modalPeriod) modalPeriod.textContent = info.orbitalPeriod;
+    if (modalRotation) modalRotation.textContent = info.rotationPeriod;
+    if (modalMoons) modalMoons.textContent = info.moons;
+    if (modalDescription) modalDescription.textContent = info.description;
+
+    showModal(modal);
+  }
+
+  setupModalClose(modal, modalClose);
+  setupDelegatedModalTrigger(
+    "planet-label",
+    "body",
+    (value) => { const n = parseInt(value, 10); return isNaN(n) ? null : n; },
+    showPlanetInfo
+  );
+}
+
+/**
  * Set up the dwarf planet info modal.
  */
 function setupDwarfPlanetModal(): void {
@@ -266,5 +311,6 @@ export function setupInfoModals(): void {
   setupConstellationModal();
   setupDSOModal();
   setupCometModal();
+  setupPlanetModal();
   setupDwarfPlanetModal();
 }
