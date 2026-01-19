@@ -433,14 +433,17 @@ async function main(): Promise<void> {
 
   // Orbits checkbox
   const orbitsCheckbox = document.getElementById("orbits") as HTMLInputElement | null;
+  // Track if we need to compute orbits after loading (deferred for performance)
+  let deferredOrbitsCompute = false;
   if (orbitsCheckbox) {
     // Restore from settings
     orbitsCheckbox.checked = settings.orbitsVisible;
     renderer.setOrbitsVisible(settings.orbitsVisible);
 
-    // Compute initial orbits if visible
+    // Defer orbit computation until after loading overlay is dismissed
+    // Computing 840 ephemeris points synchronously blocks the main thread
     if (settings.orbitsVisible) {
-      void renderer.computeOrbits(engine, currentDate);
+      deferredOrbitsCompute = true;
     }
 
     orbitsCheckbox.addEventListener("change", () => {
@@ -1055,6 +1058,18 @@ async function main(): Promise<void> {
           tourEngine.play(tour);
         } else {
           console.warn(`Tour not found: ${urlState.tour}`);
+        }
+      }
+
+      // Compute deferred orbits using requestIdleCallback to avoid blocking
+      if (deferredOrbitsCompute) {
+        const computeOrbits = () => {
+          void renderer.computeOrbits(engine, currentDate);
+        };
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(computeOrbits, { timeout: 2000 });
+        } else {
+          setTimeout(computeOrbits, 100);
         }
       }
     }, 0);
