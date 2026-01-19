@@ -3,6 +3,8 @@
  *
  * Renders planetary orbit paths computed dynamically from the current simulation date.
  * Orbits show the apparent path of each planet on the celestial sphere over time.
+ *
+ * Uses a Web Worker for computation to avoid blocking the main thread on mobile.
  */
 
 import * as THREE from "three";
@@ -10,6 +12,28 @@ import type { SkyEngine } from "../../wasm/sky_engine";
 import { getBodiesPositionBuffer } from "../../engine";
 import { ORBIT_PLANET_INDICES, ORBIT_NUM_POINTS, ORBIT_PERIODS_DAYS, BODY_COLORS, SKY_RADIUS } from "../constants";
 import { readPositionFromBuffer } from "../utils/coordinates";
+
+// Worker message types
+interface ComputeMessage {
+  type: "compute";
+  centerDateMs: number;
+}
+
+interface ResultMessage {
+  type: "result";
+  orbits: Float32Array[];
+}
+
+interface ErrorMessage {
+  type: "error";
+  error: string;
+}
+
+interface ReadyMessage {
+  type: "ready";
+}
+
+type WorkerResponse = ResultMessage | ErrorMessage | ReadyMessage;
 
 export interface OrbitsLayer {
   /** The group containing all orbit lines */
@@ -56,6 +80,68 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
   let computePromise: Promise<void> | null = null;
   let lastComputeDate: Date | null = null;
 
+  // Web Worker for off-thread computation
+  let worker: Worker | null = null;
+  let workerReady = false;
+  let pendingResolve: (() => void) | null = null;
+  let pendingReject: ((error: Error) => void) | null = null;
+
+  // Initialize worker
+  function initWorker(): void {
+    if (worker) return;
+
+    try {
+      // Use Vite's worker import syntax
+      worker = new Worker(
+        new URL("../../workers/orbit-worker.ts", import.meta.url),
+        { type: "module" }
+      );
+
+      worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+        const message = event.data;
+
+        if (message.type === "ready") {
+          workerReady = true;
+          console.log("Orbit worker ready");
+        } else if (message.type === "result") {
+          // Update geometries with computed positions
+          for (let i = 0; i < message.orbits.length; i++) {
+            const geometry = lines[i].geometry;
+            geometry.setAttribute(
+              "position",
+              new THREE.BufferAttribute(message.orbits[i], 3)
+            );
+            geometry.computeBoundingSphere();
+          }
+          console.log(`Orbit paths updated via worker`);
+          pendingResolve?.();
+          pendingResolve = null;
+          pendingReject = null;
+        } else if (message.type === "error") {
+          console.error("Orbit worker error:", message.error);
+          pendingReject?.(new Error(message.error));
+          pendingResolve = null;
+          pendingReject = null;
+        }
+      };
+
+      worker.onerror = (error) => {
+        console.error("Orbit worker failed:", error);
+        worker = null;
+        workerReady = false;
+        pendingReject?.(new Error("Worker failed"));
+        pendingResolve = null;
+        pendingReject = null;
+      };
+    } catch (e) {
+      console.warn("Failed to create orbit worker, will use main thread:", e);
+      worker = null;
+    }
+  }
+
+  // Try to initialize worker on creation
+  initWorker();
+
   function setVisible(visible: boolean): void {
     group.visible = visible;
     // When turning orbits on, show all orbits (clear any focus)
@@ -79,11 +165,7 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
   }
 
   /**
-   * Compute orbital paths dynamically using the WASM engine.
-   * Samples planet positions over each planet's orbital period centered on centerDate.
-   *
-   * NOTE: This mutates the engine's time state. The caller should restore the engine
-   * to the current simulation time after calling this function.
+   * Compute orbital paths using worker if available, otherwise main thread.
    */
   async function compute(engine: SkyEngine, centerDate: Date): Promise<void> {
     // Skip if already computed for the same date (within 1 day)
@@ -93,53 +175,75 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
 
     lastComputeDate = centerDate;
 
-    computePromise = (async () => {
-      const radius = SKY_RADIUS - 1;
-      const msPerDay = 24 * 60 * 60 * 1000;
+    // Try worker first
+    if (worker && workerReady) {
+      computePromise = new Promise<void>((resolve, reject) => {
+        pendingResolve = resolve;
+        pendingReject = reject;
 
-      for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
-        const bodyIdx = ORBIT_PLANET_INDICES[planetIdx];
-        const orbitPeriod = ORBIT_PERIODS_DAYS[bodyIdx];
-        const halfSpan = orbitPeriod / 2;
+        const message: ComputeMessage = {
+          type: "compute",
+          centerDateMs: centerDate.getTime(),
+        };
+        worker!.postMessage(message);
+      });
 
-        const positions = new Float32Array(ORBIT_NUM_POINTS * 3);
+      return computePromise;
+    }
 
-        for (let i = 0; i < ORBIT_NUM_POINTS; i++) {
-          // Calculate date for this sample point
-          const t = i / (ORBIT_NUM_POINTS - 1);
-          const dayOffset = -halfSpan + t * orbitPeriod;
-          const sampleDate = new Date(centerDate.getTime() + dayOffset * msPerDay);
+    // Fallback: compute on main thread (original implementation)
+    computePromise = computeOnMainThread(engine, centerDate);
+    return computePromise;
+  }
 
-          // Set engine time and compute
-          engine.set_time_utc(
-            sampleDate.getUTCFullYear(),
-            sampleDate.getUTCMonth() + 1,
-            sampleDate.getUTCDate(),
-            sampleDate.getUTCHours(),
-            sampleDate.getUTCMinutes(),
-            sampleDate.getUTCSeconds()
-          );
-          engine.recompute();
+  /**
+   * Main thread fallback for orbit computation.
+   * Used when Web Workers aren't available.
+   */
+  async function computeOnMainThread(engine: SkyEngine, centerDate: Date): Promise<void> {
+    const radius = SKY_RADIUS - 1;
+    const msPerDay = 24 * 60 * 60 * 1000;
 
-          // Get position from engine buffer
-          const bodyPositions = getBodiesPositionBuffer(engine);
-          const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
+    for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
+      const bodyIdx = ORBIT_PLANET_INDICES[planetIdx];
+      const orbitPeriod = ORBIT_PERIODS_DAYS[bodyIdx];
+      const halfSpan = orbitPeriod / 2;
 
-          positions[i * 3] = pos.x;
-          positions[i * 3 + 1] = pos.y;
-          positions[i * 3 + 2] = pos.z;
-        }
+      const positions = new Float32Array(ORBIT_NUM_POINTS * 3);
 
-        // Update this planet's orbit line geometry
-        const geometry = lines[planetIdx].geometry;
-        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-        geometry.computeBoundingSphere();
+      for (let i = 0; i < ORBIT_NUM_POINTS; i++) {
+        // Calculate date for this sample point
+        const t = i / (ORBIT_NUM_POINTS - 1);
+        const dayOffset = -halfSpan + t * orbitPeriod;
+        const sampleDate = new Date(centerDate.getTime() + dayOffset * msPerDay);
+
+        // Set engine time and compute
+        engine.set_time_utc(
+          sampleDate.getUTCFullYear(),
+          sampleDate.getUTCMonth() + 1,
+          sampleDate.getUTCDate(),
+          sampleDate.getUTCHours(),
+          sampleDate.getUTCMinutes(),
+          sampleDate.getUTCSeconds()
+        );
+        engine.recompute();
+
+        // Get position from engine buffer
+        const bodyPositions = getBodiesPositionBuffer(engine);
+        const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
+
+        positions[i * 3] = pos.x;
+        positions[i * 3 + 1] = pos.y;
+        positions[i * 3 + 2] = pos.z;
       }
 
-      console.log(`Computed orbit paths centered on ${centerDate.toISOString()}`);
-    })();
+      // Update this planet's orbit line geometry
+      const geometry = lines[planetIdx].geometry;
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.computeBoundingSphere();
+    }
 
-    return computePromise;
+    console.log(`Computed orbit paths on main thread centered on ${centerDate.toISOString()}`);
   }
 
   /**
