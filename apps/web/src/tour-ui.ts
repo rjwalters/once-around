@@ -23,6 +23,20 @@ function getTourIcon(tourId: string): string {
 }
 
 /**
+ * Close mobile menu if open.
+ */
+function closeMobileMenu(): void {
+  const controlsPanel = document.getElementById('controls');
+  const panelToggleCollapsed = document.getElementById('panel-toggle-collapsed');
+  if (controlsPanel && window.innerWidth <= 600) {
+    controlsPanel.classList.remove('expanded');
+    if (panelToggleCollapsed) {
+      panelToggleCollapsed.textContent = '☰';
+    }
+  }
+}
+
+/**
  * Set up tour UI - list generation and playback controls.
  */
 export function setupTourUI(options: TourUIOptions): void {
@@ -45,7 +59,10 @@ export function setupTourUI(options: TourUIOptions): void {
         <span class="tour-item-desc">Jump to upcoming eclipse</span>
       </div>
     `;
-    nextEclipseItem.addEventListener('click', onNextEclipse);
+    nextEclipseItem.addEventListener('click', () => {
+      closeMobileMenu();
+      onNextEclipse();
+    });
     tourList.appendChild(nextEclipseItem);
 
     // Add predefined tours
@@ -77,6 +94,7 @@ export function setupTourUI(options: TourUIOptions): void {
       if (tourId) {
         const tour = getTourById(tourId);
         if (tour) {
+          closeMobileMenu();
           stopTimePlayback();
           disableARMode?.();
           tourEngine.play(tour);
