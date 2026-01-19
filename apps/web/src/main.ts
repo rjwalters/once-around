@@ -1014,9 +1014,20 @@ async function main(): Promise<void> {
 
   animate();
 
-  // Force a full update after first render frame to ensure everything is initialized
-  // This fixes issues where planetary moons or other elements don't render until interaction
-  requestAnimationFrame(() => {
+  // Hide loading overlay immediately after animation loop starts
+  // This allows immediate interaction - the starfield is already visible and controls are ready
+  const loadingOverlay = document.getElementById("loading");
+  if (loadingOverlay) {
+    loadingOverlay.classList.add("hidden");
+    // Remove from DOM after fade out
+    setTimeout(() => loadingOverlay.remove(), 500);
+  }
+
+  // Defer heavy initialization work to avoid blocking interaction
+  // Using setTimeout(0) to yield to the browser so touch events are processed first
+  setTimeout(() => {
+    // Force a full update to ensure everything is initialized
+    // This fixes issues where planetary moons or other elements don't render until interaction
     renderer.updateFromEngine(engine, settings.fov);
     updateRenderedStars();
 
@@ -1025,15 +1036,6 @@ async function main(): Promise<void> {
     const initialSunMoonSep = calculateSunMoonSeparation(initialBodyPos);
     if (initialSunMoonSep !== null) {
       renderer.updateEclipse(initialSunMoonSep);
-    }
-
-    // Hide loading overlay after first render is complete
-    // This allows immediate interaction while satellites continue loading in background
-    const loadingOverlay = document.getElementById("loading");
-    if (loadingOverlay) {
-      loadingOverlay.classList.add("hidden");
-      // Remove from DOM after fade out
-      setTimeout(() => loadingOverlay.remove(), 500);
     }
 
     // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
@@ -1047,7 +1049,7 @@ async function main(): Promise<void> {
         console.warn(`Tour not found: ${urlState.tour}`);
       }
     }
-  });
+  }, 0);
 
   console.log("Once Around ready!");
 }
