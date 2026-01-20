@@ -356,17 +356,23 @@ export class LabelManager {
         const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute;
         const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
 
-        if (colorAttr) {
+        if (colorAttr && colorAttr.userData) {
           // Has vertex colors: scale colors by opacity
           const v0 = flagLineIndex * 2;
           const v1 = flagLineIndex * 2 + 1;
 
-          // Store original colors if we're showing (opacity > 0.5) or if not yet stored
           const colorArray = colorAttr.array as Float32Array;
+
+          // Validate indices are within bounds
+          if (v1 * 3 + 2 >= colorArray.length) {
+            return; // Invalid index, skip this flag line
+          }
+
           const userData = colorAttr.userData;
           const key = `origColor_${flagLineIndex}`;
 
-          if (targetOpacity > 0.5 || userData[key] === undefined) {
+          // Store original colors if we're showing (opacity > 0.5) or if not yet stored
+          if (targetOpacity > 0.5 || !(key in userData)) {
             // Store the current colors as original
             userData[key] = [
               colorArray[v0 * 3], colorArray[v0 * 3 + 1], colorArray[v0 * 3 + 2],
@@ -376,19 +382,26 @@ export class LabelManager {
 
           // Scale colors by opacity
           const orig = userData[key] as number[];
+          if (!orig) return; // Safety check
           colorAttr.setXYZ(v0, orig[0] * newOpacity, orig[1] * newOpacity, orig[2] * newOpacity);
           colorAttr.setXYZ(v1, orig[3] * newOpacity, orig[4] * newOpacity, orig[5] * newOpacity);
           colorAttr.needsUpdate = true;
-        } else if (posAttr) {
+        } else if (posAttr && posAttr.userData) {
           // No vertex colors: collapse positions to hide segment when opacity is low
           const v0 = flagLineIndex * 2;
           const v1 = flagLineIndex * 2 + 1;
           const posArray = posAttr.array as Float32Array;
+
+          // Validate indices are within bounds
+          if (v1 * 3 + 2 >= posArray.length) {
+            return; // Invalid index, skip this flag line
+          }
+
           const userData = posAttr.userData;
           const key = `origPos_${flagLineIndex}`;
 
           // Store original positions if we're showing or if not yet stored
-          if (targetOpacity > 0.5 || userData[key] === undefined) {
+          if (targetOpacity > 0.5 || !(key in userData)) {
             userData[key] = [
               posArray[v0 * 3], posArray[v0 * 3 + 1], posArray[v0 * 3 + 2],
               posArray[v1 * 3], posArray[v1 * 3 + 1], posArray[v1 * 3 + 2],
@@ -396,6 +409,7 @@ export class LabelManager {
           }
 
           const orig = userData[key] as number[];
+          if (!orig) return; // Safety check
           // Interpolate positions toward each other (collapse to midpoint when hidden)
           const midX = (orig[0] + orig[3]) / 2;
           const midY = (orig[1] + orig[4]) / 2;
