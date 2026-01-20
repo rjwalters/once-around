@@ -652,6 +652,27 @@ export function createCelestialControls(
     updateCameraDirection();
   }
 
+  /**
+   * Set view direction from altitude and azimuth (for AR mode).
+   * Forces topocentric mode if not already in it.
+   */
+  function setAltAz(altitudeDeg: number, azimuthDeg: number): void {
+    // AR mode should work in topocentric coordinates
+    if (viewMode !== "topocentric") {
+      viewMode = "topocentric";
+    }
+
+    // Update topocentric angles
+    topoAltitude = (altitudeDeg * Math.PI) / 180;
+    topoAzimuth = (azimuthDeg * Math.PI) / 180;
+
+    // Cancel any animations
+    isAnimating = false;
+    altAzIsAnimating = false;
+
+    updateTopocentricCamera();
+  }
+
   function setEnabled(enabled: boolean): void {
     inputEnabled = enabled;
     domElement.style.cursor = enabled ? "grab" : "default";
@@ -760,6 +781,7 @@ export function createCelestialControls(
     setCameraState,
     getRaDec,
     setQuaternion,
+    setAltAz,
     setEnabled,
     setViewMode,
     getViewMode,

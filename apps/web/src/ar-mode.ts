@@ -3,10 +3,9 @@
  */
 
 import { createDeviceOrientationManager } from "./deviceOrientation";
-import type * as THREE from "three";
 
 export interface ARModeOptions {
-  onQuaternionChange: (quaternion: THREE.Quaternion) => void;
+  onOrientationChange: (altitude: number, azimuth: number) => void;
   setControlsEnabled: (enabled: boolean) => void;
   onModeChange: (enabled: boolean) => void;
 }
@@ -22,7 +21,7 @@ export interface ARModeManager {
  * Create an AR mode manager for device orientation control.
  */
 export function createARModeManager(options: ARModeOptions): ARModeManager {
-  const { onQuaternionChange, setControlsEnabled, onModeChange } = options;
+  const { onOrientationChange, setControlsEnabled, onModeChange } = options;
 
   let enabled = false;
 
@@ -32,9 +31,9 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
 
   // Create device orientation manager
   const deviceOrientation = createDeviceOrientationManager({
-    onOrientationChange: (quaternion) => {
+    onOrientationChange: (data) => {
       if (enabled) {
-        onQuaternionChange(quaternion);
+        onOrientationChange(data.altitude, data.azimuth);
       }
     },
     onStateChange: (state) => {

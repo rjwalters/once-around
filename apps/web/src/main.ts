@@ -714,7 +714,7 @@ async function main(): Promise<void> {
   // AR Mode (Device Orientation)
   // ---------------------------------------------------------------------------
   const arModeManager = createARModeManager({
-    onQuaternionChange: (quaternion) => controls.setQuaternion(quaternion),
+    onOrientationChange: (altitude, azimuth) => controls.setAltAz(altitude, azimuth),
     setControlsEnabled: (enabled) => controls.setEnabled(enabled),
     onModeChange: (enabled) => settingsSaver.save({ arModeEnabled: enabled }),
   });

@@ -23,7 +23,7 @@ export interface DeviceOrientationManager {
 }
 
 interface DeviceOrientationCallbacks {
-  onOrientationChange: (quaternion: THREE.Quaternion) => void;
+  onOrientationChange: (data: { quaternion: THREE.Quaternion; altitude: number; azimuth: number }) => void;
   onStateChange: (state: DeviceOrientationState) => void;
 }
 
@@ -48,61 +48,126 @@ function checkPermissionRequired(): boolean {
 }
 
 /**
- * Convert device orientation to quaternion for celestial viewing.
+ * Extract altitude and azimuth from device orientation.
  *
  * Device orientation angles:
- * - alpha: 0-360° compass heading (0 = North)
- * - beta: -180 to 180° pitch (0 = flat, 90 = pointing up)
+ * - alpha: 0-360° compass heading (0 = North, increases clockwise)
+ * - beta: -180 to 180° pitch (0 = flat, 90 = screen facing up/zenith)
  * - gamma: -90 to 90° roll (tilt left/right)
  *
- * We need to convert these to a quaternion that represents looking at the sky:
- * - When phone points straight up (beta=90), we should see the zenith
- * - When phone points at horizon (beta=0), we should see along that azimuth
- * - Alpha (compass) rotates around the vertical axis
+ * For a "point at sky" app in portrait mode:
+ * - alpha gives azimuth (compass heading)
+ * - beta gives altitude (0° = horizon, 90° = zenith when phone vertical)
+ * - gamma gives roll around the viewing axis
+ *
+ * Screen orientation adjusts for landscape modes.
  */
-function deviceOrientationToQuaternion(
+function deviceOrientationToAltAz(
   alpha: number,
   beta: number,
   gamma: number,
   screenOrientation: number
-): THREE.Quaternion {
-  // Convert to radians
-  const alphaRad = THREE.MathUtils.degToRad(alpha);
-  const betaRad = THREE.MathUtils.degToRad(beta);
-  const gammaRad = THREE.MathUtils.degToRad(gamma);
-  const orientRad = THREE.MathUtils.degToRad(screenOrientation);
+): { altitude: number; azimuth: number } {
+  // Adjust for screen orientation
+  // Portrait: 0°, Landscape left: 90°, Landscape right: -90°/270°
+  let adjustedBeta = beta;
+  let adjustedGamma = gamma;
 
-  // Start with identity
+  if (screenOrientation === 90) {
+    // Landscape left (home button on right)
+    adjustedBeta = gamma;
+    adjustedGamma = -beta;
+  } else if (screenOrientation === -90 || screenOrientation === 270) {
+    // Landscape right (home button on left)
+    adjustedBeta = -gamma;
+    adjustedGamma = beta;
+  } else if (screenOrientation === 180) {
+    // Upside down portrait
+    adjustedBeta = -beta;
+    adjustedGamma = -gamma;
+  }
+
+  // In portrait mode with phone held vertically:
+  // - beta = 0° when phone is flat (screen up), horizon view
+  // - beta = 90° when phone is vertical (screen toward you), you're looking straight ahead
+  // - beta approaching 90° while tilting back = looking up
+  //
+  // For sky viewing, we want:
+  // - altitude = beta (roughly - when phone tilts back, we look up)
+  // - When beta = 90° and you tilt phone back, beta decreases but you're looking UP
+  //
+  // Actually, when holding phone in portrait and tilting back to look at sky:
+  // - Phone flat, screen up: beta ≈ 0°, you see zenith
+  // - Phone vertical, screen toward you: beta ≈ 90°, you see horizon
+  // - Phone tilted back 45°: beta ≈ 45°, you see 45° above horizon
+  //
+  // So altitude = 90 - beta when 0 ≤ beta ≤ 90
+  // But beta can go negative (phone tilted forward past vertical)
+
+  // Convert beta to altitude
+  // beta = 0° (flat, screen up) → altitude = 90° (zenith)
+  // beta = 90° (vertical) → altitude = 0° (horizon)
+  // beta = -90° (screen down) → altitude = 180° (nadir, clamped)
+  let altitude = 90 - adjustedBeta;
+
+  // Clamp altitude to valid range
+  altitude = Math.max(-90, Math.min(90, altitude));
+
+  // Azimuth from alpha (compass heading)
+  // Device alpha: 0 = north, increases clockwise (east = 90°)
+  // Astronomical azimuth: 0 = north, increases clockwise (east = 90°)
+  // They match! But we may need to account for gamma tilt affecting the perceived heading
+  let azimuth = alpha;
+
+  // Normalize azimuth to 0-360
+  azimuth = ((azimuth % 360) + 360) % 360;
+
+  return { altitude, azimuth };
+}
+
+/**
+ * Convert altitude/azimuth to a quaternion for topocentric viewing.
+ *
+ * In topocentric mode:
+ * - Azimuth 0° = North, 90° = East, 180° = South, 270° = West
+ * - Altitude 0° = horizon, 90° = zenith, -90° = nadir
+ * - "Up" in the view should be toward the zenith
+ */
+function altAzToQuaternion(altitude: number, azimuth: number): THREE.Quaternion {
+  const altRad = THREE.MathUtils.degToRad(altitude);
+  const azRad = THREE.MathUtils.degToRad(azimuth);
+
+  // In the app's topocentric coordinate system:
+  // - Looking north (az=0) at horizon (alt=0): view direction is toward north
+  // - The camera's local -Z should point at the sky location
+  // - The camera's local +Y should point toward zenith (projected onto view plane)
+
+  // Compute view direction from alt/az
+  // Standard conversion:
+  // x = cos(alt) * sin(az)  (east component)
+  // y = sin(alt)            (up component)
+  // z = cos(alt) * cos(az)  (north component)
+  // But we need to map to the app's coordinate system
+
+  // In the app's world coords for topocentric:
+  // The ground plane orientation depends on observer latitude
+  // For simplicity, let's create a quaternion that rotates:
+  // 1. First rotate around Y (up) by -azimuth to face the right direction
+  // 2. Then rotate around the local X (right) by altitude to tilt up/down
+
   const quaternion = new THREE.Quaternion();
 
-  // Create Euler angles for device orientation
-  // The standard device orientation uses ZXY order
-  const euler = new THREE.Euler();
-  euler.set(-betaRad, alphaRad, -gammaRad, "YXZ");
+  // Start looking at RA=0, Dec=0 (which is -X direction in world coords)
+  // Rotate around Y axis by azimuth (note: azimuth increases clockwise when viewed from above)
+  const yawQuat = new THREE.Quaternion();
+  yawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -azRad);
 
-  quaternion.setFromEuler(euler);
+  // Rotate around X axis by altitude (tilt up)
+  const pitchQuat = new THREE.Quaternion();
+  pitchQuat.setFromAxisAngle(new THREE.Vector3(1, 0, 0), altRad);
 
-  // Apply screen orientation correction
-  const screenRotation = new THREE.Quaternion();
-  screenRotation.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -orientRad);
-  quaternion.multiply(screenRotation);
-
-  // Rotate to align with celestial sphere coordinate system
-  // The celestial sphere uses: X = RA=0/Dec=0, Y = north pole (Dec=90), Z = RA=90/Dec=0
-  // Device orientation after euler: Z-forward, Y-up
-  // We need to map device frame to celestial frame so that:
-  // - Tilting phone up/down (beta) changes declination
-  // - Rotating phone left/right (alpha) changes RA
-  //
-  // First rotate -90° around Z to align device X with celestial forward
-  // Then rotate -90° around the new X to point device up toward celestial pole
-  const worldCorrection = new THREE.Quaternion();
-  worldCorrection.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
-  quaternion.multiply(worldCorrection);
-
-  const worldCorrection2 = new THREE.Quaternion();
-  worldCorrection2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-  quaternion.multiply(worldCorrection2);
+  // Combine: first yaw, then pitch
+  quaternion.multiplyQuaternions(yawQuat, pitchQuat);
 
   return quaternion;
 }
@@ -140,23 +205,42 @@ export function createDeviceOrientationManager(
     return (window.orientation as number) || 0;
   }
 
+  // Track smoothed altitude and azimuth
+  let currentAltitude = 0;
+  let currentAzimuth = 0;
+
   function handleOrientation(event: DeviceOrientationEvent): void {
     if (event.alpha === null || event.beta === null || event.gamma === null) {
       return;
     }
 
-    // Calculate target quaternion from device orientation
-    targetQuaternion = deviceOrientationToQuaternion(
+    // Extract altitude and azimuth from device orientation
+    const { altitude, azimuth } = deviceOrientationToAltAz(
       event.alpha,
       event.beta,
       event.gamma,
       getScreenOrientation()
     );
 
-    // Smooth interpolation (SLERP)
+    // Smooth altitude and azimuth
+    // For azimuth, handle wrap-around at 0/360
+    let azDiff = azimuth - currentAzimuth;
+    if (azDiff > 180) azDiff -= 360;
+    if (azDiff < -180) azDiff += 360;
+    currentAzimuth = (currentAzimuth + azDiff * SMOOTHING_FACTOR + 360) % 360;
+    currentAltitude = currentAltitude + (altitude - currentAltitude) * SMOOTHING_FACTOR;
+
+    // Create quaternion from smoothed alt/az
+    targetQuaternion = altAzToQuaternion(currentAltitude, currentAzimuth);
+
+    // Smooth quaternion interpolation (SLERP) for additional smoothness
     currentQuaternion.slerp(targetQuaternion, SMOOTHING_FACTOR);
 
-    callbacks.onOrientationChange(currentQuaternion.clone());
+    callbacks.onOrientationChange({
+      quaternion: currentQuaternion.clone(),
+      altitude: currentAltitude,
+      azimuth: currentAzimuth,
+    });
   }
 
   async function requestPermission(): Promise<boolean> {

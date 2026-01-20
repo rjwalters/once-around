@@ -39,6 +39,7 @@ export interface CelestialControls {
   setCameraState(state: CameraState): void;
   getRaDec(): { ra: number; dec: number };
   setQuaternion(quaternion: THREE.Quaternion): void;
+  setAltAz(altitudeDeg: number, azimuthDeg: number): void;
   setEnabled(enabled: boolean): void;
   // Topocentric mode methods
   setViewMode(mode: ViewMode): void;
