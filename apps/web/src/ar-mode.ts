@@ -27,6 +27,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
 
   // Get DOM elements
   const arModeBtn = document.getElementById("ar-mode-btn");
+  const arToggleMobile = document.getElementById("ar-toggle-mobile");
   const arModeStatus = document.getElementById("ar-mode-status");
 
   // Create device orientation manager
@@ -40,6 +41,9 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
       if (arModeBtn) {
         arModeBtn.classList.toggle("active", state.enabled);
       }
+      if (arToggleMobile) {
+        arToggleMobile.classList.toggle("active", state.enabled);
+      }
     },
   });
 
@@ -47,6 +51,10 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
     if (arModeBtn) {
       arModeBtn.classList.toggle("active", isEnabled);
       arModeBtn.setAttribute("aria-pressed", String(isEnabled));
+    }
+    if (arToggleMobile) {
+      arToggleMobile.classList.toggle("active", isEnabled);
+      arToggleMobile.setAttribute("aria-pressed", String(isEnabled));
     }
     if (arModeStatus) {
       arModeStatus.textContent = message ?? "";
@@ -94,15 +102,30 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
   }
 
   function setupEventListeners(): void {
-    if (!arModeBtn) return;
+    const isSupported = deviceOrientation.isSupported();
 
-    if (!deviceOrientation.isSupported()) {
-      arModeBtn.classList.add("unsupported");
-      arModeBtn.title = "Device orientation not supported";
-    } else {
-      arModeBtn.addEventListener("click", () => {
-        void toggle();
-      });
+    // Setup main AR button (in controls panel)
+    if (arModeBtn) {
+      if (!isSupported) {
+        arModeBtn.classList.add("unsupported");
+        arModeBtn.title = "Device orientation not supported";
+      } else {
+        arModeBtn.addEventListener("click", () => {
+          void toggle();
+        });
+      }
+    }
+
+    // Setup mobile AR toggle button (floating at top right)
+    if (arToggleMobile) {
+      if (!isSupported) {
+        arToggleMobile.classList.add("unsupported");
+        arToggleMobile.title = "Device orientation not supported";
+      } else {
+        arToggleMobile.addEventListener("click", () => {
+          void toggle();
+        });
+      }
     }
   }
 

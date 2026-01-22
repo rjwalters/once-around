@@ -2317,6 +2317,46 @@ canvas {
   color: #4a9eff;
 }
 
+/* Mobile AR toggle - hidden on desktop, shown at top right on mobile */
+.ar-toggle-mobile {
+  display: none;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  background: rgba(40, 50, 40, 0.9);
+  border: 1px solid #447744;
+  border-radius: 8px;
+  color: #88cc88;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 101;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.ar-toggle-mobile:hover {
+  background: rgba(50, 70, 50, 0.95);
+  border-color: #55aa55;
+  color: #aaffaa;
+}
+
+.ar-toggle-mobile.active {
+  background: rgba(40, 80, 50, 0.95);
+  border-color: var(--color-ar-active, #66cc66);
+  color: #aaffaa;
+  box-shadow: 0 0 10px rgba(102, 204, 102, 0.4);
+}
+
+.ar-toggle-mobile.unsupported {
+  opacity: 50%;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* Desktop: panel collapse behavior */
 @media (min-width: 601px) {
   #controls {
@@ -2380,8 +2420,13 @@ canvas {
     padding: 16px;
   }
 
-  /* Show AR mode button on mobile */
+  /* Hide AR mode button in controls on mobile - use floating toggle instead */
   .ar-mode-btn {
+    display: none;
+  }
+
+  /* Show floating AR toggle at top right on mobile */
+  .ar-toggle-mobile {
     display: flex;
   }
 
@@ -2390,7 +2435,6 @@ canvas {
   .time-step-unit,
   .eclipse-btn,
   .tour-btn,
-  .ar-mode-btn,
   .about-button {
     min-height: 44px;
   }
