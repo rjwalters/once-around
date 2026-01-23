@@ -25,6 +25,7 @@ import {
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { bvToColor, angularSizeToPixels, starIdHash } from "../utils/colors";
 import { calculateLabelOffset } from "../utils/labels";
+import { getGlowTexture } from "../utils/textures";
 import type { LabelManager } from "../label-manager";
 
 // -----------------------------------------------------------------------------
@@ -184,37 +185,6 @@ export interface StarsLayer {
  * @param labelsGroup - The group to add star labels to
  * @returns StarsLayer interface
  */
-/**
- * Create a radial glow texture for bright star rendering.
- * Uses a Gaussian-like falloff for a natural glow appearance.
- */
-function createGlowTexture(size = 128): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-
-  // Create radial gradient with soft falloff
-  const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-
-  // Bright core with soft gaussian-like falloff
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.05, 'rgba(255,255,255,0.95)');
-  gradient.addColorStop(0.1, 'rgba(255,255,255,0.8)');
-  gradient.addColorStop(0.2, 'rgba(255,255,255,0.5)');
-  gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
-  gradient.addColorStop(0.6, 'rgba(255,255,255,0.08)');
-  gradient.addColorStop(0.8, 'rgba(255,255,255,0.02)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
 export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): StarsLayer {
   // Main stars geometry with custom shader for scintillation
   const starsGeometry = new THREE.BufferGeometry();
@@ -242,7 +212,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   scene.add(starsPoints);
 
   // Override stars use billboard sprites for better appearance at large sizes
-  const glowTexture = createGlowTexture();
+  const glowTexture = getGlowTexture();
   const overrideStarsGroup = new THREE.Group();
   overrideStarsGroup.renderOrder = 100;
   scene.add(overrideStarsGroup);

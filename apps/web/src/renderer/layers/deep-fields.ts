@@ -10,6 +10,7 @@ import { DEEP_FIELD_DATA, type DeepField } from "../../deepFieldData";
 import { SKY_RADIUS, DEEP_FIELD_FADE_START_PX, DEEP_FIELD_FADE_END_PX } from "../constants";
 import { deepFieldVertexShader, deepFieldFragmentShader } from "../shaders";
 import { raDecToPosition } from "../utils/coordinates";
+import { smoothstep } from "../utils/math";
 
 interface DeepFieldMesh {
   field: DeepField;
@@ -40,14 +41,6 @@ function calculateSizePixels(sizeArcmin: number, fovDegrees: number, canvasHeigh
   const fractionOfFov = sizeDegrees / fovDegrees;
   // Convert to pixels
   return fractionOfFov * canvasHeight;
-}
-
-/**
- * Smooth step function for opacity transitions.
- */
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
 }
 
 /**

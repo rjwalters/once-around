@@ -18,6 +18,8 @@ import { getSatellitePosition, SATELLITES, type SatelliteInfo } from "../../engi
 import { SKY_RADIUS, LABEL_OFFSET } from "../constants";
 import { rustToThreeJS } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
+import { getGlowTexture } from "../utils/textures";
+import { smoothstep } from "../utils/math";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -76,45 +78,6 @@ export interface SatellitesLayer {
   getSatellitePosition(index: number, engine: SkyEngine): { x: number; y: number; z: number } | null;
   /** Check if a specific satellite is visible */
   isSatelliteVisible(index: number): boolean;
-}
-
-/**
- * Create a glow texture for point source rendering.
- */
-function createGlowTexture(size = 128): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-
-  const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-
-  // Gaussian-like falloff for natural glow
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.05, 'rgba(255,255,255,0.95)');
-  gradient.addColorStop(0.1, 'rgba(255,255,255,0.8)');
-  gradient.addColorStop(0.2, 'rgba(255,255,255,0.5)');
-  gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
-  gradient.addColorStop(0.6, 'rgba(255,255,255,0.08)');
-  gradient.addColorStop(0.8, 'rgba(255,255,255,0.02)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-// Shared glow texture for all satellites
-let sharedGlowTexture: THREE.Texture | null = null;
-
-function getGlowTexture(): THREE.Texture {
-  if (!sharedGlowTexture) {
-    sharedGlowTexture = createGlowTexture();
-  }
-  return sharedGlowTexture;
 }
 
 /**
@@ -276,14 +239,6 @@ export function createSatellitesLayer(scene: THREE.Scene, labelsGroup: THREE.Gro
     getSatellitePosition: getSatellitePositionFn,
     isSatelliteVisible,
   };
-}
-
-/**
- * Smoothstep function for smooth transitions.
- */
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
 }
 
 /**

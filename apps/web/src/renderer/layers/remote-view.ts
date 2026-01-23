@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { SKY_RADIUS } from "../constants";
 import { deepFieldVertexShader, deepFieldFragmentShader } from "../shaders";
 import { raDecToPosition } from "../utils/coordinates";
+import { getGlowTexture } from "../utils/textures";
 import type { HeliocentricPosition } from "../../spacecraftPositions";
 
 export interface RemoteViewpoint {
@@ -108,35 +109,6 @@ function eclipticDirectionToRaDec(x: number, y: number, z: number): { ra: number
 }
 
 /**
- * Create a glow texture for body dot rendering.
- */
-function createGlowTexture(size = 128): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-
-  const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-
-  // Gaussian-like falloff for natural glow
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.05, 'rgba(255,255,255,0.95)');
-  gradient.addColorStop(0.1, 'rgba(255,255,255,0.8)');
-  gradient.addColorStop(0.2, 'rgba(255,255,255,0.5)');
-  gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
-  gradient.addColorStop(0.6, 'rgba(255,255,255,0.08)');
-  gradient.addColorStop(0.8, 'rgba(255,255,255,0.02)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-/**
  * Transform heliocentric body positions to sky positions as seen from viewpoint.
  */
 function transformBodyPositions(
@@ -168,7 +140,7 @@ function transformBodyPositions(
  */
 export function createRemoteViewLayer(scene: THREE.Scene): RemoteViewLayer {
   const textureLoader = new THREE.TextureLoader();
-  const glowTexture = createGlowTexture();
+  const glowTexture = getGlowTexture();
 
   // State
   let viewpoint: RemoteViewpoint | null = null;

@@ -13,6 +13,8 @@ import { SKY_RADIUS, BODY_COLORS, BODY_NAMES, LABEL_OFFSET, POINT_SOURCE_MIN_SIZ
 import { moonVertexShader, moonFragmentShader, texturedPlanetVertexShader, texturedPlanetFragmentShader } from "../shaders";
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
+import { getGlowTexture } from "../utils/textures";
+import { smoothstep } from "../utils/math";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -31,44 +33,6 @@ const LOD_POINT_SOURCE_MAX_PX = 3;    // Below this, pure point source (sprite o
 const LOD_SIMPLE_DISK_MAX_PX = 10;    // Below this, solid color disk (no texture)
 const LOD_BLEND_DISK_MAX_PX = 30;     // Below this, blend color and texture
 // Above LOD_BLEND_DISK_MAX_PX: full texture detail
-
-/**
- * Create a glow texture for point source rendering using canvas.
- * Creates a radial gradient with Gaussian-like falloff.
- */
-function createGlowTexture(size = 128): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-
-  const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-
-  // Gaussian-like falloff for natural glow
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.05, 'rgba(255,255,255,0.95)');
-  gradient.addColorStop(0.1, 'rgba(255,255,255,0.8)');
-  gradient.addColorStop(0.2, 'rgba(255,255,255,0.5)');
-  gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
-  gradient.addColorStop(0.6, 'rgba(255,255,255,0.08)');
-  gradient.addColorStop(0.8, 'rgba(255,255,255,0.02)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-/**
- * Smoothstep function for smooth transitions.
- */
-function smoothstep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
 
 export interface BodiesLayer {
   /** The Sun mesh */
@@ -195,7 +159,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   // ---------------------------------------------------------------------------
   // Planet point source sprites (for when planets are too small to resolve)
   // ---------------------------------------------------------------------------
-  const glowTexture = createGlowTexture();
+  const glowTexture = getGlowTexture();
   const planetSprites: THREE.Sprite[] = [];
   const planetSpriteMaterials: THREE.SpriteMaterial[] = [];
 
