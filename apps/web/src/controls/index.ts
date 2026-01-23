@@ -103,7 +103,9 @@ export function createCelestialControls(
   }
 
   function getViewDirection(): THREE.Vector3 {
-    return new THREE.Vector3(-1, 0, 0).applyQuaternion(viewQuaternion);
+    // Camera looks along local -Z, which maps to viewDir via the quaternion
+    // (based on raDecToQuaternion: makeBasis(right, up, -viewDir))
+    return new THREE.Vector3(0, 0, -1).applyQuaternion(viewQuaternion);
   }
 
   function getCameraUp(): THREE.Vector3 {
@@ -111,7 +113,8 @@ export function createCelestialControls(
   }
 
   function getCameraRight(): THREE.Vector3 {
-    return new THREE.Vector3(0, 0, -1).applyQuaternion(viewQuaternion);
+    // Camera's right is local +X, which maps to 'right' via the quaternion
+    return new THREE.Vector3(1, 0, 0).applyQuaternion(viewQuaternion);
   }
 
   function getSphericalFromQuaternion(): { theta: number; phi: number } {
@@ -573,6 +576,7 @@ export function createCelestialControls(
     animDuration = durationMs;
     animStartTime = performance.now();
     isAnimating = true;
+
   }
 
   function dispose(): void {

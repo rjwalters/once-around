@@ -10,7 +10,7 @@ import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { SkyEngine } from "../../wasm/sky_engine";
 import { getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getMinorBodiesBuffer } from "../../engine";
 import { SKY_RADIUS, BODY_COLORS, BODY_NAMES, LABEL_OFFSET, POINT_SOURCE_MIN_SIZE_PX, MINOR_BODY_NAMES, MINOR_BODY_COLORS, MINOR_BODY_COUNT } from "../constants";
-import { moonVertexShader, moonFragmentShader } from "../shaders";
+import { moonVertexShader, moonFragmentShader, texturedPlanetVertexShader, texturedPlanetFragmentShader } from "../shaders";
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
 import { smoothstep } from "../utils/math";
