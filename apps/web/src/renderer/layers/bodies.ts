@@ -79,8 +79,6 @@ export interface BodiesLayer {
   planetMeshes: THREE.Mesh[];
   /** Body labels (Sun, Moon, planets) */
   labels: CSS2DObject[];
-  /** Flag lines connecting labels to bodies */
-  flagLines: THREE.LineSegments;
   /** Get current Sun position */
   getSunPosition(): THREE.Vector3;
   /** Get current Moon position */
@@ -282,20 +280,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   }
 
   // ---------------------------------------------------------------------------
-  // Body flag lines
-  // ---------------------------------------------------------------------------
-  const bodyFlagLinesGeometry = new THREE.BufferGeometry();
-  bodyFlagLinesGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9 * 2 * 3), 3));
-  bodyFlagLinesGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(9 * 2 * 3), 3));
-  const bodyFlagLinesMaterial = new THREE.LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.6,
-  });
-  const bodyFlagLines = new THREE.LineSegments(bodyFlagLinesGeometry, bodyFlagLinesMaterial);
-  labelsGroup.add(bodyFlagLines);
-
-  // ---------------------------------------------------------------------------
   // Minor body sprites (dwarf planets and asteroids)
   // ---------------------------------------------------------------------------
   const minorBodySprites: THREE.Sprite[] = [];
@@ -331,24 +315,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     minorBodyLabels.push(label);
     labelsGroup.add(label);
   }
-
-  // ---------------------------------------------------------------------------
-  // Minor body flag lines
-  // ---------------------------------------------------------------------------
-  const minorBodyFlagLinesGeometry = new THREE.BufferGeometry();
-  minorBodyFlagLinesGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(MINOR_BODY_COUNT * 2 * 3), 3));
-  minorBodyFlagLinesGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(MINOR_BODY_COUNT * 2 * 3), 3));
-  const minorBodyFlagLinesMaterial = new THREE.LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.6,
-  });
-  const minorBodyFlagLines = new THREE.LineSegments(minorBodyFlagLinesGeometry, minorBodyFlagLinesMaterial);
-  labelsGroup.add(minorBodyFlagLines);
-
-  // Pre-allocate flag line arrays for minor bodies
-  const minorBodyFlagLinePositions = new Float32Array(MINOR_BODY_COUNT * 2 * 3);
-  const minorBodyFlagLineColors = new Float32Array(MINOR_BODY_COUNT * 2 * 3);
 
   // ---------------------------------------------------------------------------
   // Textured meshes for minor bodies with spacecraft imagery (for extreme zoom)
@@ -455,7 +421,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       for (const mesh of planetMeshes) mesh.visible = false;
       for (const sprite of planetSprites) sprite.visible = false;
       for (const label of bodyLabels) label.visible = false;
-      bodyFlagLines.visible = false;
       saturnRings.visible = false;
       // Also hide minor bodies
       plutoMesh.visible = false;
@@ -463,43 +428,17 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       vestaMesh.visible = false;
       for (const sprite of minorBodySprites) sprite.visible = false;
       for (const label of minorBodyLabels) label.visible = false;
-      minorBodyFlagLines.visible = false;
       return;
     }
-
-    // Restore flag line visibility when not in remote view
-    bodyFlagLines.visible = true;
-    minorBodyFlagLines.visible = true;
 
     const bodyPositions = getBodiesPositionBuffer(engine);
     const angularDiameters = getBodiesAngularDiametersBuffer(engine);
     const radius = SKY_RADIUS - 1;
 
-    const flagLinePositions = new Float32Array(9 * 2 * 3);
-    const flagLineColors = new Float32Array(9 * 2 * 3);
-
     // Convert angular diameter to world scale for spheres on the sky sphere
     // Formula: scale = angDiam * SKY_RADIUS / 2 (geometric optics)
     function angularDiameterToScale(angDiamRadians: number): number {
       return (angDiamRadians * SKY_RADIUS) / 2;
-    }
-
-    // Helper to set flag line
-    function setFlagLine(bodyIdx: number, objPos: THREE.Vector3, labelPos: THREE.Vector3) {
-      const color = BODY_COLORS[bodyIdx];
-      const baseIdx = bodyIdx * 6;
-      flagLinePositions[baseIdx] = objPos.x;
-      flagLinePositions[baseIdx + 1] = objPos.y;
-      flagLinePositions[baseIdx + 2] = objPos.z;
-      flagLinePositions[baseIdx + 3] = labelPos.x;
-      flagLinePositions[baseIdx + 4] = labelPos.y;
-      flagLinePositions[baseIdx + 5] = labelPos.z;
-      flagLineColors[baseIdx] = color.r;
-      flagLineColors[baseIdx + 1] = color.g;
-      flagLineColors[baseIdx + 2] = color.b;
-      flagLineColors[baseIdx + 3] = color.r;
-      flagLineColors[baseIdx + 4] = color.g;
-      flagLineColors[baseIdx + 5] = color.b;
     }
 
     // Update Sun (no minimum size - Sun is always large enough)
@@ -511,7 +450,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     sunMesh.scale.setScalar(sunDisplayScale);
     const sunLabelPos = calculateLabelOffset(sunPos, LABEL_OFFSET);
     bodyLabels[0].position.copy(sunLabelPos);
-    setFlagLine(0, sunPos, sunLabelPos);
     // Hide sun if below horizon in topocentric mode
     const sunAboveHorizon = isAboveHorizon(sunPos);
     sunMesh.visible = sunAboveHorizon;
@@ -521,11 +459,11 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     if (sunAboveHorizon && labelManager) {
       labelManager.registerLabel({
         id: 'body-sun',
-        worldPos: sunLabelPos,
+        objectPos: sunPos,
+        labelPos: sunLabelPos,
         priority: LABEL_PRIORITY.SUN,
         label: bodyLabels[0],
-        flagLine: bodyFlagLines,
-        flagLineIndex: 0,
+        color: BODY_COLORS[0],
       });
     }
 
@@ -554,7 +492,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
 
     const moonLabelPos = calculateLabelOffset(moonPos, LABEL_OFFSET);
     bodyLabels[1].position.copy(moonLabelPos);
-    setFlagLine(1, moonPos, moonLabelPos);
     // Hide moon if below horizon in topocentric mode
     const moonAboveHorizon = isAboveHorizon(moonPos);
     moonMesh.visible = moonAboveHorizon;
@@ -564,11 +501,11 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     if (moonAboveHorizon && labelManager) {
       labelManager.registerLabel({
         id: 'body-moon',
-        worldPos: moonLabelPos,
+        objectPos: moonPos,
+        labelPos: moonLabelPos,
         priority: LABEL_PRIORITY.MOON,
         label: bodyLabels[1],
-        flagLine: bodyFlagLines,
-        flagLineIndex: 1,
+        color: BODY_COLORS[1],
       });
     }
 
@@ -636,21 +573,20 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         planetSprites[i].visible = false;
       }
 
-      // Labels and flag lines
+      // Labels
       const labelPos = calculateLabelOffset(planetPos, LABEL_OFFSET);
       bodyLabels[bodyIdx].position.copy(labelPos);
-      setFlagLine(bodyIdx, planetPos, labelPos);
       bodyLabels[bodyIdx].visible = planetAboveHorizon;
 
       // Register planet label with label manager
       if (planetAboveHorizon && labelManager) {
         labelManager.registerLabel({
           id: `body-planet-${bodyIdx}`,
-          worldPos: labelPos,
+          objectPos: planetPos,
+          labelPos: labelPos,
           priority: LABEL_PRIORITY.PLANET,
           label: bodyLabels[bodyIdx],
-          flagLine: bodyFlagLines,
-          flagLineIndex: bodyIdx,
+          color: BODY_COLORS[bodyIdx],
         });
       }
     }
@@ -751,7 +687,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         minorBodySprites[i].visible = false;
       }
 
-      // Update label and flag line
+      // Update label
       const labelPos = calculateLabelOffset(minorPos, LABEL_OFFSET);
       minorBodyLabels[i].position.copy(labelPos);
       minorBodyLabels[i].visible = aboveHorizon;
@@ -762,42 +698,14 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         const priority = i === 0 ? LABEL_PRIORITY.MINOR_BODY_HIGH : LABEL_PRIORITY.MINOR_BODY_LOW;
         labelManager.registerLabel({
           id: `body-minor-${i}`,
-          worldPos: labelPos,
+          objectPos: minorPos,
+          labelPos: labelPos,
           priority: priority,
           label: minorBodyLabels[i],
-          flagLine: minorBodyFlagLines,
-          flagLineIndex: i,
+          color: MINOR_BODY_COLORS[i],
         });
       }
-
-      // Flag line for minor body
-      const color = MINOR_BODY_COLORS[i];
-      const baseIdx = i * 6;
-      minorBodyFlagLinePositions[baseIdx] = minorPos.x;
-      minorBodyFlagLinePositions[baseIdx + 1] = minorPos.y;
-      minorBodyFlagLinePositions[baseIdx + 2] = minorPos.z;
-      minorBodyFlagLinePositions[baseIdx + 3] = labelPos.x;
-      minorBodyFlagLinePositions[baseIdx + 4] = labelPos.y;
-      minorBodyFlagLinePositions[baseIdx + 5] = labelPos.z;
-      minorBodyFlagLineColors[baseIdx] = color.r;
-      minorBodyFlagLineColors[baseIdx + 1] = color.g;
-      minorBodyFlagLineColors[baseIdx + 2] = color.b;
-      minorBodyFlagLineColors[baseIdx + 3] = color.r;
-      minorBodyFlagLineColors[baseIdx + 4] = color.g;
-      minorBodyFlagLineColors[baseIdx + 5] = color.b;
     }
-
-    // Update minor body flag line geometry
-    minorBodyFlagLinesGeometry.attributes.position.array.set(minorBodyFlagLinePositions);
-    (minorBodyFlagLinesGeometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    minorBodyFlagLinesGeometry.attributes.color.array.set(minorBodyFlagLineColors);
-    (minorBodyFlagLinesGeometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
-
-    // Update flag line geometry
-    bodyFlagLinesGeometry.attributes.position.array.set(flagLinePositions);
-    (bodyFlagLinesGeometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    bodyFlagLinesGeometry.attributes.color.array.set(flagLineColors);
-    (bodyFlagLinesGeometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
   }
 
   function setHorizonCulling(enabled: boolean, zenith?: THREE.Vector3): void {
@@ -873,7 +781,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     moonMesh,
     planetMeshes,
     labels: bodyLabels,
-    flagLines: bodyFlagLines,
     getSunPosition: () => currentSunPos.clone(),
     getMoonPosition: () => currentMoonPos.clone(),
     getSunMoonSeparationDeg: () => currentSunMoonSeparationDeg,

@@ -98,6 +98,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   // Create label manager for priority-based label culling
   const labelManager = new LabelManager();
 
+  // Add the label manager's flagline mesh to the labels group
+  labelsGroup.add(labelManager.getFlagLineMesh());
+
   // Create all layers
   const milkyWayLayer = createMilkyWayLayer(scene);
   const groundLayer = createGroundLayer(scene);
@@ -123,6 +126,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   let hubbleModeEnabled = false;
   let jwstModeEnabled = false;
   let lastUpdateTime = performance.now();
+  let currentDsoMagLimit = 6.5; // Default DSO magnitude limit
+  let dsosVisible = false;
 
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
     const effectiveFov = fov * 1.2;
@@ -153,6 +158,10 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     if (satellitesEnabled) {
       satellitesLayer.update(engine, labelsVisible, fov, canvasHeight, labelManager);
     }
+    // Update DSOs so their labels participate in overlap detection
+    if (dsosVisible) {
+      dsoLayer.update(fov, currentDsoMagLimit, labelsVisible, canvasHeight, labelManager);
+    }
 
     // End label manager frame - resolves overlaps and applies fades
     if (labelsVisible) {
@@ -167,6 +176,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   function setLabelsVisible(visible: boolean): void {
     labelsVisible = visible;
     labelsGroup.visible = visible;
+    labelManager.setVisible(visible);
   }
 
   function setOrbitsVisible(visible: boolean): void {
@@ -186,11 +196,13 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   function updateDSOs(fov: number, magLimit: number): void {
+    currentDsoMagLimit = magLimit;
     const canvasHeight = ctx.container.clientHeight;
     dsoLayer.update(fov, magLimit, labelsVisible, canvasHeight, labelManager);
   }
 
   function setDSOsVisible(visible: boolean): void {
+    dsosVisible = visible;
     dsoLayer.setVisible(visible);
   }
 

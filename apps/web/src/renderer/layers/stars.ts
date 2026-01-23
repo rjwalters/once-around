@@ -154,8 +154,6 @@ export interface StarsLayer {
   overrideStarsGroup: THREE.Group;
   /** Star labels (HR number -> label) */
   labels: Map<number, CSS2DObject>;
-  /** Flag lines connecting labels to stars */
-  flagLines: THREE.LineSegments;
   /** Star position map (HR number -> position), built during update */
   getStarPositionMap(): Map<number, THREE.Vector3>;
   /** Constellation star position map (all stars, for drawing constellation lines) */
@@ -266,21 +264,8 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     labelsGroup.add(label);
   }
 
-  // Star flag lines
-  const MAX_STAR_FLAGS = 30;
-  const starFlagLinesGeometry = new THREE.BufferGeometry();
-  const starFlagPositionBuffer = new Float32Array(MAX_STAR_FLAGS * 2 * 3);
-  const starFlagPositionAttr = new THREE.BufferAttribute(starFlagPositionBuffer, 3);
-  starFlagPositionAttr.setUsage(THREE.DynamicDrawUsage);
-  starFlagLinesGeometry.setAttribute("position", starFlagPositionAttr);
-
-  const starFlagLinesMaterial = new THREE.LineBasicMaterial({
-    color: new THREE.Color(0.6, 0.6, 0.7),
-    transparent: true,
-    opacity: 0.5,
-  });
-  const starFlagLines = new THREE.LineSegments(starFlagLinesGeometry, starFlagLinesMaterial);
-  labelsGroup.add(starFlagLines);
+  // Default star flagline color (gray-blue)
+  const starFlagLineColor = new THREE.Color(0.6, 0.6, 0.7);
 
   // State
   let starPositionMap: Map<number, THREE.Vector3> = new Map();
@@ -550,15 +535,13 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   }
 
   function updateLabels(labelsVisible: boolean): void {
-    let flagIndex = 0;
-
     for (let starIdx = 0; starIdx < MAJOR_STARS.length; starIdx++) {
       const [hr] = MAJOR_STARS[starIdx];
       const label = starLabels.get(hr);
       if (!label) continue;
 
       const pos = starPositionMap.get(hr);
-      if (pos && flagIndex < MAX_STAR_FLAGS) {
+      if (pos) {
         const labelPos = calculateLabelOffset(pos, LABEL_OFFSET);
         label.position.copy(labelPos);
         label.visible = labelsVisible;
@@ -570,31 +553,17 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
           const priority = Math.max(300, 500 - starIdx * 5);
           currentLabelManager.registerLabel({
             id: `star-${hr}`,
-            worldPos: labelPos,
+            objectPos: pos,
+            labelPos: labelPos,
             priority: priority,
             label: label,
-            flagLine: starFlagLines,
-            flagLineIndex: flagIndex,
+            color: starFlagLineColor,
           });
         }
-
-        // Add flag line from star to label
-        const idx = flagIndex * 6;
-        starFlagPositionBuffer[idx] = pos.x;
-        starFlagPositionBuffer[idx + 1] = pos.y;
-        starFlagPositionBuffer[idx + 2] = pos.z;
-        starFlagPositionBuffer[idx + 3] = labelPos.x;
-        starFlagPositionBuffer[idx + 4] = labelPos.y;
-        starFlagPositionBuffer[idx + 5] = labelPos.z;
-        flagIndex++;
       } else {
         label.visible = false;
       }
     }
-
-    starFlagPositionAttr.needsUpdate = true;
-    starFlagLinesGeometry.setDrawRange(0, flagIndex * 2);
-    starFlagLines.visible = labelsVisible;
   }
 
   function setOverrides(overrides: Array<{ starHR: number; magnitude?: number; bvColor?: number; scale?: number; ra?: number; dec?: number }>): void {
@@ -660,7 +629,6 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     points: starsPoints,
     overrideStarsGroup,
     labels: starLabels,
-    flagLines: starFlagLines,
     getStarPositionMap: () => starPositionMap,
     getConstellationStarPositionMap: () => constellationStarPositionMap,
     buildConstellationStarMap,

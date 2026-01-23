@@ -4,6 +4,8 @@
  * A priority-based label culling system that prevents overlap by hiding
  * lower-priority labels when they collide with higher-priority ones.
  * Labels fade smoothly and more labels become visible when zoomed in.
+ *
+ * Also owns and manages all flaglines (the lines connecting labels to objects).
  */
 
 import * as THREE from "three";
@@ -19,16 +21,16 @@ import type { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 export interface ManagedLabelInfo {
   /** Unique identifier for this label */
   id: string;
-  /** World position of the labeled object */
-  worldPos: THREE.Vector3;
+  /** World position of the labeled object (flagline start) */
+  objectPos: THREE.Vector3;
+  /** World position of the label (flagline end) */
+  labelPos: THREE.Vector3;
   /** Priority (higher = more important, shown over lower priority) */
   priority: number;
   /** The CSS2DObject label element */
   label: CSS2DObject;
-  /** Optional flag line to coordinate opacity with */
-  flagLine?: THREE.LineSegments;
-  /** Optional flag line index (for multi-segment flag lines) */
-  flagLineIndex?: number;
+  /** Flagline color */
+  color: THREE.Color;
 }
 
 /**
@@ -75,6 +77,9 @@ const MIN_OPACITY_THRESHOLD = 0.01;
 
 // Padding between labels (pixels)
 const LABEL_PADDING_PX = 4;
+
+// Initial capacity for flaglines (will grow if needed)
+const INITIAL_FLAGLINE_CAPACITY = 200;
 
 // -----------------------------------------------------------------------------
 // Priority Constants (exported for use by layers)
@@ -133,6 +138,44 @@ export class LabelManager {
   // Reusable vector for projections
   private projVector = new THREE.Vector3();
 
+  // Flagline geometry (owned by LabelManager)
+  private flagLineGeometry: THREE.BufferGeometry;
+  private flagLineMaterial: THREE.LineBasicMaterial;
+  private flagLineMesh: THREE.LineSegments;
+  private flagLineCapacity: number;
+  private positionBuffer: Float32Array;
+  private colorBuffer: Float32Array;
+
+  constructor() {
+    // Initialize flagline geometry with pre-allocated buffers
+    this.flagLineCapacity = INITIAL_FLAGLINE_CAPACITY;
+    this.positionBuffer = new Float32Array(this.flagLineCapacity * 2 * 3);
+    this.colorBuffer = new Float32Array(this.flagLineCapacity * 2 * 3);
+
+    this.flagLineGeometry = new THREE.BufferGeometry();
+    const posAttr = new THREE.BufferAttribute(this.positionBuffer, 3);
+    const colorAttr = new THREE.BufferAttribute(this.colorBuffer, 3);
+    posAttr.setUsage(THREE.DynamicDrawUsage);
+    colorAttr.setUsage(THREE.DynamicDrawUsage);
+    this.flagLineGeometry.setAttribute("position", posAttr);
+    this.flagLineGeometry.setAttribute("color", colorAttr);
+
+    this.flagLineMaterial = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.6,
+    });
+
+    this.flagLineMesh = new THREE.LineSegments(this.flagLineGeometry, this.flagLineMaterial);
+  }
+
+  /**
+   * Get the flagline mesh to add to the scene.
+   */
+  getFlagLineMesh(): THREE.LineSegments {
+    return this.flagLineMesh;
+  }
+
   /**
    * Begin a new frame. Call this before layer updates.
    * @param camera - The perspective camera for projection
@@ -158,29 +201,41 @@ export class LabelManager {
   }
 
   /**
-   * End the frame. Resolves overlaps and applies fades.
+   * End the frame. Resolves overlaps, updates flaglines, and applies fades.
    * Call this after all layer updates.
    * @param deltaTime - Time since last frame in seconds
    */
   endFrame(deltaTime: number): void {
-    if (!this.camera || this.frameLabels.length === 0) {
+    if (!this.camera) {
+      this.flagLineGeometry.setDrawRange(0, 0);
       return;
     }
 
-    // Project all labels to screen space and calculate bounds
-    const labelBounds: Array<{ info: ManagedLabelInfo; bounds: ScreenBounds; screenPos: THREE.Vector2 }> = [];
+    if (this.frameLabels.length === 0) {
+      this.flagLineGeometry.setDrawRange(0, 0);
+      return;
+    }
 
-    for (const info of this.frameLabels) {
-      const screenPos = this.projectToScreen(info.worldPos);
+    // Ensure we have enough capacity
+    if (this.frameLabels.length > this.flagLineCapacity) {
+      this.growBuffers(this.frameLabels.length);
+    }
+
+    // Project all labels to screen space and calculate bounds
+    const labelBounds: Array<{ info: ManagedLabelInfo; bounds: ScreenBounds; screenPos: THREE.Vector2; index: number }> = [];
+
+    for (let i = 0; i < this.frameLabels.length; i++) {
+      const info = this.frameLabels[i];
+      const screenPos = this.projectToScreen(info.labelPos);
 
       // Skip labels that are behind the camera
       if (screenPos === null) {
-        this.hideLabel(info.id, info.label, info.flagLine, info.flagLineIndex, deltaTime);
+        this.updateLabelOpacity(info, 0, deltaTime);
         continue;
       }
 
       const bounds = this.calculateBounds(screenPos);
-      labelBounds.push({ info, bounds, screenPos });
+      labelBounds.push({ info, bounds, screenPos, index: i });
     }
 
     // Sort by priority (highest first)
@@ -188,25 +243,86 @@ export class LabelManager {
 
     // Greedy overlap resolution
     const visibleBounds: ScreenBounds[] = [];
+    const visibleIndices: Set<number> = new Set();
 
     for (const item of labelBounds) {
-      const { info, bounds } = item;
+      const { info, bounds, index } = item;
 
       // Check if this label overlaps any already-visible higher-priority label
       const overlaps = visibleBounds.some(vb => this.boundsOverlap(bounds, vb));
 
       if (!overlaps) {
         // This label is visible
-        this.showLabel(info.id, info.label, info.flagLine, info.flagLineIndex, deltaTime);
+        this.updateLabelOpacity(info, 1, deltaTime);
         visibleBounds.push(bounds);
+        visibleIndices.add(index);
       } else {
         // This label is hidden due to overlap
-        this.hideLabel(info.id, info.label, info.flagLine, info.flagLineIndex, deltaTime);
+        this.updateLabelOpacity(info, 0, deltaTime);
       }
     }
 
+    // Update flagline geometry
+    this.updateFlagLines(deltaTime);
+
     // Clean up stale states (labels not seen for a while)
     this.cleanupStaleStates();
+  }
+
+  /**
+   * Grow the flagline buffers to accommodate more lines.
+   */
+  private growBuffers(minCapacity: number): void {
+    const newCapacity = Math.max(minCapacity, this.flagLineCapacity * 2);
+    const newPositionBuffer = new Float32Array(newCapacity * 2 * 3);
+    const newColorBuffer = new Float32Array(newCapacity * 2 * 3);
+
+    // Copy existing data
+    newPositionBuffer.set(this.positionBuffer);
+    newColorBuffer.set(this.colorBuffer);
+
+    this.positionBuffer = newPositionBuffer;
+    this.colorBuffer = newColorBuffer;
+    this.flagLineCapacity = newCapacity;
+
+    // Update geometry attributes
+    const posAttr = new THREE.BufferAttribute(this.positionBuffer, 3);
+    const colorAttr = new THREE.BufferAttribute(this.colorBuffer, 3);
+    posAttr.setUsage(THREE.DynamicDrawUsage);
+    colorAttr.setUsage(THREE.DynamicDrawUsage);
+    this.flagLineGeometry.setAttribute("position", posAttr);
+    this.flagLineGeometry.setAttribute("color", colorAttr);
+  }
+
+  /**
+   * Update flagline geometry based on current frame's registered labels.
+   */
+  private updateFlagLines(deltaTime: number): void {
+    const posAttr = this.flagLineGeometry.getAttribute("position") as THREE.BufferAttribute;
+    const colorAttr = this.flagLineGeometry.getAttribute("color") as THREE.BufferAttribute;
+
+    for (let i = 0; i < this.frameLabels.length; i++) {
+      const info = this.frameLabels[i];
+      const state = this.labelStates.get(info.id);
+      const opacity = state ? state.currentOpacity : 1;
+      const effectiveOpacity = opacity < MIN_OPACITY_THRESHOLD ? 0 : opacity;
+
+      const baseIdx = i * 2;
+
+      // Set positions (object -> label)
+      posAttr.setXYZ(baseIdx, info.objectPos.x, info.objectPos.y, info.objectPos.z);
+      posAttr.setXYZ(baseIdx + 1, info.labelPos.x, info.labelPos.y, info.labelPos.z);
+
+      // Set colors with opacity applied
+      colorAttr.setXYZ(baseIdx, info.color.r * effectiveOpacity, info.color.g * effectiveOpacity, info.color.b * effectiveOpacity);
+      colorAttr.setXYZ(baseIdx + 1, info.color.r * effectiveOpacity, info.color.g * effectiveOpacity, info.color.b * effectiveOpacity);
+    }
+
+    posAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
+
+    // Only draw the lines we need
+    this.flagLineGeometry.setDrawRange(0, this.frameLabels.length * 2);
   }
 
   /**
@@ -274,169 +390,47 @@ export class LabelManager {
   }
 
   /**
-   * Mark a label as visible and apply fade-in.
+   * Update label opacity based on target (0 = hidden, 1 = visible).
    */
-  private showLabel(
-    id: string,
-    label: CSS2DObject,
-    flagLine: THREE.LineSegments | undefined,
-    flagLineIndex: number | undefined,
-    deltaTime: number
-  ): void {
-    const state = this.getState(id);
+  private updateLabelOpacity(info: ManagedLabelInfo, targetOpacity: number, deltaTime: number): void {
+    const state = this.getState(info.id);
 
-    // Apply hysteresis when transitioning from hidden to visible
-    if (state.targetOpacity === 0) {
-      state.hysteresisCounter++;
-      if (state.hysteresisCounter < HYSTERESIS_SHOW_FRAMES) {
-        // Not enough frames yet, keep hidden
-        this.applyOpacity(label, flagLine, flagLineIndex, state.currentOpacity, deltaTime, 0);
-        return;
+    if (targetOpacity === 1) {
+      // Showing
+      if (state.targetOpacity === 0) {
+        state.hysteresisCounter++;
+        if (state.hysteresisCounter < HYSTERESIS_SHOW_FRAMES) {
+          // Not enough frames yet, keep hidden
+          this.applyLabelOpacity(info.label, state.currentOpacity);
+          return;
+        }
       }
-    }
-
-    state.targetOpacity = 1;
-    state.hysteresisCounter = 0;
-    this.applyOpacity(label, flagLine, flagLineIndex, state.currentOpacity, deltaTime, 1);
-    state.currentOpacity = this.lerp(state.currentOpacity, 1, Math.min(1, FADE_RATE * deltaTime));
-  }
-
-  /**
-   * Mark a label as hidden and apply fade-out.
-   */
-  private hideLabel(
-    id: string,
-    label: CSS2DObject,
-    flagLine: THREE.LineSegments | undefined,
-    flagLineIndex: number | undefined,
-    deltaTime: number
-  ): void {
-    const state = this.getState(id);
-
-    // Reset hysteresis when hiding
-    if (state.targetOpacity === 1) {
+      state.targetOpacity = 1;
       state.hysteresisCounter = 0;
+    } else {
+      // Hiding
+      if (state.targetOpacity === 1) {
+        state.hysteresisCounter = 0;
+      }
+      state.targetOpacity = 0;
     }
 
-    state.targetOpacity = 0;
-    this.applyOpacity(label, flagLine, flagLineIndex, state.currentOpacity, deltaTime, 0);
-    state.currentOpacity = this.lerp(state.currentOpacity, 0, Math.min(1, FADE_RATE * deltaTime));
+    // Lerp current opacity toward target
+    state.currentOpacity = this.lerp(state.currentOpacity, state.targetOpacity, Math.min(1, FADE_RATE * deltaTime));
+    this.applyLabelOpacity(info.label, state.currentOpacity);
   }
 
   /**
-   * Apply opacity to a label and its flag line.
+   * Apply opacity to a label's DOM element.
    */
-  private applyOpacity(
-    label: CSS2DObject,
-    flagLine: THREE.LineSegments | undefined,
-    flagLineIndex: number | undefined,
-    currentOpacity: number,
-    deltaTime: number,
-    targetOpacity: number
-  ): void {
-    // Lerp toward target
-    const newOpacity = this.lerp(currentOpacity, targetOpacity, Math.min(1, FADE_RATE * deltaTime));
-
-    // Apply to label element
+  private applyLabelOpacity(label: CSS2DObject, opacity: number): void {
     if (label.element) {
-      if (newOpacity < MIN_OPACITY_THRESHOLD) {
+      if (opacity < MIN_OPACITY_THRESHOLD) {
         label.element.style.opacity = '0';
         label.element.style.pointerEvents = 'none';
       } else {
-        label.element.style.opacity = String(newOpacity);
-        label.element.style.pointerEvents = newOpacity > 0.5 ? '' : 'none';
-      }
-    }
-
-    // Apply to flag line if present
-    if (flagLine) {
-      if (flagLineIndex !== undefined) {
-        // Multi-segment flag line: modify vertex colors or positions for this specific segment
-        const geometry = flagLine.geometry as THREE.BufferGeometry;
-        const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute;
-        const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute;
-
-        if (colorAttr && colorAttr.userData) {
-          // Has vertex colors: scale colors by opacity
-          const v0 = flagLineIndex * 2;
-          const v1 = flagLineIndex * 2 + 1;
-
-          const colorArray = colorAttr.array as Float32Array;
-
-          // Validate indices are within bounds
-          if (v1 * 3 + 2 >= colorArray.length) {
-            return; // Invalid index, skip this flag line
-          }
-
-          const userData = colorAttr.userData;
-          const key = `origColor_${flagLineIndex}`;
-
-          // Store original colors if we're showing (opacity > 0.5) or if not yet stored
-          if (targetOpacity > 0.5 || !(key in userData)) {
-            // Store the current colors as original
-            userData[key] = [
-              colorArray[v0 * 3], colorArray[v0 * 3 + 1], colorArray[v0 * 3 + 2],
-              colorArray[v1 * 3], colorArray[v1 * 3 + 1], colorArray[v1 * 3 + 2],
-            ];
-          }
-
-          // Scale colors by opacity
-          const orig = userData[key] as number[];
-          if (!orig) return; // Safety check
-          colorAttr.setXYZ(v0, orig[0] * newOpacity, orig[1] * newOpacity, orig[2] * newOpacity);
-          colorAttr.setXYZ(v1, orig[3] * newOpacity, orig[4] * newOpacity, orig[5] * newOpacity);
-          colorAttr.needsUpdate = true;
-        } else if (posAttr && posAttr.userData) {
-          // No vertex colors: collapse positions to hide segment when opacity is low
-          const v0 = flagLineIndex * 2;
-          const v1 = flagLineIndex * 2 + 1;
-          const posArray = posAttr.array as Float32Array;
-
-          // Validate indices are within bounds
-          if (v1 * 3 + 2 >= posArray.length) {
-            return; // Invalid index, skip this flag line
-          }
-
-          const userData = posAttr.userData;
-          const key = `origPos_${flagLineIndex}`;
-
-          // Store original positions if we're showing or if not yet stored
-          if (targetOpacity > 0.5 || !(key in userData)) {
-            userData[key] = [
-              posArray[v0 * 3], posArray[v0 * 3 + 1], posArray[v0 * 3 + 2],
-              posArray[v1 * 3], posArray[v1 * 3 + 1], posArray[v1 * 3 + 2],
-            ];
-          }
-
-          const orig = userData[key] as number[];
-          if (!orig) return; // Safety check
-          // Interpolate positions toward each other (collapse to midpoint when hidden)
-          const midX = (orig[0] + orig[3]) / 2;
-          const midY = (orig[1] + orig[4]) / 2;
-          const midZ = (orig[2] + orig[5]) / 2;
-
-          posAttr.setXYZ(v0,
-            orig[0] * newOpacity + midX * (1 - newOpacity),
-            orig[1] * newOpacity + midY * (1 - newOpacity),
-            orig[2] * newOpacity + midZ * (1 - newOpacity)
-          );
-          posAttr.setXYZ(v1,
-            orig[3] * newOpacity + midX * (1 - newOpacity),
-            orig[4] * newOpacity + midY * (1 - newOpacity),
-            orig[5] * newOpacity + midZ * (1 - newOpacity)
-          );
-          posAttr.needsUpdate = true;
-        }
-      } else {
-        // Dedicated flag line: apply material opacity
-        const material = flagLine.material as THREE.LineBasicMaterial;
-        if (material && 'opacity' in material) {
-          // Store original opacity if not set
-          if (material.userData.originalOpacity === undefined) {
-            material.userData.originalOpacity = material.opacity;
-          }
-          material.opacity = (material.userData.originalOpacity as number) * newOpacity;
-        }
+        label.element.style.opacity = String(opacity);
+        label.element.style.pointerEvents = opacity > 0.5 ? '' : 'none';
       }
     }
   }
@@ -467,5 +461,13 @@ export class LabelManager {
   reset(): void {
     this.labelStates.clear();
     this.frameLabels = [];
+    this.flagLineGeometry.setDrawRange(0, 0);
+  }
+
+  /**
+   * Set flagline visibility.
+   */
+  setVisible(visible: boolean): void {
+    this.flagLineMesh.visible = visible;
   }
 }

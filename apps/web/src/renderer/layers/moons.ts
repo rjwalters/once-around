@@ -29,8 +29,6 @@ const MOON_LABEL_OFFSET = 0.4;
 export interface PlanetaryMoonsLayer {
   /** The moons points mesh */
   points: THREE.Points;
-  /** Flag lines connecting labels to moons */
-  flagLines: THREE.LineSegments;
   /** Moon labels */
   labels: CSS2DObject[];
   /** Update moon positions */
@@ -77,23 +75,6 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
   points.visible = false;
   scene.add(points);
 
-  // Flag lines connecting labels to moons
-  const flagGeometry = new THREE.BufferGeometry();
-  const flagPositions = new Float32Array(5 * 2 * 3);
-  const flagColors = new Float32Array(5 * 2 * 3);
-  flagGeometry.setAttribute("position", new THREE.BufferAttribute(flagPositions, 3));
-  flagGeometry.setAttribute("color", new THREE.BufferAttribute(flagColors, 3));
-
-  const flagMaterial = new THREE.LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.5,
-  });
-
-  const flagLines = new THREE.LineSegments(flagGeometry, flagMaterial);
-  flagLines.visible = false;
-  scene.add(flagLines);
-
   // Create labels
   const labels: CSS2DObject[] = [];
   for (let i = 0; i < 5; i++) {
@@ -112,7 +93,6 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
     // Hide if FOV is too wide
     if (!visible) {
       points.visible = false;
-      flagLines.visible = false;
       for (let i = 0; i < 5; i++) {
         labels[i].visible = false;
       }
@@ -126,8 +106,6 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
     const radius = SKY_RADIUS - 0.5;
 
     const posAttr = geometry.getAttribute("position") as THREE.BufferAttribute;
-    const flagPosAttr = flagGeometry.getAttribute("position") as THREE.BufferAttribute;
-    const flagColorAttr = flagGeometry.getAttribute("color") as THREE.BufferAttribute;
 
     for (let i = 0; i < 5; i++) {
       const idx = i * 4;
@@ -146,32 +124,21 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
       if (labelsVisible && labelManager) {
         labelManager.registerLabel({
           id: `planetary-moon-${i}`,
-          worldPos: labelPos,
+          objectPos: moonPos,
+          labelPos: labelPos,
           priority: LABEL_PRIORITY.MAJOR_MOON,
           label: labels[i],
-          flagLine: flagLines,
-          flagLineIndex: i,
+          color: PLANETARY_MOON_COLORS[i],
         });
       }
-
-      // Update flag line
-      const color = PLANETARY_MOON_COLORS[i];
-      flagPosAttr.setXYZ(i * 2, moonPos.x, moonPos.y, moonPos.z);
-      flagPosAttr.setXYZ(i * 2 + 1, labelPos.x, labelPos.y, labelPos.z);
-      flagColorAttr.setXYZ(i * 2, color.r, color.g, color.b);
-      flagColorAttr.setXYZ(i * 2 + 1, color.r, color.g, color.b);
     }
 
     posAttr.needsUpdate = true;
-    flagPosAttr.needsUpdate = true;
-    flagColorAttr.needsUpdate = true;
     points.visible = true;
-    flagLines.visible = labelsVisible;
   }
 
   return {
     points,
-    flagLines,
     labels,
     update,
   };
