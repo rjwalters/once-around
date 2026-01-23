@@ -10,11 +10,11 @@ import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { SkyEngine } from "../../wasm/sky_engine";
 import { getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getMinorBodiesBuffer } from "../../engine";
 import { SKY_RADIUS, BODY_COLORS, BODY_NAMES, LABEL_OFFSET, POINT_SOURCE_MIN_SIZE_PX, MINOR_BODY_NAMES, MINOR_BODY_COLORS, MINOR_BODY_COUNT } from "../constants";
-import { moonVertexShader, moonFragmentShader, texturedPlanetVertexShader, texturedPlanetFragmentShader } from "../shaders";
+import { moonVertexShader, moonFragmentShader } from "../shaders";
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
-import { getGlowTexture } from "../utils/textures";
 import { smoothstep } from "../utils/math";
+import { createGlowSpriteMaterial, createTexturedPlanetMaterial, loadTextureWithColorSpace } from "../utils/materials";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -159,7 +159,6 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   // ---------------------------------------------------------------------------
   // Planet point source sprites (for when planets are too small to resolve)
   // ---------------------------------------------------------------------------
-  const glowTexture = getGlowTexture();
   const planetSprites: THREE.Sprite[] = [];
   const planetSpriteMaterials: THREE.SpriteMaterial[] = [];
 
@@ -167,15 +166,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const bodyIdx = PLANET_INDICES[i];
     const color = BODY_COLORS[bodyIdx];
 
-    const spriteMaterial = new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: color,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthTest: false,
-      depthWrite: false,
-    });
-
+    const spriteMaterial = createGlowSpriteMaterial(color);
     const sprite = new THREE.Sprite(spriteMaterial);
     sprite.renderOrder = 10; // Render after most things
     planetSprites.push(sprite);
@@ -251,14 +242,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
 
   for (let i = 0; i < MINOR_BODY_COUNT; i++) {
     const color = MINOR_BODY_COLORS[i];
-    const spriteMaterial = new THREE.SpriteMaterial({
-      map: glowTexture, // Reuse the glow texture from planets
-      color: color,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthTest: false,
-      depthWrite: false,
-    });
+    const spriteMaterial = createGlowSpriteMaterial(color);
     const sprite = new THREE.Sprite(spriteMaterial);
     sprite.renderOrder = 10;
     minorBodySprites.push(sprite);
@@ -285,71 +269,32 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   // ---------------------------------------------------------------------------
 
   // Pluto (index 0) - New Horizons mission
-  const plutoTexture = textureLoader.load("/pluto.jpg");
-  plutoTexture.colorSpace = THREE.SRGBColorSpace;
-  const plutoMaterial = new THREE.ShaderMaterial({
-    vertexShader: texturedPlanetVertexShader,
-    fragmentShader: texturedPlanetFragmentShader,
-    uniforms: {
-      sunDirection: { value: new THREE.Vector3(1, 0, 0) },
-      planetTexture: { value: plutoTexture },
-      time: { value: 0.0 },
-      zenith: { value: new THREE.Vector3(0, 1, 0) },
-      scintillationIntensity: { value: 0.7 },
-      scintillationEnabled: { value: false },
-      planetId: { value: 100 },
-      opacity: { value: 1.0 },
-      pixelSize: { value: 100.0 },
-      bodyColor: { value: new THREE.Vector3(0.85, 0.80, 0.75) },
-    },
-    transparent: true,
-  });
+  const plutoTexture = loadTextureWithColorSpace(textureLoader, "/pluto.jpg");
+  const plutoMaterial = createTexturedPlanetMaterial(
+    plutoTexture,
+    100,
+    new THREE.Vector3(0.85, 0.80, 0.75)
+  );
   const plutoMesh = new THREE.Mesh(planetGeometry, plutoMaterial);
   scene.add(plutoMesh);
 
   // Ceres (index 1) - Dawn mission
-  const ceresTexture = textureLoader.load("/ceres.jpg");
-  ceresTexture.colorSpace = THREE.SRGBColorSpace;
-  const ceresMaterial = new THREE.ShaderMaterial({
-    vertexShader: texturedPlanetVertexShader,
-    fragmentShader: texturedPlanetFragmentShader,
-    uniforms: {
-      sunDirection: { value: new THREE.Vector3(1, 0, 0) },
-      planetTexture: { value: ceresTexture },
-      time: { value: 0.0 },
-      zenith: { value: new THREE.Vector3(0, 1, 0) },
-      scintillationIntensity: { value: 0.7 },
-      scintillationEnabled: { value: false },
-      planetId: { value: 101 },
-      opacity: { value: 1.0 },
-      pixelSize: { value: 100.0 },
-      bodyColor: { value: new THREE.Vector3(0.75, 0.75, 0.70) },
-    },
-    transparent: true,
-  });
+  const ceresTexture = loadTextureWithColorSpace(textureLoader, "/ceres.jpg");
+  const ceresMaterial = createTexturedPlanetMaterial(
+    ceresTexture,
+    101,
+    new THREE.Vector3(0.75, 0.75, 0.70)
+  );
   const ceresMesh = new THREE.Mesh(planetGeometry, ceresMaterial);
   scene.add(ceresMesh);
 
   // Vesta (index 10) - Dawn mission
-  const vestaTexture = textureLoader.load("/vesta.jpg");
-  vestaTexture.colorSpace = THREE.SRGBColorSpace;
-  const vestaMaterial = new THREE.ShaderMaterial({
-    vertexShader: texturedPlanetVertexShader,
-    fragmentShader: texturedPlanetFragmentShader,
-    uniforms: {
-      sunDirection: { value: new THREE.Vector3(1, 0, 0) },
-      planetTexture: { value: vestaTexture },
-      time: { value: 0.0 },
-      zenith: { value: new THREE.Vector3(0, 1, 0) },
-      scintillationIntensity: { value: 0.7 },
-      scintillationEnabled: { value: false },
-      planetId: { value: 110 },
-      opacity: { value: 1.0 },
-      pixelSize: { value: 100.0 },
-      bodyColor: { value: new THREE.Vector3(0.80, 0.80, 0.75) },
-    },
-    transparent: true,
-  });
+  const vestaTexture = loadTextureWithColorSpace(textureLoader, "/vesta.jpg");
+  const vestaMaterial = createTexturedPlanetMaterial(
+    vestaTexture,
+    110,
+    new THREE.Vector3(0.80, 0.80, 0.75)
+  );
   const vestaMesh = new THREE.Mesh(planetGeometry, vestaMaterial);
   scene.add(vestaMesh);
 

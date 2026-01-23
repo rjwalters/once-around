@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { SKY_RADIUS } from "../constants";
 import { deepFieldVertexShader, deepFieldFragmentShader } from "../shaders";
 import { raDecToPosition } from "../utils/coordinates";
-import { getGlowTexture } from "../utils/textures";
+import { createGlowSpriteMaterial } from "../utils/materials";
 import type { HeliocentricPosition } from "../../spacecraftPositions";
 
 export interface RemoteViewpoint {
@@ -140,7 +140,6 @@ function transformBodyPositions(
  */
 export function createRemoteViewLayer(scene: THREE.Scene): RemoteViewLayer {
   const textureLoader = new THREE.TextureLoader();
-  const glowTexture = getGlowTexture();
 
   // State
   let viewpoint: RemoteViewpoint | null = null;
@@ -153,14 +152,7 @@ export function createRemoteViewLayer(scene: THREE.Scene): RemoteViewLayer {
 
   // Create sprites for all bodies
   for (const [name, color] of Object.entries(BODY_DOT_COLORS)) {
-    const spriteMaterial = new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: color,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthTest: false,
-      depthWrite: false,
-    });
+    const spriteMaterial = createGlowSpriteMaterial(color);
     const sprite = new THREE.Sprite(spriteMaterial);
     sprite.renderOrder = 15; // Render after the Pale Blue Dot image
     sprite.visible = false;

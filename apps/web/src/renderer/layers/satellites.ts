@@ -18,8 +18,8 @@ import { getSatellitePosition, SATELLITES, type SatelliteInfo } from "../../engi
 import { SKY_RADIUS, LABEL_OFFSET } from "../constants";
 import { rustToThreeJS } from "../utils/coordinates";
 import { calculateLabelOffset } from "../utils/labels";
-import { getGlowTexture } from "../utils/textures";
 import { smoothstep } from "../utils/math";
+import { createGlowSpriteMaterial } from "../utils/materials";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -127,16 +127,8 @@ function createSatelliteMesh(
   scene.add(mesh);
 
   // Create glow sprite (point source representation)
-  const glowTexture = getGlowTexture();
   const color = SATELLITE_COLORS[info.name] ?? COLOR_ILLUMINATED;
-  const glowMaterial = new THREE.SpriteMaterial({
-    map: glowTexture,
-    color: color,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthTest: false,
-    depthWrite: false,
-  });
+  const glowMaterial = createGlowSpriteMaterial(color);
   const glowSprite = new THREE.Sprite(glowMaterial);
   glowSprite.visible = false;
   glowSprite.renderOrder = 101;

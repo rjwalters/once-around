@@ -25,7 +25,7 @@ import {
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { bvToColor, angularSizeToPixels, starIdHash } from "../utils/colors";
 import { calculateLabelOffset } from "../utils/labels";
-import { getGlowTexture } from "../utils/textures";
+import { createGlowSpriteMaterial } from "../utils/materials";
 import type { LabelManager } from "../label-manager";
 
 // -----------------------------------------------------------------------------
@@ -212,7 +212,6 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   scene.add(starsPoints);
 
   // Override stars use billboard sprites for better appearance at large sizes
-  const glowTexture = getGlowTexture();
   const overrideStarsGroup = new THREE.Group();
   overrideStarsGroup.renderOrder = 100;
   scene.add(overrideStarsGroup);
@@ -291,13 +290,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
       if (i < spritePool.length) {
         sprite = spritePool[i];
       } else {
-        const material = new THREE.SpriteMaterial({
-          map: glowTexture,
-          transparent: true,
-          blending: THREE.AdditiveBlending,
-          depthTest: false,
-          depthWrite: false,
-        });
+        const material = createGlowSpriteMaterial();
         sprite = new THREE.Sprite(material);
         spritePool.push(sprite);
         overrideStarsGroup.add(sprite);
