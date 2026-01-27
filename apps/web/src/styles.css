@@ -2496,6 +2496,7 @@ canvas {
   .tour-playback {
     left: 10px;
     right: 10px;
+    bottom: 20px;
     transform: none;
     min-width: unset;
     max-width: none;
@@ -2503,6 +2504,15 @@ canvas {
 
   .tour-playback.hidden {
     transform: translateY(20px);
+  }
+
+  .tour-caption {
+    font-size: 15px;
+    color: #ddd;
+    line-height: 1.5;
+    max-height: 40vh;
+    overflow-y: auto;
+    padding-top: 4px;
   }
 
   /* Hide keyboard shortcut hints on mobile */

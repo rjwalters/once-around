@@ -1017,6 +1017,11 @@ async function main(): Promise<void> {
     renderer.setJWSTMode(true);
   }
 
+  // Eagerly compile all shaders while the loading screen is still visible.
+  // Without this, Three.js lazily compiles each shader on first render, which
+  // causes multi-second freezes on mobile GPUs.
+  renderer.renderer.compile(renderer.scene, renderer.camera);
+
   animate();
 
   // Do heavy initialization work first, then dismiss overlay
@@ -1033,12 +1038,33 @@ async function main(): Promise<void> {
       renderer.updateEclipse(initialSunMoonSep);
     }
 
-    // Now dismiss the loading overlay - app is ready
-    const loadingOverlay = document.getElementById("loading");
-    if (loadingOverlay) {
-      // Remove immediately to prevent any lingering elements
-      loadingOverlay.remove();
-    }
+    // Wait for the GPU to finish processing the first rendered frames.
+    // Mobile GPUs need additional time after shader compilation for texture
+    // uploads and pipeline warmup. We use a readPixels call to force a
+    // CPU/GPU sync, ensuring the render pipeline is truly flushed before
+    // we dismiss the loading screen.
+    requestAnimationFrame(() => {
+      // Force GPU synchronization - readPixels blocks until the GPU has
+      // finished all pending work including texture uploads and buffer copies
+      const gl = renderer.renderer.getContext();
+      const pixel = new Uint8Array(4);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+
+      // Dismiss loading overlay with a fade transition
+      const loadingOverlay = document.getElementById("loading");
+      if (loadingOverlay) {
+        loadingOverlay.classList.add("hidden");
+        loadingOverlay.addEventListener("transitionend", () => {
+          loadingOverlay.remove();
+        }, { once: true });
+        // Fallback removal if transitionend doesn't fire (e.g. reduced motion)
+        setTimeout(() => {
+          if (loadingOverlay.parentNode) {
+            loadingOverlay.remove();
+          }
+        }, 600);
+      }
+    });
 
     // Auto-start tour from URL parameter (e.g., ?tour=sn-1054)
     if (urlState.tour) {
