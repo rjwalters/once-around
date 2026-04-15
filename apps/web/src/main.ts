@@ -22,7 +22,7 @@ import { createEclipseHandler } from "./eclipse-handler";
 import { setupInfoModals } from "./info-modals";
 import { setupKeyboardHandler } from "./keyboard-handler";
 import { setupOrbitFocus } from "./orbit-focus";
-import { readUrlState, createUrlStateUpdater } from "./url-state";
+import { readUrlState, createUrlStateUpdater, type UrlState } from "./url-state";
 import { ISSPassesUI } from "./iss-passes-ui";
 import {
   getBodyPositions,
@@ -167,9 +167,8 @@ async function main(): Promise<void> {
       fov: state.fov,
     });
 
-    // Compute current RA/Dec from camera direction
-    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(state.quaternion);
-    currentRaDec = positionToRaDec(direction);
+    // Use getRaDec() which correctly handles topocentric mode (Alt/Az → RA/Dec)
+    currentRaDec = controls.getRaDec();
 
     // Update URL with current view state
     updateUrlState({
@@ -630,6 +629,11 @@ async function main(): Promise<void> {
         issPassesUI.setVisible(mode === 'topocentric');
       }
       settingsSaver.save({ viewMode: mode });
+      // Keep URL in sync with view mode
+      const viewModeUrlMap: Record<string, UrlState['view']> = {
+        geocentric: 'geo', topocentric: 'topo', hubble: 'hubble', jwst: 'jwst',
+      };
+      updateUrlState({ view: viewModeUrlMap[mode] });
     },
     onHorizonChange: (visible) => {
       if (horizonCheckbox && horizonCheckbox.checked !== visible) {
@@ -777,6 +781,14 @@ async function main(): Promise<void> {
   });
   locationUI.setupEventListeners();
   locationUI.checkUrlParams();
+
+  // Re-apply URL camera position now that view mode and location are fully initialized.
+  // The initial lookAtRaDec at startup fired before mode/location were set from URL params,
+  // so the RA/Dec → Alt/Az conversion used wrong parameters. This also cancels the default
+  // "look south" animation that setMode('topocentric') triggers.
+  if (hasUrlState && urlState.ra !== undefined && urlState.dec !== undefined) {
+    controls.lookAtRaDec(urlState.ra, urlState.dec);
+  }
 
   // ---------------------------------------------------------------------------
   // Search functionality
