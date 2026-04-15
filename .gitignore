@@ -30,3 +30,4 @@ apps/web/src/wasm/package.json
 !apps/web/src/wasm/.gitignore
 test-results/
 playwright-report/
+tests/screenshots/
