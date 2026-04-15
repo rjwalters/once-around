@@ -87,8 +87,9 @@ export function getBodyPositions(buffers: BodyPositionBuffers): BodyPositions {
   return positions;
 }
 
-// Re-export from canonical location so existing imports keep working
-export { positionToRaDec } from "./geometry/coordinates";
+import { positionToRaDec } from "./geometry/coordinates";
+// Re-export so existing imports from this module keep working
+export { positionToRaDec };
 
 /**
  * Calculate the angular separation between Sun and Moon for eclipse detection.
