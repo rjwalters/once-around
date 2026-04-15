@@ -3,19 +3,7 @@
  */
 
 import type { ViewMode } from "./settings";
-
-/**
- * Compute Greenwich Mean Sidereal Time (GMST) from a Date.
- * Returns GMST in degrees (0-360).
- */
-export function computeGMST(date: Date): number {
-  const jd = date.getTime() / 86400000 + 2440587.5;
-  const T = (jd - 2451545.0) / 36525;
-  let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545.0) +
-             T * T * (0.000387933 - T / 38710000);
-  gmst = ((gmst % 360) + 360) % 360;
-  return gmst;
-}
+import { computeGMST } from "./geometry/time";
 
 export interface ViewModeManagerOptions {
   initialMode: ViewMode;

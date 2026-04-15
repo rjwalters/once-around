@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { BodyPositions } from "./body-positions";
+import { raDecToPosition } from "./geometry/coordinates";
 
 // Re-export for consumers that imported from here
 export type { BodyPositions };
@@ -111,20 +112,6 @@ interface VideoGroup {
   videos: VideoPlacement[];
 }
 
-// Convert RA/Dec to 3D position on sky sphere
-function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3 {
-  // Convert degrees to radians
-  const raRad = (ra * Math.PI) / 180;
-  const decRad = (dec * Math.PI) / 180;
-
-  // Convert spherical to Cartesian
-  // Negate X to fix east-west orientation (matches renderer.ts)
-  const x = -radius * Math.cos(decRad) * Math.cos(raRad);
-  const y = radius * Math.sin(decRad);
-  const z = radius * Math.cos(decRad) * Math.sin(raRad);
-
-  return new THREE.Vector3(x, y, z);
-}
 
 // Group videos that share the same or very close coordinates
 // For moving objects, use body positions if available to match by name

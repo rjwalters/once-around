@@ -7,7 +7,7 @@
  */
 
 import * as THREE from "three";
-import { computeGMST } from "../utils/coordinates";
+import { computeGMST } from "../../geometry/time";
 import {
   earthVertexShader,
   earthFragmentShader,

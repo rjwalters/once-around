@@ -87,27 +87,8 @@ export function getBodyPositions(buffers: BodyPositionBuffers): BodyPositions {
   return positions;
 }
 
-/**
- * Convert a 3D position (Three.js coordinates) to RA/Dec in degrees.
- * Three.js uses Y-up: X→RA=0°, Y→North pole, Z→RA=90°
- * Accepts either THREE.Vector3 or a plain { x, y, z } object.
- */
-export function positionToRaDec(pos: Position3D): { ra: number; dec: number } {
-  // Normalize the position manually (works with plain objects or Vector3)
-  const len = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
-  const nx = pos.x / len;
-  const ny = pos.y / len;
-  const nz = pos.z / len;
-
-  // Dec is the angle from the equatorial plane (Y component)
-  const dec = Math.asin(ny) * (180 / Math.PI);
-
-  // RA is the angle in the XZ plane (X is negated for east-west fix)
-  let ra = Math.atan2(nz, -nx) * (180 / Math.PI);
-  if (ra < 0) ra += 360;
-
-  return { ra, dec };
-}
+// Re-export from canonical location so existing imports keep working
+export { positionToRaDec } from "./geometry/coordinates";
 
 /**
  * Calculate the angular separation between Sun and Moon for eclipse detection.

@@ -8,7 +8,7 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { SKY_RADIUS } from "../constants";
-import { computeGMST } from "../utils/coordinates";
+import { computeGMST } from "../../geometry/time";
 
 export interface GroundLayer {
   /** The group containing all ground elements */

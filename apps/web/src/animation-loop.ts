@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { computeGMST } from "./view-mode";
+import { computeGMST } from "./geometry/time";
 import type { BodyPositions } from "./body-positions";
 import type { SkyEngine } from "./wasm/sky_engine";
 import { getHeliocentricPositions } from "./spacecraftPositions";

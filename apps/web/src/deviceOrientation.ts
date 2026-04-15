@@ -1,9 +1,11 @@
 /**
  * Device Orientation Manager
  * Handles device orientation API, iOS permission requests, and sensor smoothing.
+ * Pure math lives in geometry/device-orientation.ts.
  */
 
 import * as THREE from "three";
+import { deviceOrientationToAltAz } from "./geometry/device-orientation";
 
 export interface DeviceOrientationState {
   supported: boolean;
@@ -45,71 +47,6 @@ function checkPermissionRequired(): boolean {
     typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> })
       .requestPermission === "function"
   );
-}
-
-/**
- * Extract altitude and azimuth from device orientation.
- *
- * Device orientation angles:
- * - alpha: 0-360° compass heading (0 = North, increases clockwise)
- * - beta: -180 to 180° pitch (0 = flat, 90 = screen facing up/zenith)
- * - gamma: -90 to 90° roll (tilt left/right)
- *
- * For a "point at sky" app in portrait mode:
- * - alpha gives azimuth (compass heading)
- * - beta gives altitude (0° = horizon, 90° = zenith when phone vertical)
- * - gamma gives roll around the viewing axis
- *
- * Screen orientation adjusts for landscape modes.
- */
-function deviceOrientationToAltAz(
-  alpha: number,
-  beta: number,
-  gamma: number,
-  screenOrientation: number
-): { altitude: number; azimuth: number } {
-  // Adjust for screen orientation
-  // Portrait: 0°, Landscape left: 90°, Landscape right: -90°/270°
-  let adjustedBeta = beta;
-  let adjustedGamma = gamma;
-
-  if (screenOrientation === 90) {
-    // Landscape left (home button on right)
-    adjustedBeta = gamma;
-    adjustedGamma = -beta;
-  } else if (screenOrientation === -90 || screenOrientation === 270) {
-    // Landscape right (home button on left)
-    adjustedBeta = -gamma;
-    adjustedGamma = beta;
-  } else if (screenOrientation === 180) {
-    // Upside down portrait
-    adjustedBeta = -beta;
-    adjustedGamma = -gamma;
-  }
-
-  // The view direction is where the BACK of the phone points (camera mode).
-  // From the ZXY rotation matrix R = Rz(α) · Rx(β) · Ry(γ), the back-of-phone
-  // direction (0,0,-1) in device space maps to world space as:
-  //   east  = -sin(α)·sin(β)
-  //   north =  cos(α)·sin(β)
-  //   up    = -cos(β)
-  //
-  // This gives altitude = β - 90° and azimuth = 360° - α.
-  //
-  // Examples (portrait, gamma=0):
-  //   Phone flat, screen up (β=0°):   back faces down  → alt = -90° (ground)
-  //   Phone vertical (β=90°):         back faces ahead  → alt = 0°  (horizon)
-  //   Phone flat, screen down (β=180°): back faces up   → alt = 90° (zenith)
-
-  let altitude = adjustedBeta - 90;
-  altitude = Math.max(-90, Math.min(90, altitude));
-
-  // Device alpha increases counterclockwise viewed from above (W3C spec),
-  // but astronomical azimuth increases clockwise, so we negate.
-  let azimuth = (360 - alpha) % 360;
-  azimuth = ((azimuth % 360) + 360) % 360;
-
-  return { altitude, azimuth };
 }
 
 /**

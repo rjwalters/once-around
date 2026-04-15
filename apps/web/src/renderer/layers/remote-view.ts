@@ -10,7 +10,7 @@
 import * as THREE from "three";
 import { SKY_RADIUS } from "../constants";
 import { deepFieldVertexShader, deepFieldFragmentShader } from "../shaders";
-import { raDecToPosition } from "../utils/coordinates";
+import { raDecToPosition, eclipticToEquatorialRaDec } from "../../geometry/coordinates";
 import { createGlowSpriteMaterial } from "../utils/materials";
 import type { HeliocentricPosition } from "../../spacecraftPositions";
 
@@ -77,38 +77,6 @@ export interface RemoteViewLayer {
 }
 
 /**
- * Convert heliocentric ecliptic direction to equatorial RA/Dec.
- * @param x, y, z - Direction vector in ecliptic coordinates
- * @returns { ra, dec } in degrees
- */
-function eclipticDirectionToRaDec(x: number, y: number, z: number): { ra: number; dec: number } {
-  // Normalize the direction
-  const len = Math.sqrt(x * x + y * y + z * z);
-  if (len === 0) return { ra: 0, dec: 0 };
-  const dx = x / len;
-  const dy = y / len;
-  const dz = z / len;
-
-  // Convert from ecliptic to equatorial coordinates
-  // Obliquity of the ecliptic (J2000): 23.4393°
-  const eps = 23.4393 * Math.PI / 180;
-  const cosEps = Math.cos(eps);
-  const sinEps = Math.sin(eps);
-
-  // Rotation about X-axis
-  const eqX = dx;
-  const eqY = dy * cosEps - dz * sinEps;
-  const eqZ = dy * sinEps + dz * cosEps;
-
-  // Calculate RA and Dec
-  let ra = Math.atan2(eqY, eqX) * 180 / Math.PI;
-  if (ra < 0) ra += 360;
-  const dec = Math.asin(eqZ) * 180 / Math.PI;
-
-  return { ra, dec };
-}
-
-/**
  * Transform heliocentric body positions to sky positions as seen from viewpoint.
  */
 function transformBodyPositions(
@@ -123,8 +91,8 @@ function transformBodyPositions(
     const dy = helioPos.y - viewpoint.y;
     const dz = helioPos.z - viewpoint.z;
 
-    // Convert to RA/Dec using eclipticDirectionToRaDec()
-    const { ra, dec } = eclipticDirectionToRaDec(dx, dy, dz);
+    // Convert to RA/Dec using eclipticToEquatorialRaDec()
+    const { ra, dec } = eclipticToEquatorialRaDec(dx, dy, dz);
 
     // Position on sky sphere
     const position = raDecToPosition(ra, dec, SKY_RADIUS - 0.5);
@@ -210,7 +178,7 @@ export function createRemoteViewLayer(scene: THREE.Scene): RemoteViewLayer {
   function setViewpoint(x: number, y: number, z: number, distanceAU: number): void {
     // Calculate RA/Dec of the Sun as seen from this position
     // Direction to Sun is opposite of position (Sun is at origin)
-    const { ra, dec } = eclipticDirectionToRaDec(-x, -y, -z);
+    const { ra, dec } = eclipticToEquatorialRaDec(-x, -y, -z);
 
     viewpoint = { x, y, z, distanceAU, sunRA: ra, sunDec: dec };
 
