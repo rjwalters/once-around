@@ -382,9 +382,11 @@ function updateSatellite(
     if (labelManager) {
       labelManager.registerLabel({
         id: `satellite-${info.index}`,
-        worldPos: labelPos,
+        objectPos: satPos,
+        labelPos: labelPos,
         priority: LABEL_PRIORITY.SATELLITE,
         label: label,
+        color: color,
       });
     }
 
