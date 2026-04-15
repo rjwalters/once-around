@@ -87,39 +87,26 @@ function deviceOrientationToAltAz(
     adjustedGamma = -gamma;
   }
 
-  // In portrait mode with phone held vertically:
-  // - beta = 0° when phone is flat (screen up), horizon view
-  // - beta = 90° when phone is vertical (screen toward you), you're looking straight ahead
-  // - beta approaching 90° while tilting back = looking up
+  // The view direction is where the BACK of the phone points (camera mode).
+  // From the ZXY rotation matrix R = Rz(α) · Rx(β) · Ry(γ), the back-of-phone
+  // direction (0,0,-1) in device space maps to world space as:
+  //   east  = -sin(α)·sin(β)
+  //   north =  cos(α)·sin(β)
+  //   up    = -cos(β)
   //
-  // For sky viewing, we want:
-  // - altitude = beta (roughly - when phone tilts back, we look up)
-  // - When beta = 90° and you tilt phone back, beta decreases but you're looking UP
+  // This gives altitude = β - 90° and azimuth = 360° - α.
   //
-  // Actually, when holding phone in portrait and tilting back to look at sky:
-  // - Phone flat, screen up: beta ≈ 0°, you see zenith
-  // - Phone vertical, screen toward you: beta ≈ 90°, you see horizon
-  // - Phone tilted back 45°: beta ≈ 45°, you see 45° above horizon
-  //
-  // So altitude = 90 - beta when 0 ≤ beta ≤ 90
-  // But beta can go negative (phone tilted forward past vertical)
+  // Examples (portrait, gamma=0):
+  //   Phone flat, screen up (β=0°):   back faces down  → alt = -90° (ground)
+  //   Phone vertical (β=90°):         back faces ahead  → alt = 0°  (horizon)
+  //   Phone flat, screen down (β=180°): back faces up   → alt = 90° (zenith)
 
-  // Convert beta to altitude
-  // beta = 0° (flat, screen up) → altitude = 90° (zenith)
-  // beta = 90° (vertical) → altitude = 0° (horizon)
-  // beta = -90° (screen down) → altitude = 180° (nadir, clamped)
-  let altitude = 90 - adjustedBeta;
-
-  // Clamp altitude to valid range
+  let altitude = adjustedBeta - 90;
   altitude = Math.max(-90, Math.min(90, altitude));
 
-  // Azimuth from alpha (compass heading)
-  // Device alpha: 0 = north, increases clockwise (east = 90°)
-  // Astronomical azimuth: 0 = north, increases clockwise (east = 90°)
-  // They match! But we may need to account for gamma tilt affecting the perceived heading
-  let azimuth = alpha;
-
-  // Normalize azimuth to 0-360
+  // Device alpha increases counterclockwise viewed from above (W3C spec),
+  // but astronomical azimuth increases clockwise, so we negate.
+  let azimuth = (360 - alpha) % 360;
   azimuth = ((azimuth % 360) + 360) % 360;
 
   return { altitude, azimuth };
