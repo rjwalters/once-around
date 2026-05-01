@@ -16,7 +16,7 @@ export interface LocationManager {
   setLocation(location: ObserverLocation): void;
   setLocationFromCity(city: City): void;
   requestGeolocation(): Promise<ObserverLocation | null>;
-  searchCities(query: string): City[];
+  searchCities(query: string, signal?: AbortSignal): Promise<City[]>;
 }
 
 interface LocationCallbacks {
@@ -143,6 +143,6 @@ export function createLocationManager(
     setLocation,
     setLocationFromCity,
     requestGeolocation,
-    searchCities: (query: string) => searchCities(query, 8),
+    searchCities: (query: string, signal?: AbortSignal) => searchCities(query, 8, signal),
   };
 }

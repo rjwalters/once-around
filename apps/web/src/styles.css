@@ -2134,6 +2134,13 @@ canvas {
   margin-left: 4px;
 }
 
+.location-result-status {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
 .location-coords {
   display: flex;
   gap: 8px;

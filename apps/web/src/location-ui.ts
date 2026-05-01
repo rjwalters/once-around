@@ -6,7 +6,7 @@ import type { ObserverLocation } from "./location";
 import type { City } from "./cityData";
 
 export interface LocationUIOptions {
-  searchCities: (query: string) => City[];
+  searchCities: (query: string, signal?: AbortSignal) => Promise<City[]>;
   setLocationFromCity: (city: City) => void;
   setLocation: (location: { latitude: number; longitude: number; name: string }) => void;
   requestGeolocation: () => Promise<ObserverLocation | null>;
@@ -36,6 +36,10 @@ export function createLocationUI(options: LocationUIOptions): LocationUI {
   // Search state
   let searchResultsList: City[] = [];
   let selectedIndex = -1;
+  let debounceTimer: number | undefined;
+  let abortController: AbortController | undefined;
+  let requestSeq = 0;
+  const SEARCH_DEBOUNCE_MS = 300;
 
   function updateDisplay(location: ObserverLocation): void {
     if (locationNameEl) {
@@ -47,6 +51,14 @@ export function createLocationUI(options: LocationUIOptions): LocationUI {
     if (locationLonInput) {
       locationLonInput.value = location.longitude.toFixed(4);
     }
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(
+      /[&<>"']/g,
+      (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string
+    );
   }
 
   function renderResults(): void {
@@ -61,13 +73,19 @@ export function createLocationUI(options: LocationUIOptions): LocationUI {
       .map(
         (city, i) => `
       <div class="location-result${i === selectedIndex ? " selected" : ""}" data-index="${i}">
-        <span class="location-result-name">${city.name}</span>
-        <span class="location-result-country">${city.country}</span>
+        <span class="location-result-name">${escapeHtml(city.name)}</span>
+        <span class="location-result-country">${escapeHtml(city.country)}</span>
       </div>
     `
       )
       .join("");
 
+    locationResults.classList.add("visible");
+  }
+
+  function showStatus(text: string): void {
+    if (!locationResults) return;
+    locationResults.innerHTML = `<div class="location-result-status">${escapeHtml(text)}</div>`;
     locationResults.classList.add("visible");
   }
 
@@ -107,15 +125,45 @@ export function createLocationUI(options: LocationUIOptions): LocationUI {
     if (locationSearchInput) {
       locationSearchInput.addEventListener("input", () => {
         const query = locationSearchInput.value.trim();
+
+        if (debounceTimer !== undefined) {
+          clearTimeout(debounceTimer);
+          debounceTimer = undefined;
+        }
+        if (abortController) {
+          abortController.abort();
+          abortController = undefined;
+        }
+
         if (query.length === 0) {
           hideResults();
           searchResultsList = [];
           return;
         }
 
-        searchResultsList = searchCities(query);
-        selectedIndex = searchResultsList.length > 0 ? 0 : -1;
-        renderResults();
+        debounceTimer = window.setTimeout(async () => {
+          const seq = ++requestSeq;
+          abortController = new AbortController();
+          const signal = abortController.signal;
+          showStatus("Searching…");
+
+          try {
+            const results = await searchCities(query, signal);
+            if (seq !== requestSeq) return; // a newer query superseded us
+            searchResultsList = results;
+            selectedIndex = results.length > 0 ? 0 : -1;
+            if (results.length === 0) {
+              showStatus("No matches");
+            } else {
+              renderResults();
+            }
+          } catch (err) {
+            if ((err as Error).name === "AbortError") return;
+            if (seq !== requestSeq) return;
+            console.warn("City search failed:", err);
+            showStatus("Search failed");
+          }
+        }, SEARCH_DEBOUNCE_MS);
       });
 
       locationSearchInput.addEventListener("keydown", (e) => {
