@@ -5,7 +5,12 @@
  */
 
 import * as THREE from "three";
-import { deviceOrientationToAltAz } from "./geometry/device-orientation";
+import { compassHeadingToAlpha, deviceOrientationToAltAz } from "./geometry/device-orientation";
+
+// iOS Safari exposes a true compass heading on orientation events
+interface DeviceOrientationEventiOS extends DeviceOrientationEvent {
+  webkitCompassHeading?: number;
+}
 
 export interface DeviceOrientationState {
   supported: boolean;
@@ -115,18 +120,11 @@ export function createDeviceOrientationManager(
 
   // Event handler reference for cleanup
   let orientationHandler: ((event: DeviceOrientationEvent) => void) | null = null;
+  let orientationEventName: "deviceorientation" | "deviceorientationabsolute" = "deviceorientation";
 
   function updateState(updates: Partial<DeviceOrientationState>): void {
     state = { ...state, ...updates };
     callbacks.onStateChange(state);
-  }
-
-  function getScreenOrientation(): number {
-    if (typeof screen.orientation !== "undefined") {
-      return screen.orientation.angle;
-    }
-    // Fallback for older browsers
-    return (window.orientation as number) || 0;
   }
 
   // Track smoothed altitude and azimuth
@@ -138,13 +136,16 @@ export function createDeviceOrientationManager(
       return;
     }
 
-    // Extract altitude and azimuth from device orientation
-    const { altitude, azimuth } = deviceOrientationToAltAz(
-      event.alpha,
-      event.beta,
-      event.gamma,
-      getScreenOrientation()
+    // iOS never fires deviceorientationabsolute and its alpha has an arbitrary
+    // zero point, but Safari provides a true compass heading — prefer it so
+    // azimuth is north-referenced.
+    const compassAlpha = compassHeadingToAlpha(
+      (event as DeviceOrientationEventiOS).webkitCompassHeading
     );
+    const alpha = compassAlpha ?? event.alpha;
+
+    // Extract altitude and azimuth from device orientation
+    const { altitude, azimuth } = deviceOrientationToAltAz(alpha, event.beta, event.gamma);
 
     // Smooth altitude and azimuth
     // For azimuth, handle wrap-around at 0/360
@@ -204,8 +205,17 @@ export function createDeviceOrientationManager(
       return;
     }
 
+    // Android Chrome's plain deviceorientation alpha is relative to an
+    // arbitrary startup heading; the absolute variant is north-referenced.
+    // (iOS lacks the absolute event but compensates via webkitCompassHeading.)
+    orientationEventName =
+      "ondeviceorientationabsolute" in window ? "deviceorientationabsolute" : "deviceorientation";
     orientationHandler = handleOrientation;
-    window.addEventListener("deviceorientation", orientationHandler, true);
+    window.addEventListener(
+      orientationEventName,
+      orientationHandler as EventListener,
+      true
+    );
     updateState({ enabled: true });
   }
 
@@ -214,7 +224,7 @@ export function createDeviceOrientationManager(
       return;
     }
 
-    window.removeEventListener("deviceorientation", orientationHandler, true);
+    window.removeEventListener(orientationEventName, orientationHandler as EventListener, true);
     orientationHandler = null;
     updateState({ enabled: false });
   }

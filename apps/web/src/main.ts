@@ -13,6 +13,7 @@ import { setupSimpleModal, setupModalClose } from "./modal-utils";
 import { createViewModeManager } from "./view-mode";
 import { formatLST } from "./coordinate-utils";
 import { createARModeManager } from "./ar-mode";
+import { magneticDeclination } from "./geometry/magnetic-declination";
 import { createLocationUI } from "./location-ui";
 import { setupTourUI } from "./tour-ui";
 import { getTourById } from "./tourData";
@@ -715,18 +716,17 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------------
-  // AR Mode (Device Orientation)
-  // ---------------------------------------------------------------------------
-  const arModeManager = createARModeManager({
-    onOrientationChange: (altitude, azimuth) => controls.setAltAz(altitude, azimuth),
-    setControlsEnabled: (enabled) => controls.setEnabled(enabled),
-    onModeChange: (enabled) => settingsSaver.save({ arModeEnabled: enabled }),
-  });
-  arModeManager.setupEventListeners();
-
-  // ---------------------------------------------------------------------------
   // Observer Location
   // ---------------------------------------------------------------------------
+  // Magnetic declination at the observer, used to correct compass-derived AR
+  // azimuths to true north. Uses the real present time (the physical compass),
+  // not the simulated sky time.
+  let observerDeclination = magneticDeclination(
+    settings.observerLatitude,
+    settings.observerLongitude,
+    new Date()
+  );
+
   // Create location manager with initial location from settings
   const locationManager = createLocationManager(
     {
@@ -736,6 +736,8 @@ async function main(): Promise<void> {
     },
     {
       onLocationChange: (location: ObserverLocation) => {
+        // Keep the AR compass correction in sync with the observer
+        observerDeclination = magneticDeclination(location.latitude, location.longitude, new Date());
         // Update UI
         locationUI.updateDisplay(location);
         // Update engine's observer location (for topocentric Moon correction)
@@ -781,6 +783,30 @@ async function main(): Promise<void> {
   });
   locationUI.setupEventListeners();
   locationUI.checkUrlParams();
+
+  // ---------------------------------------------------------------------------
+  // AR Mode (Device Orientation)
+  // ---------------------------------------------------------------------------
+  const arModeManager = createARModeManager({
+    // Device compasses report magnetic north; add declination for true north
+    onOrientationChange: (altitude, azimuth) =>
+      controls.setAltAz(altitude, (azimuth + observerDeclination + 360) % 360),
+    setControlsEnabled: (enabled) => controls.setEnabled(enabled),
+    onModeChange: (enabled) => {
+      settingsSaver.save({ arModeEnabled: enabled });
+      if (enabled) {
+        // AR is a surface-observer experience: switch the whole app (renderers,
+        // horizon culling, UI) into topocentric mode rather than only the camera...
+        if (viewModeManager.getMode() !== 'topocentric') {
+          viewModeManager.setMode('topocentric');
+        }
+        // ...and center it on the user's actual position. Falls back to the
+        // current observer location if geolocation is denied/unavailable.
+        void locationManager.requestGeolocation();
+      }
+    },
+  });
+  arModeManager.setupEventListeners();
 
   // Re-apply URL camera position now that view mode and location are fully initialized.
   // The initial lookAtRaDec at startup fired before mode/location were set from URL params,
