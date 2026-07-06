@@ -13,6 +13,7 @@
     "deploy:all": "pnpm --filter once-around-web deploy:all",
     "preview": "pnpm --filter once-around-web preview",
     "test": "playwright test",
+    "test:unit": "pnpm --filter once-around-web test:unit",
     "test:perf": "playwright test tests/performance.spec.ts --reporter=list",
     "test:ui": "playwright test --ui"
   },

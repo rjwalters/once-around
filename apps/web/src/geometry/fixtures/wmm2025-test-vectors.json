@@ -1,0 +1,91 @@
+{
+  "_source": "NOAA/NCEI WMM2025_TEST_VALUES.txt (World Magnetic Model 2025)",
+  "_url": "https://www.ncei.noaa.gov/sites/default/files/2025-02/WMM2025_TEST_VALUES.txt",
+  "_note": "Official published test vectors. Columns used: date(decimal yr), altKm, lat, lon, decl(deg). date/altKm/lat/lon are model inputs; decl is the expected output.",
+  "vectors": [
+    {
+      "date": 2025,
+      "altKm": 0,
+      "lat": 80,
+      "lon": 0,
+      "decl": 1.28
+    },
+    {
+      "date": 2025,
+      "altKm": 0,
+      "lat": 0,
+      "lon": 120,
+      "decl": -0.16
+    },
+    {
+      "date": 2025,
+      "altKm": 0,
+      "lat": -80,
+      "lon": 240,
+      "decl": 68.78
+    },
+    {
+      "date": 2025,
+      "altKm": 100,
+      "lat": 80,
+      "lon": 0,
+      "decl": 0.85
+    },
+    {
+      "date": 2025,
+      "altKm": 100,
+      "lat": 0,
+      "lon": 120,
+      "decl": -0.15
+    },
+    {
+      "date": 2025,
+      "altKm": 100,
+      "lat": -80,
+      "lon": 240,
+      "decl": 68.21
+    },
+    {
+      "date": 2027.5,
+      "altKm": 0,
+      "lat": 80,
+      "lon": 0,
+      "decl": 2.59
+    },
+    {
+      "date": 2027.5,
+      "altKm": 0,
+      "lat": 0,
+      "lon": 120,
+      "decl": -0.24
+    },
+    {
+      "date": 2027.5,
+      "altKm": 0,
+      "lat": -80,
+      "lon": 240,
+      "decl": 68.49
+    },
+    {
+      "date": 2027.5,
+      "altKm": 100,
+      "lat": 80,
+      "lon": 0,
+      "decl": 2.16
+    },
+    {
+      "date": 2027.5,
+      "altKm": 100,
+      "lat": 0,
+      "lon": 120,
+      "decl": -0.23
+    },
+    {
+      "date": 2027.5,
+      "altKm": 100,
+      "lat": -80,
+      "lon": 240,
+      "decl": 67.93
+    }
+  ]
+}

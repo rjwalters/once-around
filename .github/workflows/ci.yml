@@ -11,6 +11,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  unit-test:
+    name: Unit tests (web geometry)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Geometry tests are pure TypeScript (no Rust / wasm-pack needed), so this
+      # job intentionally omits the WASM build and stays well under the <10 s
+      # acceptance threshold.
+      - name: Run unit tests
+        run: pnpm --filter once-around-web test:unit
+
   typecheck:
     name: Typecheck (web)
     runs-on: ubuntu-latest
