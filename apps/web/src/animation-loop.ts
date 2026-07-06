@@ -7,7 +7,7 @@ import { getHeliocentricPositions } from "./spacecraftPositions";
 export interface AnimationLoopDependencies {
   controls: {
     update: () => void;
-    getCameraState: () => { fov: number; quaternion: THREE.Quaternion };
+    getCameraState: () => { fov: number; quaternion: { x: number; y: number; z: number; w: number } };
   };
   tourEngine: {
     update: () => void;
@@ -20,18 +20,18 @@ export interface AnimationLoopDependencies {
     updateDeepFields: (fov: number) => void;
     updateJWST: (
       fov: number,
-      sunPos: { x: number; y: number; z: number } | null,
-      moonPos: { x: number; y: number; z: number } | null,
+      sunPos: THREE.Vector3,
+      moonPos: THREE.Vector3,
       date: Date
     ) => void;
     getSatellitePosition: (index: number, engine: SkyEngine) => { x: number; y: number; z: number } | null;
     updateEarthPosition: (nadir: THREE.Vector3) => void;
     updateEarthRotation: (date: Date, longitude: number) => void;
-    updateEarthSunDirection: (sunPos: { x: number; y: number; z: number }) => void;
+    updateEarthSunDirection: (sunPos: THREE.Vector3) => void;
     updateLabelOcclusion: () => void;
     isOccludedByEarth: (position: THREE.Vector3) => boolean;
-    getSunPosition: () => { x: number; y: number; z: number } | null;
-    getMoonPosition: () => { x: number; y: number; z: number } | null;
+    getSunPosition: () => THREE.Vector3;
+    getMoonPosition: () => THREE.Vector3;
     updateRemoteView: (
       fov: number,
       heliocentricBodies?: Map<string, { x: number; y: number; z: number }>

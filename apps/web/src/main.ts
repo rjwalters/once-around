@@ -1,5 +1,4 @@
 import "./styles.css";
-import * as THREE from "three";
 import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadAllSatelliteEphemerides } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
@@ -10,7 +9,7 @@ import { createLocationManager, type ObserverLocation } from "./location";
 import type { SkyEngine } from "./wasm/sky_engine";
 import { createTimeControls } from "./time-controls";
 import { setupSimpleModal, setupModalClose } from "./modal-utils";
-import { createViewModeManager } from "./view-mode";
+import { createViewModeManager, type ViewIndicatorInfo } from "./view-mode";
 import { formatLST } from "./coordinate-utils";
 import { createARModeManager } from "./ar-mode";
 import { magneticDeclination } from "./geometry/magnetic-declination";
@@ -132,6 +131,7 @@ async function main(): Promise<void> {
     getMode: () => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
     lockAndSetMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
     unlockAndRestoreMode: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => void;
+    setIndicatorLabel: (info: ViewIndicatorInfo | null) => void;
   } | null = null;
 
   // Track current date (set later after initialization)
@@ -700,10 +700,9 @@ async function main(): Promise<void> {
       lstContainer.style.display = 'block';
     }
     renderer.setHorizonCulling(true);
-    // Show ISS passes panel (will be populated once ephemeris loads)
-    if (issPassesUI) {
-      issPassesUI.setVisible(true);
-    }
+    // ISS passes panel visibility is set once the ephemeris finishes loading
+    // (see the satellitesLoadedPromise handler above); issPassesUI is not yet
+    // constructed at this synchronous point in startup.
   }
 
   // Handle seeing control changes

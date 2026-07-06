@@ -270,7 +270,6 @@ function updateSatellite(
   labelManager?: LabelManager
 ): void {
   const { info, mesh, label, labelDiv, glowSprite, glowMaterial, detailSprite, detailMaterial } = sat;
-  const geometry = mesh.geometry as THREE.BufferGeometry;
 
   // Check if we have ephemeris data
   sat.hasData = engine.has_satellite_ephemeris(info.index);

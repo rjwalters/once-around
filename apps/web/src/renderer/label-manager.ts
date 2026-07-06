@@ -263,7 +263,7 @@ export class LabelManager {
     }
 
     // Update flagline geometry
-    this.updateFlagLines(deltaTime);
+    this.updateFlagLines();
 
     // Clean up stale states (labels not seen for a while)
     this.cleanupStaleStates();
@@ -297,7 +297,7 @@ export class LabelManager {
   /**
    * Update flagline geometry based on current frame's registered labels.
    */
-  private updateFlagLines(deltaTime: number): void {
+  private updateFlagLines(): void {
     const posAttr = this.flagLineGeometry.getAttribute("position") as THREE.BufferAttribute;
     const colorAttr = this.flagLineGeometry.getAttribute("color") as THREE.BufferAttribute;
 

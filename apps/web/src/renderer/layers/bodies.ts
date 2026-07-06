@@ -31,8 +31,7 @@ const SATURN_AXIAL_TILT = 26.73 * (Math.PI / 180);
 // Level 3: Full detail     (> 30 px) → Full textured sphere
 const LOD_POINT_SOURCE_MAX_PX = 3;    // Below this, pure point source (sprite only)
 const LOD_SIMPLE_DISK_MAX_PX = 10;    // Below this, solid color disk (no texture)
-const LOD_BLEND_DISK_MAX_PX = 30;     // Below this, blend color and texture
-// Above LOD_BLEND_DISK_MAX_PX: full texture detail
+// Between 10 and 30 px: blend color and texture; above 30 px: full texture detail
 
 export interface BodiesLayer {
   /** The Sun mesh */

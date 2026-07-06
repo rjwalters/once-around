@@ -4,7 +4,7 @@
 
 import type { SearchItem } from "./search";
 import type { VideoPlacement } from "./videos";
-import { METEOR_SHOWER_DATA, type MeteorShower } from "./meteorShowerData";
+import { METEOR_SHOWER_DATA } from "./meteorShowerData";
 
 export interface StarDataEntry {
   name: string;
@@ -77,7 +77,6 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     getBodyPositions,
     positionToRaDec,
     satellites,
-    getSatellitePosition,
     getISSPosition,
     getEarthPosition,
     planetaryMoons,

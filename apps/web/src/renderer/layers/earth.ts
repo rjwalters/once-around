@@ -137,8 +137,7 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
   terminatorLine.computeLineDistances(); // Required for dashed lines
   group.add(terminatorLine);
 
-  // Track current rotation state
-  let currentRotationY = 0;
+  // Track current positioning state
   let hasBeenPositioned = false;
 
   function setVisible(visible: boolean): void {

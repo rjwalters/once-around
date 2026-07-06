@@ -1,4 +1,4 @@
-import { createTourEngine, type TourPlaybackState, type TargetBody, type TourViewpoint } from "./tour";
+import { createTourEngine, type TourPlaybackState, type TargetBody, type TourViewpoint, type StarOverride } from "./tour";
 import { getSpacecraftPosition } from "./spacecraftPositions";
 import { applyTimeToEngine } from "./ui";
 import type { SkyEngine } from "./wasm/sky_engine";
@@ -43,7 +43,7 @@ export interface TourSetupDependencies {
     updateFromEngine: (engine: SkyEngine, fov: number) => void;
     updateEclipse: (separation: number) => void;
     updateDSOs: (fov: number, mag: number) => void;
-    setStarOverrides: (overrides: Map<number, { color?: string; scale?: number }>) => void;
+    setStarOverrides: (overrides: StarOverride[]) => void;
     clearStarOverrides: () => void;
     setRemoteViewpoint: (x: number, y: number, z: number, distanceAU: number) => void;
     clearRemoteViewpoint: () => void;
