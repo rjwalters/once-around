@@ -1,4 +1,5 @@
 import "./styles.css";
+import * as THREE from "three";
 import { createEngine, getBodiesPositionBuffer, getMinorBodiesBuffer, getCometsBuffer, loadAllSatelliteEphemerides } from "./engine";
 import { createRenderer } from "./renderer";
 import { createCelestialControls } from "./controls";
@@ -787,9 +788,18 @@ async function main(): Promise<void> {
   // AR Mode (Device Orientation)
   // ---------------------------------------------------------------------------
   const arModeManager = createARModeManager({
-    // Device compasses report magnetic north; add declination for true north
-    onOrientationChange: (altitude, azimuth) =>
-      controls.setAltAz(altitude, (azimuth + observerDeclination + 360) % 360),
+    // Device compasses report magnetic north; rotate the device→ENU orientation
+    // about the local up-axis by the declination so the view is true-north
+    // referenced. Adding d degrees to a clockwise-from-north azimuth is a
+    // rotation of -d radians about ENU +z (up).
+    onOrientationChange: ({ quaternion }) => {
+      const declRad = (-observerDeclination * Math.PI) / 180;
+      const correction = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 0, 1),
+        declRad
+      );
+      controls.setARQuaternion(correction.multiply(quaternion));
+    },
     setControlsEnabled: (enabled) => controls.setEnabled(enabled),
     onModeChange: (enabled) => {
       settingsSaver.save({ arModeEnabled: enabled });

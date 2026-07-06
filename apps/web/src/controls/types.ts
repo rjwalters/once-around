@@ -40,6 +40,13 @@ export interface CelestialControls {
   getRaDec(): { ra: number; dec: number };
   setQuaternion(quaternion: THREE.Quaternion): void;
   setAltAz(altitudeDeg: number, azimuthDeg: number): void;
+  /**
+   * Set the full topocentric camera orientation (including roll) from a
+   * device→ENU quaternion (X = east, Y = north, Z = up), as produced by
+   * `deviceOrientationToQuaternion`. Forces topocentric mode. Alt/az readout
+   * values are derived from the resulting pointing direction.
+   */
+  setARQuaternion(quaternion: THREE.Quaternion): void;
   setEnabled(enabled: boolean): void;
   // Topocentric mode methods
   setViewMode(mode: ViewMode): void;
