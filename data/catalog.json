@@ -51,12 +51,12 @@
     "title": "Once Around An Interesting Plutino",
     "url": "https://www.youtube.com/watch?v=wMnB9WRaykc",
     "videoId": "wMnB9WRaykc",
-    "objectName": "An Interesting Plutino",
+    "objectName": "2002 XV93",
     "category": "moving",
-    "ra": null,
-    "dec": null,
+    "ra": "07 16 59.73",
+    "dec": "+35 16 52.5",
     "isMoving": true,
-    "notes": "Unnamed plutino with possible atmosphere; no Horizons ID",
+    "notes": "Plutino 2002 XV93 (minor planet 612533); 2:3 Neptune resonance, possible atmosphere from Jan 2024 stellar occultation. JPL Horizons geocentric RA/Dec for epoch 2026-07-06",
     "simbadName": null
   },
   {

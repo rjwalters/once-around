@@ -3,7 +3,7 @@ title,object_name,url,video_id,category,is_moving,ra,dec,ra_decimal,dec_decimal,
 "Once Around Hyperion","Hyperion",https://www.youtube.com/watch?v=59TJnHHEZKY,59TJnHHEZKY,moving,true,,,,,,true,"Saturn's moon"
 "Once Around Amalthea","Amalthea",https://www.youtube.com/watch?v=i42truqNi8Y,i42truqNi8Y,moving,true,,,,,,true,"Jupiter's moon"
 "Once Around Three Mirror Telescopes","Three Mirror Telescopes",https://www.youtube.com/watch?v=ZwfLzMlcAc0,ZwfLzMlcAc0,concept,false,,,,,,false,"Telescope design, no sky position"
-"Once Around An Interesting Plutino","An Interesting Plutino",https://www.youtube.com/watch?v=wMnB9WRaykc,wMnB9WRaykc,moving,true,,,,,,true,"Unnamed plutino with possible atmosphere; no Horizons ID"
+"Once Around An Interesting Plutino","2002 XV93",https://www.youtube.com/watch?v=wMnB9WRaykc,wMnB9WRaykc,moving,true,"07 16 59.73","+35 16 52.5",109.248875,35.281250,,true,"Plutino 2002 XV93 (minor planet 612533); 2:3 Neptune resonance, possible atmosphere from Jan 2024 stellar occultation. JPL Horizons geocentric RA/Dec for epoch 2026-07-06"
 "Once Around Extreme Exoplanets","Extreme Exoplanets",https://www.youtube.com/watch?v=lQHpcOiGd7k,lQHpcOiGd7k,concept,false,,,,,,true,"Class of objects, no single position"
 "Once Around Comet Holmes","Comet Holmes",https://www.youtube.com/watch?v=CNSK99bSoYM,CNSK99bSoYM,moving,true,,,,,,true,"Comet 17P/Holmes"
 "Once Around Dark Flow","Dark Flow",https://www.youtube.com/watch?v=-rSxWW2oAaE,-rSxWW2oAaE,concept,false,,,,,,true,"Cosmological concept, no single position"
