@@ -488,11 +488,11 @@ pub fn compute_minor_body_position(body: MinorBody, time: &SkyTime) -> MinorBody
 }
 
 /// Compute positions for all minor bodies.
-pub fn compute_all_minor_body_positions(time: &SkyTime) -> Vec<MinorBodyPosition> {
-    MinorBody::ALL
-        .iter()
-        .map(|&body| compute_minor_body_position(body, time))
-        .collect()
+///
+/// Returns a fixed-size array (matching `MinorBody::ALL`) rather than a heap-allocated
+/// `Vec`, avoiding a per-call allocation in the 5 Hz orbit-worker recompute path.
+pub fn compute_all_minor_body_positions(time: &SkyTime) -> [MinorBodyPosition; 15] {
+    std::array::from_fn(|i| compute_minor_body_position(MinorBody::ALL[i], time))
 }
 
 #[cfg(test)]
