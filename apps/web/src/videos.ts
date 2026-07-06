@@ -86,6 +86,20 @@ function matchVideoToBody(objectName: string): string | null {
   // Special cases for specific moons
   if (lowerName === "triton") return "Neptune"; // Triton is Neptune's moon
   if (lowerName === "janus and epimetheus") return "Saturn"; // Saturn's moons
+  // Saturn moons
+  if (lowerName === "hyperion") return "Saturn";
+  if (lowerName === "enceladus") return "Saturn";
+  if (lowerName === "mimas") return "Saturn";
+  if (lowerName === "titan") return "Saturn";
+  if (lowerName === "iapetus") return "Saturn";
+  // Jupiter moons
+  if (lowerName === "amalthea") return "Jupiter";
+  if (lowerName === "callisto") return "Jupiter";
+  if (lowerName === "ganymede") return "Jupiter";
+  if (lowerName === "europa") return "Jupiter";
+  if (lowerName === "io") return "Jupiter";
+  // Transit event placed at Venus
+  if (lowerName === "the transit of venus") return "Venus";
   if (lowerName === "the ice giants") return "Uranus"; // Pick Uranus for ice giants
   if (lowerName === "dysnomia") return "Eris"; // Eris's moon
   if (lowerName === "charon") return "Pluto"; // Pluto's large moon
