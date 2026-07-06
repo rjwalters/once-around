@@ -61,18 +61,19 @@
   },
   {
     "title": "Once Around An Interesting Plutino",
-    "objectName": "An Interesting Plutino",
+    "objectName": "2002 XV93",
     "url": "https://www.youtube.com/watch?v=wMnB9WRaykc",
     "videoId": "wMnB9WRaykc",
     "category": "moving",
     "isMoving": true,
     "ra_sexagesimal": null,
     "dec_sexagesimal": null,
-    "ra_decimal": null,
-    "dec_decimal": null,
+    "ra_decimal": "109.248875",
+    "dec_decimal": "35.281250",
     "simbadName": null,
+    "horizonsId": "612533",
     "hasTranscript": true,
-    "notes": "Unnamed plutino with possible atmosphere; no Horizons ID"
+    "notes": "Plutino 2002 XV93 (minor planet 612533); 2:3 Neptune resonance, possible atmosphere from Jan 2024 stellar occultation. JPL Horizons geocentric RA/Dec for epoch 2026-07-06"
   },
   {
     "title": "Once Around Extreme Exoplanets",
