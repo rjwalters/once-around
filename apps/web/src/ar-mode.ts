@@ -2,10 +2,15 @@
  * AR Mode (Device Orientation) management.
  */
 
+import * as THREE from "three";
 import { createDeviceOrientationManager } from "./deviceOrientation";
 
 export interface ARModeOptions {
-  onOrientationChange: (altitude: number, azimuth: number) => void;
+  onOrientationChange: (data: {
+    quaternion: THREE.Quaternion;
+    altitude: number;
+    azimuth: number;
+  }) => void;
   setControlsEnabled: (enabled: boolean) => void;
   onModeChange: (enabled: boolean) => void;
 }
@@ -34,7 +39,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
   const deviceOrientation = createDeviceOrientationManager({
     onOrientationChange: (data) => {
       if (enabled) {
-        onOrientationChange(data.altitude, data.azimuth);
+        onOrientationChange(data);
       }
     },
     onStateChange: (state) => {

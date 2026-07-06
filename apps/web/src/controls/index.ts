@@ -139,7 +139,20 @@ export function createCelestialControls(
     }
   }
 
-  function updateTopocentricCamera(): void {
+  /**
+   * Compute the local topocentric ENU basis in Three.js world space for the
+   * current observer latitude and local sidereal time. Returns unit vectors:
+   * - zenith: straight up (toward RA=LST, Dec=latitude)
+   * - north:  horizontal, toward the north celestial-pole projection
+   * - east:   horizontal, north × zenith
+   * Shared by `updateTopocentricCamera` (alt/az pointing) and
+   * `setARQuaternion` (full device orientation) so both use identical geometry.
+   */
+  function getTopocentricBasis(): {
+    zenith: THREE.Vector3;
+    north: THREE.Vector3;
+    east: THREE.Vector3;
+  } {
     const lstDeg = (topoLST * 180) / Math.PI;
     const latDeg = (topoLatitude * 180) / Math.PI;
     const zenith = raDecToDirection(lstDeg, latDeg);
@@ -151,6 +164,12 @@ export function createCelestialControls(
       .normalize();
 
     const east = new THREE.Vector3().crossVectors(north, zenith).normalize();
+
+    return { zenith, north, east };
+  }
+
+  function updateTopocentricCamera(): void {
+    const { zenith, north, east } = getTopocentricBasis();
 
     const cosAlt = Math.cos(topoAltitude);
     const sinAlt = Math.sin(topoAltitude);
@@ -628,6 +647,57 @@ export function createCelestialControls(
     updateTopocentricCamera();
   }
 
+  /**
+   * Set the full topocentric camera orientation from a device→ENU quaternion
+   * (X = east, Y = north, Z = up). Unlike `setAltAz`, this represents the
+   * device's roll: the rendered horizon rotates with the phone instead of being
+   * locked to screen level. Forces topocentric mode.
+   */
+  function setARQuaternion(quaternion: THREE.Quaternion): void {
+    if (viewMode !== "topocentric") {
+      viewMode = "topocentric";
+    }
+
+    // Back-of-phone (viewing direction) and top-of-phone (camera up) in ENU.
+    const backENU = new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion);
+    const upENU = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
+
+    // Map ENU components onto the world-space topocentric basis.
+    const { zenith, north, east } = getTopocentricBasis();
+
+    const viewDir = new THREE.Vector3()
+      .addScaledVector(east, backENU.x)
+      .addScaledVector(north, backENU.y)
+      .addScaledVector(zenith, backENU.z)
+      .normalize();
+
+    const upDir = new THREE.Vector3()
+      .addScaledVector(east, upENU.x)
+      .addScaledVector(north, upENU.y)
+      .addScaledVector(zenith, upENU.z)
+      .normalize();
+
+    // Derive alt/az from the pointing direction for the coordinate readout.
+    // ENU: z = up (altitude), azimuth = clockwise-from-north = atan2(east, north).
+    topoAltitude = Math.asin(Math.max(-1, Math.min(1, backENU.z)));
+    let az = Math.atan2(backENU.x, backENU.y);
+    az = ((az % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    topoAzimuth = az;
+
+    // Cancel any animations
+    isAnimating = false;
+    altAzIsAnimating = false;
+
+    camera.up.copy(upDir);
+    camera.lookAt(viewDir.x * 100, viewDir.y * 100, viewDir.z * 100);
+
+    updateDebug({ fov: camera.fov });
+
+    if (apiReady) {
+      controlsApi.onCameraChange?.();
+    }
+  }
+
   function setEnabled(enabled: boolean): void {
     inputEnabled = enabled;
     domElement.style.cursor = enabled ? "grab" : "default";
@@ -737,6 +807,7 @@ export function createCelestialControls(
     getRaDec,
     setQuaternion,
     setAltAz,
+    setARQuaternion,
     setEnabled,
     setViewMode,
     getViewMode,
