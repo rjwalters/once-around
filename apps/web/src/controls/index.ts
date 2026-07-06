@@ -61,8 +61,6 @@ export function createCelestialControls(
   let topoAltitude = (30 * Math.PI) / 180;
 
   // Geocentric mode state (RA/Dec in radians to prevent roll accumulation)
-  let geoRA = 0;      // Right ascension in radians
-  let geoDec = 0;     // Declination in radians
 
   // Input enabled state
   let inputEnabled = true;
@@ -75,15 +73,6 @@ export function createCelestialControls(
   let altAzAnimDuration = 0;
   let altAzAnimStartTime = 0;
   let altAzIsAnimating = false;
-
-  // RA/Dec animation state (geocentric/hubble/jwst)
-  let raDecAnimStartRA = 0;
-  let raDecAnimStartDec = 0;
-  let raDecAnimTargetRA = 0;
-  let raDecAnimTargetDec = 0;
-  let raDecAnimDuration = 0;
-  let raDecAnimStartTime = 0;
-  let raDecIsAnimating = false;
 
   // Roll correction animation state
   let rollCorrectionStartQuat = new THREE.Quaternion();
@@ -182,14 +171,6 @@ export function createCelestialControls(
     if (apiReady) {
       controlsApi.onCameraChange?.();
     }
-  }
-
-  function updateGeocentricCamera(): void {
-    // Convert RA/Dec to quaternion with celestial north as "up"
-    const raDeg = (geoRA * 180) / Math.PI;
-    const decDeg = (geoDec * 180) / Math.PI;
-    viewQuaternion.copy(raDecToQuaternion(raDeg, decDeg));
-    updateCameraDirection();
   }
 
   // ---------------------------------------------------------------------------
@@ -489,12 +470,6 @@ export function createCelestialControls(
 
       if (t >= 1) {
         isCorrectingRoll = false;
-        // Sync geoRA/geoDec state
-        const dir = getViewDirection();
-        let ra = Math.atan2(dir.z, -dir.x);
-        if (ra < 0) ra += 2 * Math.PI;
-        geoRA = ra;
-        geoDec = Math.asin(Math.max(-1, Math.min(1, dir.y)));
       }
     }
 
@@ -516,12 +491,6 @@ export function createCelestialControls(
 
     if (progress >= 1) {
       isAnimating = false;
-      // Sync geoRA/geoDec after animation completes
-      const dir = getViewDirection();
-      let ra = Math.atan2(dir.z, -dir.x);
-      if (ra < 0) ra += 2 * Math.PI;
-      geoRA = ra;
-      geoDec = Math.asin(Math.max(-1, Math.min(1, dir.y)));
     }
   }
 
@@ -545,10 +514,7 @@ export function createCelestialControls(
 
     // Geocentric/Hubble/JWST: use quaternion with roll-corrected orientation
     viewQuaternion.copy(raDecToQuaternion(ra, dec));
-    geoRA = (ra * Math.PI) / 180;
-    geoDec = (dec * Math.PI) / 180;
     isAnimating = false;
-    raDecIsAnimating = false;
     updateCameraDirection();
   }
 
@@ -611,13 +577,6 @@ export function createCelestialControls(
       state.quaternion.w
     );
 
-    // Extract RA/Dec from the quaternion to sync geocentric state
-    const dir = new THREE.Vector3(-1, 0, 0).applyQuaternion(viewQuaternion);
-    let ra = Math.atan2(dir.z, -dir.x);
-    if (ra < 0) ra += 2 * Math.PI;
-    geoRA = ra;
-    geoDec = Math.asin(Math.max(-1, Math.min(1, dir.y)));
-
     camera.fov = state.fov;
     camera.updateProjectionMatrix();
     updateCameraDirection();
@@ -644,15 +603,7 @@ export function createCelestialControls(
   function setQuaternion(quaternion: THREE.Quaternion): void {
     viewQuaternion.copy(quaternion);
 
-    // Extract RA/Dec from the quaternion to sync geocentric state
-    const dir = new THREE.Vector3(-1, 0, 0).applyQuaternion(quaternion);
-    let ra = Math.atan2(dir.z, -dir.x);
-    if (ra < 0) ra += 2 * Math.PI;
-    geoRA = ra;
-    geoDec = Math.asin(Math.max(-1, Math.min(1, dir.y)));
-
     isAnimating = false;
-    raDecIsAnimating = false;
     updateCameraDirection();
   }
 

@@ -135,14 +135,19 @@ function saveSettingsImmediate(settings: Settings): void {
 }
 
 /**
+ * Debounced settings saver returned by {@link createSettingsSaver}.
+ */
+export interface SettingsSaver {
+  save: (settings: Partial<Settings>) => void;
+  flush: () => void;
+}
+
+/**
  * Create a debounced settings saver.
  * Returns a function that saves settings after a delay,
  * coalescing multiple rapid calls into a single save.
  */
-export function createSettingsSaver(): {
-  save: (settings: Partial<Settings>) => void;
-  flush: () => void;
-} {
+export function createSettingsSaver(): SettingsSaver {
   let currentSettings = loadSettings();
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 

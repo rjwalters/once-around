@@ -43,15 +43,8 @@ const MOON_MAX_SEPARATION_RAD = Math.atan(MOON_ORBITAL_RADIUS_KM / L2_DISTANCE_K
 // Earth's diameter in km
 const EARTH_DIAMETER_KM = 12_742;
 
-// Sun's diameter in km
-const SUN_DIAMETER_KM = 1_392_700;
-
-// Distance from L2 to Sun in km (Earth-Sun distance + L2 distance from Earth)
-const L2_TO_SUN_DISTANCE_KM = 149_597_870 + L2_DISTANCE_KM;
-
-// Angular diameters from L2 in radians
+// Angular diameter from L2 in radians
 const EARTH_ANGULAR_DIAMETER_RAD = EARTH_DIAMETER_KM / L2_DISTANCE_KM; // ~0.49°
-const SUN_ANGULAR_DIAMETER_RAD = SUN_DIAMETER_KM / L2_TO_SUN_DISTANCE_KM; // ~0.53°
 
 // LOD threshold - below this pixel size, show as point source
 const LOD_POINT_SOURCE_MAX_PX = 4;

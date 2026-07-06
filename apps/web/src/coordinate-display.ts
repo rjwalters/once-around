@@ -11,7 +11,7 @@ const REFERENCE_ARCSEC = 50;
 const COORD_UPDATE_INTERVAL = 100; // ms - update at most 10 times per second
 
 export interface CoordinateDisplayOptions {
-  getViewMode: () => 'geocentric' | 'topocentric';
+  getViewMode: () => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
   getCameraState: () => { fov: number };
   getRaDec: () => { ra: number; dec: number };
   getAltAz: () => { altitude: number; azimuth: number } | null;

@@ -45,7 +45,6 @@ interface ReadyMessage {
 }
 
 type WorkerMessage = ComputeMessage;
-type WorkerResponse = ResultMessage | ErrorMessage | ReadyMessage;
 
 async function initEngine(): Promise<void> {
   if (engine || isInitializing) return;
@@ -157,10 +156,12 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     try {
       const orbits = await computeOrbits(message.centerDateMs);
 
-      // Transfer the Float32Arrays for efficiency (zero-copy)
+      // Transfer the Float32Arrays for efficiency (zero-copy).
+      // Use the structured-clone options form (`{ transfer }`) so this is
+      // valid whether `self` types as the worker or window global scope.
       const response: ResultMessage = { type: "result", orbits };
-      const transferables = orbits.map((arr) => arr.buffer);
-      self.postMessage(response, transferables);
+      const transferables: Transferable[] = orbits.map((arr) => arr.buffer as ArrayBuffer);
+      self.postMessage(response, { transfer: transferables });
     } catch (e) {
       const response: ErrorMessage = {
         type: "error",
