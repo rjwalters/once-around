@@ -128,6 +128,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   let lastUpdateTime = performance.now();
   let currentDsoMagLimit = 6.5; // Default DSO magnitude limit
   let dsosVisible = false;
+  let meteorShowersVisible = false;
+  let currentMeteorShowerDate: Date | null = null;
 
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
     const effectiveFov = fov * 1.2;
@@ -161,6 +163,12 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     // Update DSOs so their labels participate in overlap detection
     if (dsosVisible) {
       dsoLayer.update(fov, currentDsoMagLimit, labelsVisible, canvasHeight, labelManager);
+    }
+    // Update meteor showers inside the frame window so their labels are
+    // registered between beginFrame/endFrame (otherwise registrations from the
+    // standalone updateMeteorShowers() are discarded by the next beginFrame()).
+    if (meteorShowersVisible && currentMeteorShowerDate) {
+      meteorShowerLayer.update(currentMeteorShowerDate, labelsVisible, labelManager);
     }
 
     // End label manager frame - resolves overlaps and applies fades
@@ -216,10 +224,12 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   function setMeteorShowersVisible(visible: boolean): void {
+    meteorShowersVisible = visible;
     meteorShowerLayer.setVisible(visible);
   }
 
   function updateMeteorShowers(currentDate: Date): void {
+    currentMeteorShowerDate = currentDate;
     meteorShowerLayer.update(currentDate, labelsVisible, labelManager);
   }
 
