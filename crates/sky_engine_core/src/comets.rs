@@ -465,11 +465,11 @@ pub fn compute_comet_position(comet: Comet, time: &SkyTime) -> CometPosition {
 }
 
 /// Compute positions for all comets.
-pub fn compute_all_comet_positions(time: &SkyTime) -> Vec<CometPosition> {
-    Comet::ALL
-        .iter()
-        .map(|&comet| compute_comet_position(comet, time))
-        .collect()
+///
+/// Returns a fixed-size array (matching `Comet::ALL`) rather than a heap-allocated
+/// `Vec`, avoiding a per-call allocation in the 5 Hz orbit-worker recompute path.
+pub fn compute_all_comet_positions(time: &SkyTime) -> [CometPosition; 7] {
+    std::array::from_fn(|i| compute_comet_position(Comet::ALL[i], time))
 }
 
 #[cfg(test)]
