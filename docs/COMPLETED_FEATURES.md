@@ -354,7 +354,8 @@ Location-aware totality path tools in the eclipse banner (`eclipsePaths.ts`, `ec
 - **Distance readout** - "You are X km from the center line" (haversine great-circle geometry)
 - **Local circumstances** - inside-path test and local totality duration (chord-factor estimate)
 - **Navigate to path** - one click snaps the observer to the nearest center-line point via the location manager
-- Deferred: 3D on-sphere ground-track rendering and engine-computed Besselian elements
+- **3D ground tracks** - center lines rendered as great-circle polylines on the Earth mesh (visible in Hubble mode), far side depth-occluded
+- Deferred: engine-computed local circumstances/Besselian elements (curated chord-factor estimate retained)
 
 ---
 
@@ -698,6 +699,8 @@ Regression suites guarding the astronomy engine (`sky_engine_core`).
 
 External-authority accuracy tests (`tests/horizons_accuracy.rs`) against NASA/JPL Horizons reference data, checked in as an offline CSV fixture (regenerate with `scripts/fetch_horizons_reference.py`).
 
-- **Coverage:** Sun, Moon, all 8 planets, Pluto at 4 epochs (J2000/2020/2026/2030); Halley and NEOWISE near their element epochs; one topocentric Moon site
+- **Coverage:** Sun, Moon, all 8 planets, Pluto at 4 epochs (J2000/2020/2026/2030); Halley and NEOWISE near their element epochs; one topocentric Moon site; all 14 minor bodies (dwarf planets, TNOs, asteroids, NEOs)
 - **Frame matching:** VSOP87/orbital-element bodies validated against astrometric ICRF (the engine omits precession); the equinox-of-date Meeus Moon against apparent-of-date
-- **Tolerances** derived from measured residuals: planets/Pluto 3′, geocentric Moon 2.5′, topocentric Moon 6′, comets 1°, distances 0.1–1%
+- **Tolerances** derived from measured residuals: planets/Pluto/minor bodies 3′, geocentric Moon 2.5′, topocentric Moon 6′, comets 1°, distances 0.1–1%
+- **Minor bodies** use real Horizons osculating elements at a documented epoch (2026-07-06), back-propagated to the J2000 anchor — Ceres improved from ~18° to 0.21′; two-body drift limits documented per body
+- **CI:** the lib + Horizons suites run on every PR (`rust-test` job); the bit-exact golden suite remains a local macOS guard (1-2 ULP libm divergence across platforms)
