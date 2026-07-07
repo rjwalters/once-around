@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { BodyPositions } from "./body-positions";
 import { raDecToPosition } from "./geometry/coordinates";
 
@@ -475,6 +476,19 @@ export async function createVideoMarkersLayer(
   const labelPositions = new Map<string, THREE.Vector3>();
   const markerPositions = new Map<string, THREE.Vector3>();
 
+  // Static (non-moving) ring/arc geometries have their world transform baked in
+  // and are merged into a single mesh after the loop, collapsing ~80 static rings
+  // into one draw call. Moving markers keep individual meshes (see below).
+  const staticRingGeometries: THREE.BufferGeometry[] = [];
+  const bakeObject = new THREE.Object3D();
+  function bakeTransform(geometry: THREE.BufferGeometry, pos: THREE.Vector3): void {
+    // Reproduce mesh.position.copy(pos); mesh.lookAt(0,0,0) as a baked vertex transform.
+    bakeObject.position.copy(pos);
+    bakeObject.lookAt(0, 0, 0);
+    bakeObject.updateMatrix();
+    geometry.applyMatrix4(bakeObject.matrix);
+  }
+
   // Process each video group
   for (const videoGroup of videoGroups) {
     const totalInGroup = videoGroup.videos.length;
@@ -497,31 +511,38 @@ export async function createVideoMarkersLayer(
         hitGeometry = createArcHitGeometry(1.2, sliceIndex, totalInGroup, 24);
       }
 
-      // Create visible ring/arc mesh
-      const ringMesh = new THREE.Mesh(ringGeometry, markerMaterial.clone());
-      ringMesh.position.copy(position);
-      ringMesh.lookAt(0, 0, 0);
-      group.add(ringMesh);
-
-      // Create larger invisible hit area mesh
-      const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial.clone());
+      // Create the larger clickable hit-area mesh. It shares a single material
+      // (no per-marker clone) and is hidden: Raycaster.intersectObjects tests the
+      // mesh array directly and does not consult visibility, so hit-testing is
+      // unchanged while the hidden mesh costs zero draw calls / fill.
+      const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial);
       marker.position.copy(position);
       marker.lookAt(0, 0, 0);
-
+      marker.visible = false;
       marker.userData = { videoId: video.id };
       markers.set(video.id, marker);
       videoDataMap.set(video.id, video);
       group.add(marker);
 
-      // Track moving video meshes for position updates
-      if (video.moving) {
-        const bodyName = matchVideoToBody(video.object);
-        if (bodyName) {
-          if (!movingVideoMeshes.has(bodyName)) {
-            movingVideoMeshes.set(bodyName, []);
-          }
-          movingVideoMeshes.get(bodyName)!.push({ videoId: video.id, ringMesh, hitMesh: marker });
+      // Create the visible ring/arc.
+      // - Moving markers (planets/moons/comets) update their position each frame,
+      //   so they keep an individual mesh sharing the single marker material.
+      // - Static markers have their transform baked into the geometry and are
+      //   merged into one mesh after the loop (single draw call).
+      const movingBodyName = video.moving ? matchVideoToBody(video.object) : null;
+      if (movingBodyName) {
+        const ringMesh = new THREE.Mesh(ringGeometry, markerMaterial);
+        ringMesh.position.copy(position);
+        ringMesh.lookAt(0, 0, 0);
+        group.add(ringMesh);
+
+        if (!movingVideoMeshes.has(movingBodyName)) {
+          movingVideoMeshes.set(movingBodyName, []);
         }
+        movingVideoMeshes.get(movingBodyName)!.push({ videoId: video.id, ringMesh, hitMesh: marker });
+      } else {
+        bakeTransform(ringGeometry, position);
+        staticRingGeometries.push(ringGeometry);
       }
 
       // Store marker position for repulsion constraint
@@ -552,6 +573,22 @@ export async function createVideoMarkersLayer(
 
       labels.set(video.id, labelSprite);
       labelsGroup.add(labelSprite);
+    }
+  }
+
+  // Merge all static ring/arc geometries into a single mesh -> one draw call.
+  if (staticRingGeometries.length > 0) {
+    const mergedRingGeometry = mergeGeometries(staticRingGeometries, false);
+    if (mergedRingGeometry) {
+      group.add(new THREE.Mesh(mergedRingGeometry, markerMaterial));
+      // The vertex data was copied into the merged buffer; free the sources.
+      for (const geometry of staticRingGeometries) geometry.dispose();
+    } else {
+      // Defensive fallback (uniform RingGeometry should always merge): render the
+      // individual geometries, whose transforms are already baked in.
+      for (const geometry of staticRingGeometries) {
+        group.add(new THREE.Mesh(geometry, markerMaterial));
+      }
     }
   }
 
@@ -591,9 +628,12 @@ export async function createVideoMarkersLayer(
   const flagLines = new THREE.LineSegments(flagLinesGeometry, flagLinesMaterial);
   labelsGroup.add(flagLines);
 
-  // Setup click handling
+  // Setup click handling.
+  // The hit-mesh set is fixed after construction (moving markers reuse the same
+  // mesh objects and only mutate their transforms), so snapshot it once instead
+  // of rebuilding the array on every pointer move / click.
+  const markerMeshes = Array.from(markers.values());
   function getVideoAtPosition(raycaster: THREE.Raycaster): VideoPlacement | null {
-    const markerMeshes = Array.from(markers.values());
     const intersects = raycaster.intersectObjects(markerMeshes);
 
     if (intersects.length > 0) {
@@ -675,10 +715,11 @@ export async function createVideoMarkersLayer(
       for (const [_id, sprite] of labels) {
         sprite.visible = !isOccluded(sprite.position);
       }
-      // Hide markers (ring meshes) that are occluded
-      for (const [_id, marker] of markers) {
-        marker.visible = !isOccluded(marker.position);
-      }
+      // Marker hit meshes are intentionally kept hidden (they carry opacity 0 and
+      // exist only for raycasting), so occlusion no longer toggles their
+      // visibility — doing so would re-introduce their draw calls with no visible
+      // effect. This matches prior behavior, where toggling invisible hit meshes
+      // had no visual impact.
       // Hide flag lines if any labels are occluded
       // (flagLines is the last child of labelsGroup)
       if (labelsGroup.children.length > 0) {
@@ -695,10 +736,7 @@ export async function createVideoMarkersLayer(
       for (const [_id, sprite] of labels) {
         sprite.visible = true;
       }
-      // Reset all markers to visible
-      for (const [_id, marker] of markers) {
-        marker.visible = true;
-      }
+      // Marker hit meshes stay hidden by design (raycast-only); see updateOcclusion.
     },
   };
 }
