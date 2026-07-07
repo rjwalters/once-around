@@ -191,6 +191,45 @@ pub const HALE_BOPP: CometElements = CometElements::from_degrees(
     4.0,                // Magnitude slope
 );
 
+// =============================================================================
+// Historic Great Comets - Famous naked-eye apparitions from before the space age
+// =============================================================================
+
+/// C/1811 F1 (Great Comet of 1811) - "Flaugergues' Comet"
+/// One of the most spectacular comets ever recorded, remaining visible to the
+/// naked eye for around nine months. Its enormous coma rivaled the Sun in size.
+/// Orbital elements: JPL Small-Body Database (epoch 1811 perihelion)
+/// Perihelion: September 12, 1811. Orbital period ~3,000 years.
+pub const GREAT_COMET_1811: CometElements = CometElements::from_degrees(
+    "C/1811 F1 (1811)",
+    1.0354,             // Perihelion distance (AU)
+    0.99509,            // Eccentricity (near-parabolic)
+    106.93,             // Inclination (degrees) - retrograde
+    140.53,             // Longitude of ascending node (degrees)
+    65.41,              // Argument of perihelion (degrees)
+    2382767.5,          // Perihelion JD: Sept 12, 1811
+    0.0,                // Absolute magnitude (intrinsically very bright)
+    4.0,                // Magnitude slope
+);
+
+/// C/1965 S1 (Ikeya-Seki) - Great sungrazing comet of 1965
+/// A Kreutz sungrazer that passed just ~450,000 km above the Sun's surface.
+/// Near perihelion it reached magnitude -10, briefly visible in broad daylight
+/// beside the Sun, then developed a spectacular tail in the morning sky.
+/// Orbital elements: JPL Small-Body Database (fragment A)
+/// Perihelion: October 21, 1965. Orbital period ~880 years.
+pub const IKEYA_SEKI: CometElements = CometElements::from_degrees(
+    "C/1965 S1 Ikeya-Seki",
+    0.0077858,          // Perihelion distance (AU) - grazes the Sun!
+    0.999915,           // Eccentricity (near-parabolic)
+    141.8642,           // Inclination (degrees) - retrograde
+    346.9947,           // Longitude of ascending node (degrees)
+    69.0486,            // Argument of perihelion (degrees)
+    2439054.68,         // Perihelion JD: Oct 21, 1965
+    6.5,                // Absolute magnitude
+    4.0,                // Magnitude slope
+);
+
 /// Comet identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -204,10 +243,13 @@ pub enum Comet {
     Neowise = 4,
     TsuchinshanAtlas = 5,
     HaleBopp = 6,
+    // Historic great comets
+    GreatComet1811 = 7,
+    IkeyaSeki = 8,
 }
 
 impl Comet {
-    pub const ALL: [Comet; 7] = [
+    pub const ALL: [Comet; 9] = [
         Comet::Halley,
         Comet::Encke,
         Comet::ChuryumovGerasimenko,
@@ -215,6 +257,8 @@ impl Comet {
         Comet::Neowise,
         Comet::TsuchinshanAtlas,
         Comet::HaleBopp,
+        Comet::GreatComet1811,
+        Comet::IkeyaSeki,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -230,6 +274,8 @@ impl Comet {
             Comet::Neowise => &NEOWISE,
             Comet::TsuchinshanAtlas => &TSUCHINSHAN_ATLAS,
             Comet::HaleBopp => &HALE_BOPP,
+            Comet::GreatComet1811 => &GREAT_COMET_1811,
+            Comet::IkeyaSeki => &IKEYA_SEKI,
         }
     }
 }
@@ -481,13 +527,13 @@ pub fn compute_comet_position_with_ctx(comet: Comet, ctx: &TimeContext) -> Comet
 ///
 /// Returns a fixed-size array (matching `Comet::ALL`) rather than a heap-allocated
 /// `Vec`, avoiding a per-call allocation in the 5 Hz orbit-worker recompute path.
-pub fn compute_all_comet_positions(time: &SkyTime) -> [CometPosition; 7] {
+pub fn compute_all_comet_positions(time: &SkyTime) -> [CometPosition; 9] {
     let ctx = TimeContext::new(time);
     compute_all_comet_positions_with_ctx(&ctx)
 }
 
 /// Compute positions for all comets using a shared [`TimeContext`].
-pub fn compute_all_comet_positions_with_ctx(ctx: &TimeContext) -> [CometPosition; 7] {
+pub fn compute_all_comet_positions_with_ctx(ctx: &TimeContext) -> [CometPosition; 9] {
     std::array::from_fn(|i| compute_comet_position_with_ctx(Comet::ALL[i], ctx))
 }
 
@@ -617,6 +663,50 @@ mod tests {
                 pos.magnitude
             );
         }
+    }
+
+    #[test]
+    fn test_great_comet_1811() {
+        // Great Comet of 1811 at perihelion (Sept 12, 1811) should be ~1.035 AU from Sun
+        let time = SkyTime::from_jd(2382767.5);
+        let pos = compute_comet_position(Comet::GreatComet1811, &time);
+
+        let helio_au = pos.helio_distance_km / AU_TO_KM;
+        assert!(
+            (helio_au - 1.0354).abs() < 0.05,
+            "Great Comet of 1811 at perihelion should be ~1.035 AU from Sun, got {} AU",
+            helio_au
+        );
+
+        // Orbital period should be a long-period comet (~3,000 years)
+        let period_years = GREAT_COMET_1811.orbital_period_days().unwrap() / 365.25;
+        assert!(
+            period_years > 2000.0 && period_years < 4000.0,
+            "Great Comet of 1811 period should be ~3,000 years, got {} years",
+            period_years
+        );
+        eprintln!(
+            "Great Comet of 1811 at perihelion: {:.3} AU from Sun, period {:.0} years",
+            helio_au, period_years
+        );
+    }
+
+    #[test]
+    fn test_ikeya_seki_1965() {
+        // Ikeya-Seki at perihelion (Oct 21, 1965) is a sungrazer: ~0.0078 AU from Sun
+        let time = SkyTime::from_jd(2439054.68);
+        let pos = compute_comet_position(Comet::IkeyaSeki, &time);
+
+        let helio_au = pos.helio_distance_km / AU_TO_KM;
+        assert!(
+            (helio_au - 0.0077858).abs() < 0.01,
+            "Ikeya-Seki at perihelion should graze the Sun (~0.0078 AU), got {} AU",
+            helio_au
+        );
+        eprintln!(
+            "Ikeya-Seki at 1965 perihelion: {:.4} AU from Sun, magnitude {:.1}",
+            helio_au, pos.magnitude
+        );
     }
 
     #[test]

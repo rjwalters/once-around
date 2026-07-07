@@ -83,5 +83,25 @@ export const COMET_INFO: Record<string, CometInfo> = {
     lastVisit: "Apr 1, 1997",
     nextReturn: "~Year 4530",
     description: "The 'Great Comet of 1997' was visible to the naked eye for a record 18 months. Independently discovered by Alan Hale and Thomas Bopp in 1995 when it was still beyond Jupiter. Reached magnitude -1.8 at perihelion, brighter than any star except Sirius."
+  },
+  "C/1811 F1 (1811)": {
+    name: "C/1811 F1",
+    commonName: "Great Comet of 1811",
+    type: "Long-period",
+    period: "~3,000 years",
+    perihelion: "1.04 AU",
+    lastVisit: "Sep 12, 1811",
+    nextReturn: "~Year 4800",
+    description: "One of the most spectacular comets in history, remaining visible to the naked eye for around nine months. Discovered by Honoré Flaugergues, its coma swelled to rival the Sun in size. It was famously associated in folklore with the exceptional wine vintage of 1811 ('Comet Wine') and the tumultuous events of Napoleon's era."
+  },
+  "C/1965 S1 Ikeya-Seki": {
+    name: "C/1965 S1 Ikeya-Seki",
+    commonName: "Comet Ikeya-Seki",
+    type: "Sungrazer (Kreutz)",
+    period: "~880 years",
+    perihelion: "0.008 AU",
+    lastVisit: "Oct 21, 1965",
+    nextReturn: "~Year 2845",
+    description: "One of the brightest comets of the last millennium. This Kreutz sungrazer skimmed just ~450,000 km above the Sun's surface, briefly reaching magnitude -10 and becoming visible in broad daylight right beside the Sun. It then displayed a brilliant tail in the morning sky before its nucleus split into fragments."
   }
 };

@@ -235,6 +235,32 @@ test.describe("Tour System - Specific Tours", () => {
     await expect(tourName).toHaveText("Comet Hale-Bopp (1997)");
   });
 
+  test("comet tour loads - Great Comet of 1811", async ({ page }) => {
+    await page.goto("/?tour=great-comet-1811");
+    await page.waitForSelector("canvas", { timeout: 30000 });
+    await page.waitForTimeout(2000);
+
+    const tourName = page.locator("#tour-playback-name");
+    await expect(tourName).toHaveText("The Great Comet of 1811");
+
+    const caption = page.locator("#tour-caption");
+    const text = await caption.textContent();
+    expect(text?.toLowerCase()).toContain("flaugergues");
+  });
+
+  test("comet tour loads - Ikeya-Seki 1965", async ({ page }) => {
+    await page.goto("/?tour=ikeya-seki-1965");
+    await page.waitForSelector("canvas", { timeout: 30000 });
+    await page.waitForTimeout(2000);
+
+    const tourName = page.locator("#tour-playback-name");
+    await expect(tourName).toHaveText("Comet Ikeya-Seki (1965)");
+
+    const caption = page.locator("#tour-caption");
+    const text = await caption.textContent();
+    expect(text?.toLowerCase()).toContain("ikeya");
+  });
+
   test("supernova tour loads - SN 1054 (Crab Nebula)", async ({ page }) => {
     const consoleLogs: string[] = [];
     page.on("console", (msg) => consoleLogs.push(msg.text()));

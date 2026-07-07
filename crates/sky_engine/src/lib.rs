@@ -94,7 +94,7 @@ impl SkyEngine {
             bodies_angular_diameters: vec![0.0; 9], // Angular diameters for each body
             planetary_moons_pos: vec![0.0; PlanetaryMoon::ALL.len() * 4], // 18 moons total
             minor_bodies_pos: vec![0.0; MinorBody::ALL.len() * 4], // Pluto (dwarf planets)
-            comets_pos: vec![0.0; Comet::ALL.len() * 4], // 7 comets * 4 floats (x, y, z, magnitude)
+            comets_pos: vec![0.0; Comet::ALL.len() * 4], // 9 comets * 4 floats (x, y, z, magnitude)
             all_stars_pos: vec![0.0; star_count * 3],
             all_stars_meta: vec![0.0; star_count * 4],
             satellite_ephemerides: vec![None; SatelliteId::ALL.len()],

@@ -30,7 +30,9 @@ export type TargetBody =
   | 'wirtanen'
   | 'neowise'
   | 'tsuchinshan-atlas'
-  | 'hale-bopp';
+  | 'hale-bopp'
+  | 'great-comet-1811'
+  | 'ikeya-seki';
 
 /**
  * Observer location for a keyframe.

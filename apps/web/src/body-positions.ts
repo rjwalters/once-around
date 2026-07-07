@@ -27,7 +27,8 @@ export const MINOR_BODY_NAMES = [
 // Comet names in the order they appear in the comets buffer
 export const COMET_NAMES = [
   "1P/Halley", "2P/Encke", "67P/C-G", "46P/Wirtanen",
-  "C/2020 F3 NEOWISE", "C/2023 A3 T-ATLAS", "C/1995 O1 Hale-Bopp"
+  "C/2020 F3 NEOWISE", "C/2023 A3 T-ATLAS", "C/1995 O1 Hale-Bopp",
+  "C/1811 F1 (1811)", "C/1965 S1 Ikeya-Seki"
 ] as const;
 
 // Sky sphere radius for positioning
