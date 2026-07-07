@@ -38,6 +38,33 @@ jobs:
       - name: Run unit tests
         run: pnpm --filter once-around-web test:unit
 
+  rust-test:
+    name: Rust tests (sky_engine_core)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Caches ~/.cargo registry/git plus the workspace target dir keyed on
+      # Cargo.lock, so incremental runs skip recompiling unchanged dependencies.
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+
+      # Test-only job by design: the astronomy engine suites (unit tests,
+      # golden-value regression, JPL Horizons accuracy) complete in well under
+      # a minute, so an engine regression now fails CI instead of merging
+      # unnoticed. Linting is intentionally excluded — there is a known
+      # pre-existing clippy::approx_constant error and the package is not
+      # rustfmt-clean (tracked separately in issue #66), which would otherwise
+      # block this job.
+      - name: Run Rust tests
+        run: cargo test -p sky_engine_core
+
   typecheck:
     name: Typecheck (web)
     runs-on: ubuntu-latest
