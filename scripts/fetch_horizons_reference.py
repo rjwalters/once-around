@@ -4,7 +4,8 @@
 This script queries the public JPL Horizons API
 (https://ssd.jpl.nasa.gov/api/horizons.api) for geocentric (and one topocentric)
 apparent + astrometric right ascension / declination of the Sun, Moon, the eight
-planets, Pluto, and two comets at a spread of epochs. The results are written to
+planets, the minor bodies (dwarf planets, TNOs, major asteroids, NEOs), and two
+comets at a spread of epochs. The results are written to
 
     crates/sky_engine_core/tests/data/horizons_reference.csv
 
@@ -62,6 +63,47 @@ GEOCENTRIC_BODIES = [
     ("Neptune", "899", "planet"),
     ("Moon", "301", "moon"),
     ("Pluto", "999", "minorbody"),
+]
+
+# Minor bodies (dwarf planets, TNOs, major asteroids, NEOs) validated as
+# geocentric astrometric positions. The engine's osculating elements in
+# minor_bodies.rs are pinned to the JPL Horizons epoch JDTDB 2461227.5
+# (2026-07-06), so every body is validated at that epoch (residuals < 0.9').
+#
+# Which bodies also get the 2030 epoch depends on how well fixed two-body
+# elements propagate (measured against Horizons):
+#   * Distant dwarf planets / TNOs move slowly and are barely perturbed over a
+#     few years, so they stay < 0.6' at 2030 and are validated there too (this
+#     guards the mean motion over a real multi-year arc).
+#   * Main-belt asteroids (Ceres, Vesta, Pallas, Hygiea) accumulate unmodeled
+#     planetary-perturbation drift -- Ceres ~12', Vesta ~4', Hygiea ~15' by 2030
+#     -- so fixed two-body elements genuinely cannot match Horizons there. They
+#     are validated only at the 2026 element epoch rather than faking a loose
+#     tolerance. (The 2026 check still catches a mean-motion regression: the
+#     stored J2000 mean anomaly is a fixed literal, so a corrupted period shifts
+#     the propagated 2026 position by degrees.)
+#   * Close-approach NEOs (Apophis, Bennu) -- a fixed-element orbit is
+#     meaningless across an Earth encounter, so 2026 epoch only.
+# Small-body COMMANDs use the record-number ';' suffix to force a unique match.
+#   (name, command, [epoch_labels])
+MINOR_BODIES = [
+    # Dwarf planets / TNOs (slow, weakly perturbed: 2026 + 2030)
+    ("Eris", "136199;", ["2026-today", "2030-future"]),
+    ("Makemake", "136472;", ["2026-today", "2030-future"]),
+    ("Haumea", "136108;", ["2026-today", "2030-future"]),
+    ("Sedna", "90377;", ["2026-today", "2030-future"]),
+    ("Quaoar", "50000;", ["2026-today", "2030-future"]),
+    ("Gonggong", "225088;", ["2026-today", "2030-future"]),
+    ("Orcus", "90482;", ["2026-today", "2030-future"]),
+    ("Varuna", "20000;", ["2026-today", "2030-future"]),
+    # Main-belt asteroids (two-body drift within a few years: element epoch only)
+    ("Ceres", "1;", ["2026-today"]),
+    ("Vesta", "4;", ["2026-today"]),
+    ("Pallas", "2;", ["2026-today"]),
+    ("Hygiea", "10;", ["2026-today"]),
+    # Near-Earth Objects (close-approach orbits: element epoch only)
+    ("Apophis", "99942;", ["2026-today"]),
+    ("Bennu", "101955;", ["2026-today"]),
 ]
 
 # Comets: validated near their osculating-element epoch, where two-body
@@ -189,6 +231,12 @@ def main():
     for label, (y, mo, d, h, mi) in EPOCHS.items():
         for name, command, kind in GEOCENTRIC_BODIES:
             add(kind, name, command, "500@399", label, y, mo, d, h, mi)
+
+    # Minor bodies (dwarf planets, TNOs, asteroids, NEOs) at their validated epochs.
+    for name, command, epoch_labels in MINOR_BODIES:
+        for label in epoch_labels:
+            y, mo, d, h, mi = EPOCHS[label]
+            add("minorbody", name, command, "500@399", label, y, mo, d, h, mi)
 
     # Comets near their element epoch.
     for name, command, kind, epoch_label in COMETS:

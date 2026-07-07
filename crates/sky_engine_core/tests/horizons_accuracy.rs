@@ -66,8 +66,15 @@ const CSV: &str = include_str!("data/horizons_reference.csv");
 /// epochs/phases while still catching real regressions.
 const TOL_PLANET_DEG: f64 = 3.0 / 60.0;
 
-/// Pluto vs astrometric ICRF. Uses precise J2000 elements (not an estimate), so
-/// it is nearly as good as the planets. Measured worst case 0.88'; 3' with margin.
+/// Minor bodies (Pluto, dwarf planets, TNOs, major asteroids, NEOs) vs
+/// astrometric ICRF. Each body uses real JPL Horizons osculating elements at the
+/// common epoch JDTDB 2461227.5 (2026-07-06); Pluto keeps its fixed J2000
+/// elements. Every body is validated at that 2026 epoch, where two-body
+/// propagation is essentially exact -- measured worst case is Pluto at 0.88', all
+/// others < 0.4'. The slow outer bodies are also validated at 2030 (worst 0.53');
+/// see `fetch_horizons_reference.py` for why the main-belt and NEO bodies are
+/// validated only near the element epoch. 3' leaves ~3x margin over the worst
+/// measured residual while still catching real regressions.
 const TOL_MINORBODY_DEG: f64 = 3.0 / 60.0;
 
 /// Geocentric Moon vs apparent. The engine uses a *truncated* subset of the
@@ -90,7 +97,8 @@ const TOL_MOON_TOPO_DEG: f64 = 6.0 / 60.0;
 const TOL_COMET_DEG: f64 = 1.0;
 
 // ---- Distance (range) tolerances (fractional) ------------------------------
-// Measured worst cases: planets 0.013%, Moon 0.010%, Pluto 0.026%, comets 0.19%.
+// Measured worst cases: planets 0.013%, Moon 0.010%, minor bodies 0.026% (Pluto;
+// other minor bodies < 0.017%), comets 0.19%.
 const TOL_DIST_PLANET: f64 = 0.001; // 0.1%
 const TOL_DIST_MOON: f64 = 0.001; // 0.1%
 const TOL_DIST_MINORBODY: f64 = 0.002; // 0.2%
@@ -183,12 +191,26 @@ fn engine_dir_dist(r: &Ref) -> Option<(CartesianCoord, f64)> {
         }
         "minorbody" => {
             let minor = compute_all_minor_body_positions(&time);
-            // Pluto is index 0 (see MinorBody::ALL).
-            assert_eq!(
-                r.name, "Pluto",
-                "fixture only validates Pluto as a minor body"
-            );
-            Some((minor[0].direction, minor[0].distance_km))
+            // Index into MinorBody::ALL (see minor_bodies.rs).
+            let idx = match r.name.as_str() {
+                "Pluto" => 0,
+                "Ceres" => 1,
+                "Eris" => 2,
+                "Makemake" => 3,
+                "Haumea" => 4,
+                "Sedna" => 5,
+                "Quaoar" => 6,
+                "Gonggong" => 7,
+                "Orcus" => 8,
+                "Varuna" => 9,
+                "Vesta" => 10,
+                "Pallas" => 11,
+                "Hygiea" => 12,
+                "Apophis" => 13,
+                "Bennu" => 14,
+                other => panic!("unknown minor body {other}"),
+            };
+            Some((minor[idx].direction, minor[idx].distance_km))
         }
         "comet" => {
             let comets = compute_all_comet_positions(&time);
@@ -269,8 +291,8 @@ fn engine_matches_horizons_within_tolerance() {
         checked += 1;
     }
     assert!(
-        checked >= 40,
-        "expected to check many bodies, only checked {checked}"
+        checked >= 60,
+        "expected to check many bodies (incl. the minor-body suite), only checked {checked}"
     );
 }
 
