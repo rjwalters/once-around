@@ -20,7 +20,7 @@ import {
 } from "../constants";
 import { rustToThreeJS } from "../utils/coordinates";
 import { angularSizeToPixels } from "../utils/colors";
-import { calculateLabelOffset } from "../utils/labels";
+import { calculateLabelOffsetInPlace } from "../utils/labels";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -115,9 +115,8 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
       // Update position in the Points geometry buffer
       posAttr.setXYZ(i, moonPos.x, moonPos.y, moonPos.z);
 
-      // Update label position
-      const labelPos = calculateLabelOffset(moonPos, MOON_LABEL_OFFSET);
-      labels[i].position.copy(labelPos);
+      // Update label position (written in place into the persistent label position)
+      calculateLabelOffsetInPlace(moonPos, MOON_LABEL_OFFSET, labels[i].position);
       labels[i].visible = labelsVisible;
 
       // Register planetary moon label with label manager
@@ -125,7 +124,7 @@ export function createPlanetaryMoonsLayer(scene: THREE.Scene, labelsGroup: THREE
         labelManager.registerLabel({
           id: `planetary-moon-${i}`,
           objectPos: moonPos,
-          labelPos: labelPos,
+          labelPos: labels[i].position,
           priority: LABEL_PRIORITY.MAJOR_MOON,
           label: labels[i],
           color: PLANETARY_MOON_COLORS[i],

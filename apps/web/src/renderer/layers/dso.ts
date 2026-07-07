@@ -42,10 +42,17 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
   const sizes = new Float32Array(dsoCount);
   const ellipseParams = new Float32Array(dsoCount * 2); // [axisRatio, positionAngle]
 
+  // DSO positions and label positions are static (derived only from ra/dec),
+  // so compute them once here and reuse every frame instead of recomputing.
+  const dsoPositions: THREE.Vector3[] = new Array(dsoCount);
+  const dsoLabelPositions: THREE.Vector3[] = new Array(dsoCount);
+
   // Initialize DSO positions and attributes
   for (let i = 0; i < dsoCount; i++) {
     const dso = DSO_DATA[i];
     const pos = raDecToPosition(dso.ra, dso.dec, SKY_RADIUS);
+    dsoPositions[i] = pos;
+    dsoLabelPositions[i] = calculateLabelOffset(pos, LABEL_OFFSET * 0.8);
     positions[i * 3] = pos.x;
     positions[i * 3 + 1] = pos.y;
     positions[i * 3 + 2] = pos.z;
@@ -131,8 +138,9 @@ export function createDSOLayer(scene: THREE.Scene, labelsGroup: THREE.Group): DS
         const sizePixels = Math.max(4, dsoSizeToPixels(dso.sizeArcmin[0], fov, canvasHeight));
         sizeAttr.setX(i, sizePixels);
 
-        const pos = raDecToPosition(dso.ra, dso.dec, SKY_RADIUS);
-        const labelPos = calculateLabelOffset(pos, LABEL_OFFSET * 0.8);
+        // Reuse the cached static position and label position.
+        const pos = dsoPositions[i];
+        const labelPos = dsoLabelPositions[i];
 
         // Update label position and visibility
         const label = labels.get(dso.id);

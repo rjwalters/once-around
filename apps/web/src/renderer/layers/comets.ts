@@ -11,7 +11,7 @@ import { getCometsBuffer } from "../../engine";
 import { SKY_RADIUS, LABEL_OFFSET, COMET_NAMES, COMET_COLOR } from "../constants";
 import { cometTailVertexShader, cometTailFragmentShader } from "../shaders";
 import { rustToThreeJS } from "../utils/coordinates";
-import { calculateLabelOffset } from "../utils/labels";
+import { calculateLabelOffsetInPlace } from "../utils/labels";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -86,8 +86,7 @@ export function createCometsLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       // Only show comets brighter than threshold
       if (magnitude < COMET_VISIBILITY_MAG && labelsVisible) {
         const cometPos = rustToThreeJS(cometsBuffer[idx], cometsBuffer[idx + 1], cometsBuffer[idx + 2], radius);
-        const labelPos = calculateLabelOffset(cometPos, LABEL_OFFSET);
-        labels[i].position.copy(labelPos);
+        calculateLabelOffsetInPlace(cometPos, LABEL_OFFSET, labels[i].position);
         labels[i].visible = true;
 
         // Register comet label with label manager
@@ -95,7 +94,7 @@ export function createCometsLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
           labelManager.registerLabel({
             id: `comet-${i}`,
             objectPos: cometPos,
-            labelPos: labelPos,
+            labelPos: labels[i].position,
             priority: LABEL_PRIORITY.COMET,
             label: labels[i],
             color: new THREE.Color(COMET_COLOR),

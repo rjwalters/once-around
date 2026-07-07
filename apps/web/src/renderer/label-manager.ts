@@ -45,6 +45,8 @@ interface LabelState {
   hysteresisCounter: number;
   /** Last update frame */
   lastFrame: number;
+  /** Last opacity value written to the DOM (NaN = never written) */
+  lastAppliedOpacity: number;
 }
 
 /**
@@ -138,6 +140,25 @@ export class LabelManager {
   // Reusable vector for projections
   private projVector = new THREE.Vector3();
 
+  // Reusable screen-space position for projectToScreen (avoids per-label allocation)
+  private screenPos = new THREE.Vector2();
+
+  // Pooled per-frame overlap-resolution state (grown as needed, reused each frame)
+  private entryPool: Array<{ info: ManagedLabelInfo; bounds: ScreenBounds; index: number }> = [];
+  private activeEntries: Array<{ info: ManagedLabelInfo; bounds: ScreenBounds; index: number }> = [];
+  private visibleBounds: ScreenBounds[] = [];
+
+  // How often (in frames) to sweep the label-state map for stale entries.
+  private static readonly CLEANUP_INTERVAL_FRAMES = 60;
+
+  // Stable comparator (defined once) to avoid allocating a closure each frame.
+  private static byPriorityDesc(
+    a: { info: ManagedLabelInfo },
+    b: { info: ManagedLabelInfo }
+  ): number {
+    return b.info.priority - a.info.priority;
+  }
+
   // Flagline geometry (owned by LabelManager)
   private flagLineGeometry: THREE.BufferGeometry;
   private flagLineMaterial: THREE.LineBasicMaterial;
@@ -221,9 +242,11 @@ export class LabelManager {
       this.growBuffers(this.frameLabels.length);
     }
 
-    // Project all labels to screen space and calculate bounds
-    const labelBounds: Array<{ info: ManagedLabelInfo; bounds: ScreenBounds; screenPos: THREE.Vector2; index: number }> = [];
-
+    // Project all labels to screen space and calculate bounds, reusing pooled
+    // entry and bounds objects to avoid per-frame allocations.
+    const active = this.activeEntries;
+    active.length = 0;
+    let count = 0;
     for (let i = 0; i < this.frameLabels.length; i++) {
       const info = this.frameLabels[i];
       const screenPos = this.projectToScreen(info.labelPos);
@@ -234,28 +257,43 @@ export class LabelManager {
         continue;
       }
 
-      const bounds = this.calculateBounds(screenPos);
-      labelBounds.push({ info, bounds, screenPos, index: i });
+      // Grow the pool lazily as the number of visible labels increases.
+      let entry = this.entryPool[count];
+      if (!entry) {
+        entry = { info, bounds: { left: 0, right: 0, top: 0, bottom: 0 }, index: i };
+        this.entryPool[count] = entry;
+      }
+      this.calculateBounds(screenPos, entry.bounds);
+      entry.info = info;
+      entry.index = i;
+      active.push(entry);
+      count++;
     }
 
-    // Sort by priority (highest first)
-    labelBounds.sort((a, b) => b.info.priority - a.info.priority);
+    // Sort the active entries in place by priority (highest first).
+    active.sort(LabelManager.byPriorityDesc);
 
     // Greedy overlap resolution
-    const visibleBounds: ScreenBounds[] = [];
-    const visibleIndices: Set<number> = new Set();
+    const visibleBounds = this.visibleBounds;
+    visibleBounds.length = 0;
 
-    for (const item of labelBounds) {
-      const { info, bounds, index } = item;
+    for (let k = 0; k < count; k++) {
+      const item = active[k];
+      const { info, bounds } = item;
 
       // Check if this label overlaps any already-visible higher-priority label
-      const overlaps = visibleBounds.some(vb => this.boundsOverlap(bounds, vb));
+      let overlaps = false;
+      for (let v = 0; v < visibleBounds.length; v++) {
+        if (this.boundsOverlap(bounds, visibleBounds[v])) {
+          overlaps = true;
+          break;
+        }
+      }
 
       if (!overlaps) {
         // This label is visible
         this.updateLabelOpacity(info, 1, deltaTime);
         visibleBounds.push(bounds);
-        visibleIndices.add(index);
       } else {
         // This label is hidden due to overlap
         this.updateLabelOpacity(info, 0, deltaTime);
@@ -265,8 +303,11 @@ export class LabelManager {
     // Update flagline geometry
     this.updateFlagLines();
 
-    // Clean up stale states (labels not seen for a while)
-    this.cleanupStaleStates();
+    // Clean up stale states (labels not seen for a while). Amortized: only
+    // sweep the full map periodically instead of every frame.
+    if (this.currentFrame % LabelManager.CLEANUP_INTERVAL_FRAMES === 0) {
+      this.cleanupStaleStates();
+    }
   }
 
   /**
@@ -340,28 +381,28 @@ export class LabelManager {
       return null;
     }
 
-    // Convert from NDC (-1 to 1) to screen coordinates
-    const x = (this.projVector.x + 1) * 0.5 * this.containerWidth;
-    const y = (1 - this.projVector.y) * 0.5 * this.containerHeight;
-
-    return new THREE.Vector2(x, y);
+    // Convert from NDC (-1 to 1) to screen coordinates. Reuse a pooled Vector2
+    // to avoid allocating one per label per frame.
+    this.screenPos.set(
+      (this.projVector.x + 1) * 0.5 * this.containerWidth,
+      (1 - this.projVector.y) * 0.5 * this.containerHeight
+    );
+    return this.screenPos;
   }
 
   /**
-   * Calculate screen-space bounding box for a label.
+   * Calculate screen-space bounding box for a label, writing into `out`.
    */
-  private calculateBounds(screenPos: THREE.Vector2): ScreenBounds {
+  private calculateBounds(screenPos: THREE.Vector2, out: ScreenBounds): void {
     // Label is positioned at screenPos, typically anchor is center-bottom or center
     // CSS2D labels are centered horizontally, positioned at the anchor
     const halfWidth = (LABEL_WIDTH_PX + LABEL_PADDING_PX) / 2;
     const height = LABEL_HEIGHT_PX + LABEL_PADDING_PX;
 
-    return {
-      left: screenPos.x - halfWidth,
-      right: screenPos.x + halfWidth,
-      top: screenPos.y - height,
-      bottom: screenPos.y,
-    };
+    out.left = screenPos.x - halfWidth;
+    out.right = screenPos.x + halfWidth;
+    out.top = screenPos.y - height;
+    out.bottom = screenPos.y;
   }
 
   /**
@@ -382,6 +423,7 @@ export class LabelManager {
         targetOpacity: 1,
         hysteresisCounter: 0,
         lastFrame: this.currentFrame,
+        lastAppliedOpacity: NaN,  // Force the first DOM write
       };
       this.labelStates.set(id, state);
     }
@@ -401,7 +443,7 @@ export class LabelManager {
         state.hysteresisCounter++;
         if (state.hysteresisCounter < HYSTERESIS_SHOW_FRAMES) {
           // Not enough frames yet, keep hidden
-          this.applyLabelOpacity(info.label, state.currentOpacity);
+          this.applyLabelOpacity(state, info.label, state.currentOpacity);
           return;
         }
       }
@@ -417,13 +459,17 @@ export class LabelManager {
 
     // Lerp current opacity toward target
     state.currentOpacity = this.lerp(state.currentOpacity, state.targetOpacity, Math.min(1, FADE_RATE * deltaTime));
-    this.applyLabelOpacity(info.label, state.currentOpacity);
+    this.applyLabelOpacity(state, info.label, state.currentOpacity);
   }
 
   /**
-   * Apply opacity to a label's DOM element.
+   * Apply opacity to a label's DOM element. Skips the style writes when the
+   * opacity is unchanged since the last applied value (e.g. a fully-faded or
+   * fully-visible label that is not animating), avoiding redundant layout work.
    */
-  private applyLabelOpacity(label: CSS2DObject, opacity: number): void {
+  private applyLabelOpacity(state: LabelState, label: CSS2DObject, opacity: number): void {
+    if (opacity === state.lastAppliedOpacity) return;
+    state.lastAppliedOpacity = opacity;
     if (label.element) {
       if (opacity < MIN_OPACITY_THRESHOLD) {
         label.element.style.opacity = '0';

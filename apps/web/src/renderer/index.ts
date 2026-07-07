@@ -131,6 +131,11 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   let meteorShowersVisible = false;
   let currentMeteorShowerDate: Date | null = null;
 
+  // Cache the container height and re-read it only on resize. Reading
+  // clientHeight forces a layout flush; doing it once per resize instead of
+  // per frame avoids that cost next to the CSS2D style writes.
+  let cachedCanvasHeight = ctx.container.clientHeight;
+
   function updateFromEngine(engine: SkyEngine, fov: number = 60): void {
     const effectiveFov = fov * 1.2;
     const canvasHeight = ctx.container.clientHeight;
@@ -205,8 +210,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   function updateDSOs(fov: number, magLimit: number): void {
     currentDsoMagLimit = magLimit;
-    const canvasHeight = ctx.container.clientHeight;
-    dsoLayer.update(fov, magLimit, labelsVisible, canvasHeight, labelManager);
+    dsoLayer.update(fov, magLimit, labelsVisible, cachedCanvasHeight, labelManager);
   }
 
   function setDSOsVisible(visible: boolean): void {
@@ -215,8 +219,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   }
 
   function updateDeepFields(fov: number): void {
-    const canvasHeight = ctx.container.clientHeight;
-    deepFieldsLayer.update(fov, canvasHeight, camera);
+    deepFieldsLayer.update(fov, cachedCanvasHeight, camera);
   }
 
   function setDeepFieldsVisible(visible: boolean): void {
@@ -476,6 +479,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
     labelRenderer.setSize(width, height);
+    // Refresh the cached container height (used by the deep-fields and DSO
+    // per-frame updates) once per resize instead of reading it every frame.
+    cachedCanvasHeight = ctx.container.clientHeight;
   }
 
   return {
