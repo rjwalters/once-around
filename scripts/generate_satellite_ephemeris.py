@@ -29,6 +29,7 @@ The output binary format is:
 
 import argparse
 import json
+import re
 import struct
 import sys
 import time
@@ -47,6 +48,30 @@ SATELLITES = {
     "iss": ("-125544", "ISS (International Space Station)", 420),
     "hubble": ("-48", "Hubble Space Telescope", 540),
 }
+
+
+def _fetch_json(url: str) -> dict:
+    """GET a Horizons API URL and return parsed JSON, retrying on timeouts.
+
+    Horizons can take minutes to generate large vector tables (45 days at
+    1-min steps is ~65k rows) and times out sporadically from CI runners,
+    so allow a generous timeout and retry with backoff.
+    """
+    req = urllib.request.Request(url)
+    req.add_header("User-Agent", "once-around-satellite-ephemeris/1.0")
+
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=300) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError) as e:
+            if attempt == attempts:
+                raise
+            wait_s = 30 * attempt
+            print(f"Horizons request failed ({e}); retrying in {wait_s}s "
+                  f"(attempt {attempt}/{attempts})...")
+            time.sleep(wait_s)
 
 
 def parse_date(date_str: str) -> datetime:
@@ -87,29 +112,22 @@ def fetch_satellite_vectors(
 
     print(f"Fetching {display_name} ephemeris from {start} to {end} (step: {step_minutes} min)...")
 
-    # Build URL with query parameters
-    query_string = urllib.parse.urlencode(params)
-    url = f"{HORIZONS_API_URL}?{query_string}"
+    data = _fetch_json(f"{HORIZONS_API_URL}?{urllib.parse.urlencode(params)}")
 
-    # Make the request. Horizons can take minutes to generate large vector
-    # tables (45 days at 1-min steps is ~65k rows) and times out sporadically
-    # from CI runners, so allow a generous timeout and retry with backoff.
-    req = urllib.request.Request(url)
-    req.add_header("User-Agent", "once-around-satellite-ephemeris/1.0")
-
-    attempts = 3
-    for attempt in range(1, attempts + 1):
-        try:
-            with urllib.request.urlopen(req, timeout=300) as response:
-                data = json.loads(response.read().decode("utf-8"))
-            break
-        except (urllib.error.URLError, TimeoutError) as e:
-            if attempt == attempts:
-                raise
-            wait_s = 30 * attempt
-            print(f"Horizons request failed ({e}); retrying in {wait_s}s "
-                  f"(attempt {attempt}/{attempts})...")
-            time.sleep(wait_s)
+    if "error" in data:
+        # Predicted spacecraft trajectories only extend so far into the
+        # future (~30 days for the ISS). When the requested window runs past
+        # Horizons' cutoff, it reports the cutoff date in the error — clamp
+        # the window to it and refetch instead of failing.
+        m = re.search(r'after A\.D\. (\d{4}-[A-Za-z]{3}-\d{2})', data["error"])
+        if m:
+            cutoff = datetime.strptime(m.group(1).title(), "%Y-%b-%d")
+            clamped_end = cutoff - timedelta(days=1)
+            if clamped_end > start:
+                print(f"Horizons only has {display_name} ephemeris through "
+                      f"{cutoff.date()}; clamping window to {clamped_end.date()}.")
+                params["STOP_TIME"] = clamped_end.strftime("%Y-%m-%d")
+                data = _fetch_json(f"{HORIZONS_API_URL}?{urllib.parse.urlencode(params)}")
 
     if "error" in data:
         raise RuntimeError(f"Horizons API error: {data['error']}")
