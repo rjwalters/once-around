@@ -38,6 +38,44 @@ jobs:
       - name: Run unit tests
         run: pnpm --filter once-around-web test:unit
 
+  rust-test:
+    name: Rust tests (sky_engine_core)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # Caches ~/.cargo registry/git plus the workspace target dir keyed on
+      # Cargo.lock, so incremental runs skip recompiling unchanged dependencies.
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+
+      # Test-only job by design: the astronomy engine's tolerance-based suites
+      # (53 library unit tests + JPL Horizons accuracy) complete in well under a
+      # minute, so an engine regression now fails CI instead of merging
+      # unnoticed. Linting is intentionally excluded — there is a known
+      # pre-existing clippy::approx_constant error and the package is not
+      # rustfmt-clean (tracked separately in issue #66), which would otherwise
+      # block this job.
+      #
+      # The tests/golden_positions.rs suite is intentionally NOT run here. It
+      # pins full-precision f64 outputs with exact-equality (`assert_eq!`, no
+      # tolerance) and its own documented contract forbids adding tolerances.
+      # Those constants were captured on the developer's macOS/Apple Silicon
+      # machine; on CI's x86_64 Linux they differ by 1-2 ULP (e.g. Sun
+      # direction.x -0.2351194894444659 vs ...661) because the two platforms'
+      # libm trig implementations round differently. It is a within-platform
+      # bit-identity guard, not a cross-platform one, so it stays a local check.
+      # See PR discussion / issue #65 for the follow-up options (regenerate for
+      # Linux, run on a macOS runner, or relax the exact-equality contract).
+      - name: Run Rust tests
+        run: cargo test -p sky_engine_core --lib --test horizons_accuracy
+
   typecheck:
     name: Typecheck (web)
     runs-on: ubuntu-latest
