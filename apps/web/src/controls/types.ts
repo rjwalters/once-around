@@ -33,6 +33,12 @@ export type ViewMode = "geocentric" | "topocentric" | "hubble" | "jwst";
 export interface CelestialControls {
   update(): void;
   dispose(): void;
+  /**
+   * Whether a multi-frame camera animation is currently running: a quaternion
+   * slerp fly-to, a topocentric alt/az fly-to, or a post-drag roll correction.
+   * Used by the render scheduler to keep rendering while the camera moves.
+   */
+  isAnimating(): boolean;
   lookAtRaDec(ra: number, dec: number): void;
   animateToRaDec(ra: number, dec: number, durationMs?: number): void;
   getCameraState(): CameraState;

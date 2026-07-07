@@ -801,9 +801,14 @@ export function createCelestialControls(
     isAnimating = true;
   }
 
+  function isAnimating_(): boolean {
+    return isAnimating || altAzIsAnimating || isCorrectingRoll;
+  }
+
   const controlsApi: CelestialControls = {
     update,
     dispose,
+    isAnimating: isAnimating_,
     lookAtRaDec,
     animateToRaDec,
     getCameraState,

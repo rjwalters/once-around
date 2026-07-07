@@ -19,6 +19,11 @@ export interface EclipseLayer {
   update(sunMoonSeparationDeg: number, sunMesh: THREE.Mesh, camera: THREE.Camera): void;
   /** Update corona animation time (call in render loop) */
   updateTime(): void;
+  /**
+   * Whether the corona is currently rendered. When true its shader advances a
+   * time uniform every frame, so the render loop must keep rendering.
+   */
+  isCoronaActive(): boolean;
 }
 
 /**
@@ -93,9 +98,14 @@ export function createEclipseLayer(scene: THREE.Scene): EclipseLayer {
     material.uniforms.uTime.value = coronaTime;
   }
 
+  function isCoronaActive(): boolean {
+    return mesh.visible;
+  }
+
   return {
     mesh,
     update,
     updateTime,
+    isCoronaActive,
   };
 }
