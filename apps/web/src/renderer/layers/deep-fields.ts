@@ -45,10 +45,22 @@ function calculateSizePixels(sizeArcmin: number, fovDegrees: number, canvasHeigh
 
 /**
  * Create the deep fields layer.
+ *
+ * The ~18 MB of deep-field / Messier textures are NOT loaded at construction.
+ * The layer starts hidden (checkbox defaults off), so the meshes, materials, and
+ * textures are only created on the first `setVisible(true)` — i.e. when the user
+ * toggles deep fields on. This keeps the textures off the startup critical path.
+ *
  * @param scene - The Three.js scene to add meshes to
+ * @param onTextureLoad - Called when a deep-field texture finishes loading, so a
+ *   render-on-demand scene repaints the newly-arrived image on an otherwise
+ *   static frame (PR #31).
  * @returns DeepFieldsLayer interface
  */
-export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
+export function createDeepFieldsLayer(
+  scene: THREE.Scene,
+  onTextureLoad?: () => void
+): DeepFieldsLayer {
   const textureLoader = new THREE.TextureLoader();
   const deepFieldMeshes: DeepFieldMesh[] = [];
 
@@ -61,73 +73,88 @@ export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
   let lastFov = NaN;
   let lastCanvasHeight = NaN;
 
-  // Create a mesh for each deep field
-  for (const field of DEEP_FIELD_DATA) {
-    // Calculate the world-space size of the quad
-    // The quad needs to subtend the correct angular size on the sky sphere
-    // Angular size in radians = sizeArcmin / 60 * PI / 180
-    const sizeRadians = (field.sizeArcmin / 60) * (Math.PI / 180);
+  // Lazy-load guard. The mesh/material/texture creation below defers until the
+  // layer is first shown (issue #5).
+  let texturesLoaded = false;
 
-    // The chord length for this angular size at SKY_RADIUS
-    // For small angles: chord ≈ 2 * r * sin(θ/2) ≈ r * θ
-    const quadSize = SKY_RADIUS * sizeRadians;
+  /**
+   * Build the deep-field meshes and kick off their texture loads. Runs once, on
+   * the first activation of the layer. Idempotent.
+   */
+  function ensureTexturesLoaded(): void {
+    if (texturesLoaded) return;
+    texturesLoaded = true;
 
-    // Create plane geometry - sized to match angular extent on sky
-    const geometry = new THREE.PlaneGeometry(quadSize, quadSize);
+    // Create a mesh for each deep field
+    for (const field of DEEP_FIELD_DATA) {
+      // Calculate the world-space size of the quad
+      // The quad needs to subtend the correct angular size on the sky sphere
+      // Angular size in radians = sizeArcmin / 60 * PI / 180
+      const sizeRadians = (field.sizeArcmin / 60) * (Math.PI / 180);
 
-    // Load texture (with error handling for missing textures)
-    const texture = textureLoader.load(
-      field.textureUrl,
-      undefined,
-      undefined,
-      () => {
-        // Texture failed to load - create a placeholder
-        console.warn(`Deep field texture not found: ${field.textureUrl}`);
+      // The chord length for this angular size at SKY_RADIUS
+      // For small angles: chord ≈ 2 * r * sin(θ/2) ≈ r * θ
+      const quadSize = SKY_RADIUS * sizeRadians;
+
+      // Create plane geometry - sized to match angular extent on sky
+      const geometry = new THREE.PlaneGeometry(quadSize, quadSize);
+
+      // Load texture (with error handling for missing textures). The onLoad
+      // callback requests a render so the image appears on the current static
+      // frame instead of waiting for the next user interaction.
+      const texture = textureLoader.load(
+        field.textureUrl,
+        () => onTextureLoad?.(),
+        undefined,
+        () => {
+          // Texture failed to load - create a placeholder
+          console.warn(`Deep field texture not found: ${field.textureUrl}`);
+        }
+      );
+
+      // Configure texture for best quality
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.anisotropy = 4;
+
+      // Create shader material
+      const material = new THREE.ShaderMaterial({
+        vertexShader: deepFieldVertexShader,
+        fragmentShader: deepFieldFragmentShader,
+        uniforms: {
+          uTexture: { value: texture },
+          uOpacity: { value: 0 },
+        },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+
+      // Create mesh
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.renderOrder = 6; // Render on top of DSO ellipses (renderOrder 5)
+
+      // Position on the sky sphere (slightly in front to prevent z-fighting with stars)
+      const pos = raDecToPosition(field.ra, field.dec, SKY_RADIUS - 0.5);
+      mesh.position.copy(pos);
+
+      // Apply rotation angle if specified
+      if (field.rotationAngle !== 0) {
+        mesh.rotation.z = (field.rotationAngle * Math.PI) / 180;
       }
-    );
 
-    // Configure texture for best quality
-    texture.minFilter = THREE.LinearMipmapLinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.anisotropy = 4;
+      // Initially hidden
+      mesh.visible = false;
 
-    // Create shader material
-    const material = new THREE.ShaderMaterial({
-      vertexShader: deepFieldVertexShader,
-      fragmentShader: deepFieldFragmentShader,
-      uniforms: {
-        uTexture: { value: texture },
-        uOpacity: { value: 0 },
-      },
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    });
+      scene.add(mesh);
 
-    // Create mesh
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 6; // Render on top of DSO ellipses (renderOrder 5)
-
-    // Position on the sky sphere (slightly in front to prevent z-fighting with stars)
-    const pos = raDecToPosition(field.ra, field.dec, SKY_RADIUS - 0.5);
-    mesh.position.copy(pos);
-
-    // Apply rotation angle if specified
-    if (field.rotationAngle !== 0) {
-      mesh.rotation.z = (field.rotationAngle * Math.PI) / 180;
+      deepFieldMeshes.push({
+        field,
+        mesh,
+        material,
+      });
     }
-
-    // Initially hidden
-    mesh.visible = false;
-
-    scene.add(mesh);
-
-    deepFieldMeshes.push({
-      field,
-      mesh,
-      material,
-    });
   }
 
   function update(fov: number, canvasHeight: number, camera: THREE.Camera): void {
@@ -172,6 +199,10 @@ export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
 
   function setVisible(isVisible: boolean): void {
     visible = isVisible;
+    // Build the meshes + load textures on the first activation (issue #5).
+    if (isVisible) {
+      ensureTexturesLoaded();
+    }
     // Force the next update() to recompute opacity/visibility regardless of
     // whether fov/canvasHeight changed while the layer was toggled.
     lastFov = NaN;

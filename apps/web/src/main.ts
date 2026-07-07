@@ -72,15 +72,16 @@ async function main(): Promise<void> {
   // Set initial observer location for topocentric Moon corrections
   engine.set_observer_location(settings.observerLatitude, settings.observerLongitude);
 
-  // Create Three.js renderer
-  const renderer = createRenderer(container);
-
   // Render-on-demand scheduler. Every code path that changes something the
   // renderer draws must call requestRender(); the animation loop skips the
   // WebGL + CSS2D render calls on clean, static frames. Starts dirty so the
-  // first frame always renders.
+  // first frame always renders. Created before the renderer so lazily-loaded
+  // layer textures can request a repaint when they arrive (issue #5).
   const renderScheduler = createRenderScheduler();
   const requestRender = renderScheduler.requestRender;
+
+  // Create Three.js renderer
+  const renderer = createRenderer(container, requestRender);
 
   // Helper to update rendered star count display
   const starCountEl = document.getElementById("star-count");

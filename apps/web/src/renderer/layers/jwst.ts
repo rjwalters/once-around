@@ -119,11 +119,40 @@ export interface JWSTLayer {
 }
 
 /**
+ * A tiny 1×1 gray texture used as a placeholder for the JWST Earth material until
+ * the real night texture is lazy-loaded on first entry into JWST mode (issue #5).
+ */
+function createPlaceholderTexture(): THREE.Texture {
+  const tex = new THREE.DataTexture(
+    new Uint8Array([128, 128, 128, 255]),
+    1,
+    1,
+    THREE.RGBAFormat
+  );
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * Create the JWST layer.
+ *
+ * The `/earth-night.jpg` texture is NOT loaded at construction. The layer starts
+ * hidden, so it is only fetched on the first `setVisible(true)` — i.e. when the
+ * user first enters JWST mode (issue #5).
+ *
  * @param scene - The Three.js scene to add objects to
+ * @param getSharedNightTexture - Optional provider for the shared
+ *   `/earth-night.jpg` texture, so Earth and JWST layers share a single texture +
+ *   network request instead of each loading their own.
+ * @param onTextureLoad - Called when the lazily-loaded texture arrives, so a
+ *   render-on-demand scene repaints on an otherwise static frame (PR #31).
  * @returns JWSTLayer interface
  */
-export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
+export function createJWSTLayer(
+  scene: THREE.Scene,
+  getSharedNightTexture?: () => THREE.Texture,
+  onTextureLoad?: () => void
+): JWSTLayer {
   let visible = false;
 
   // Group for all JWST-specific objects
@@ -131,10 +160,10 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
   group.visible = false;
   scene.add(group);
 
-  // Load textures
+  // Earth night texture is lazy-loaded (issue #5). The material starts with a
+  // gray placeholder and swaps in the real texture on first setVisible(true).
   const textureLoader = new THREE.TextureLoader();
-  const earthNightTexture = textureLoader.load("/earth-night.jpg");
-  earthNightTexture.colorSpace = THREE.SRGBColorSpace;
+  const earthNightTexture = createPlaceholderTexture();
 
   // Earth sphere with JWST-specific shader (night side + limb glow)
   const earthGeometry = new THREE.SphereGeometry(1, 48, 48);
@@ -393,6 +422,35 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
     hasEarthPosition = true;
   }
 
+  // Lazy-load guard for the Earth night texture. Runs once, on first activation.
+  let textureLoaded = false;
+
+  /**
+   * Load the Earth night texture on the first activation (issue #5) and swap it
+   * into the material, replacing the gray placeholder. Shared with the Earth
+   * layer when a provider is supplied (single texture + single request).
+   */
+  function ensureTextureLoaded(): void {
+    if (textureLoaded) return;
+    textureLoaded = true;
+
+    if (getSharedNightTexture) {
+      earthMaterial.uniforms.nightTexture.value = getSharedNightTexture();
+      onTextureLoad?.();
+    } else {
+      textureLoader.load(
+        "/earth-night.jpg",
+        (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          earthMaterial.uniforms.nightTexture.value = texture;
+          onTextureLoad?.();
+        },
+        undefined,
+        () => console.warn("Earth night texture not found: /earth-night.jpg")
+      );
+    }
+  }
+
   function setVisible(isVisible: boolean): void {
     visible = isVisible;
     group.visible = isVisible;
@@ -402,6 +460,8 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
       moonSphere.visible = false;
       moonSprite.visible = false;
     } else {
+      // Load the Earth night texture on the first activation (issue #5).
+      ensureTextureLoaded();
       // Force a full recompute on the next update() after becoming visible, so
       // stale last-frame inputs cannot trigger the early-return.
       lastFov = Number.NaN;

@@ -45,24 +45,52 @@ export interface EarthLayer {
 }
 
 /**
+ * A tiny 1×1 gray texture used as a placeholder for the Earth materials until
+ * their real textures are lazy-loaded on first entry into Hubble mode (issue #5).
+ */
+function createPlaceholderTexture(): THREE.Texture {
+  const tex = new THREE.DataTexture(
+    new Uint8Array([128, 128, 128, 255]),
+    1,
+    1,
+    THREE.RGBAFormat
+  );
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * Create the Earth layer for Hubble view mode.
+ *
+ * The Earth day/night/cloud textures (~several MB) are NOT loaded at
+ * construction. The layer starts hidden, so the textures are only fetched on the
+ * first `setVisible(true)` — i.e. when the user first enters Hubble mode. This
+ * keeps them off the startup critical path (issue #5).
+ *
  * @param scene - The Three.js scene to add the Earth to
+ * @param getSharedNightTexture - Optional provider for the shared
+ *   `/earth-night.jpg` texture. When supplied, Earth and JWST layers share a
+ *   single texture + network request instead of each loading their own.
+ * @param onTextureLoad - Called when a lazily-loaded texture arrives, so a
+ *   render-on-demand scene repaints on an otherwise static frame (PR #31).
  * @returns EarthLayer interface
  */
-export function createEarthLayer(scene: THREE.Scene): EarthLayer {
+export function createEarthLayer(
+  scene: THREE.Scene,
+  getSharedNightTexture?: () => THREE.Texture,
+  onTextureLoad?: () => void
+): EarthLayer {
   // Group containing all Earth elements
   const group = new THREE.Group();
   group.visible = false; // Start hidden
   scene.add(group);
 
-  // Load Earth textures
+  // Earth textures are lazy-loaded (issue #5). Materials start with a gray
+  // placeholder and swap in the real textures on the first setVisible(true).
   const textureLoader = new THREE.TextureLoader();
-  const dayTexture = textureLoader.load("/earth-day.jpg");
-  const nightTexture = textureLoader.load("/earth-night.jpg");
-
-  // Set proper color space for textures
-  dayTexture.colorSpace = THREE.SRGBColorSpace;
-  nightTexture.colorSpace = THREE.SRGBColorSpace;
+  const placeholder = createPlaceholderTexture();
+  const dayTexture = placeholder;
+  const nightTexture = placeholder;
 
   // Earth sphere with day/night shader
   const earthGeometry = new THREE.SphereGeometry(
@@ -100,9 +128,9 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
   const atmosphereMesh = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
   group.add(atmosphereMesh);
 
-  // Cloud layer - slightly above Earth surface, drifts slowly
-  const cloudTexture = textureLoader.load("/earth-clouds.jpg");
-  cloudTexture.colorSpace = THREE.SRGBColorSpace;
+  // Cloud layer - slightly above Earth surface, drifts slowly. Texture is
+  // lazy-loaded (issue #5); starts with the gray placeholder.
+  const cloudTexture = placeholder;
 
   const cloudGeometry = new THREE.SphereGeometry(
     EARTH_RADIUS * CLOUD_ALTITUDE,
@@ -153,8 +181,68 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
   // time input), so a static Hubble frame can skip them entirely.
   let lastRotationDateMs = Number.NaN;
 
+  // Lazy-load guard for the Earth textures. Runs once, on first setVisible(true).
+  let texturesLoaded = false;
+
+  /**
+   * Load the Earth day/night/cloud textures on the first activation (issue #5)
+   * and swap them into the materials, replacing the gray placeholder. The night
+   * texture is shared with the JWST layer when a provider is supplied.
+   */
+  function ensureTexturesLoaded(): void {
+    if (texturesLoaded) return;
+    texturesLoaded = true;
+
+    // Day texture (Earth-owned).
+    textureLoader.load(
+      "/earth-day.jpg",
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        earthMaterial.uniforms.dayTexture.value = texture;
+        onTextureLoad?.();
+      },
+      undefined,
+      () => console.warn("Earth day texture not found: /earth-day.jpg")
+    );
+
+    // Night texture (shared with JWST via the provider when available).
+    if (getSharedNightTexture) {
+      const shared = getSharedNightTexture();
+      earthMaterial.uniforms.nightTexture.value = shared;
+      onTextureLoad?.();
+    } else {
+      textureLoader.load(
+        "/earth-night.jpg",
+        (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          earthMaterial.uniforms.nightTexture.value = texture;
+          onTextureLoad?.();
+        },
+        undefined,
+        () => console.warn("Earth night texture not found: /earth-night.jpg")
+      );
+    }
+
+    // Cloud texture (Earth-owned; used as a single-channel alpha mask).
+    textureLoader.load(
+      "/earth-clouds.jpg",
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        cloudMaterial.uniforms.cloudTexture.value = texture;
+        onTextureLoad?.();
+      },
+      undefined,
+      () => console.warn("Earth cloud texture not found: /earth-clouds.jpg")
+    );
+  }
+
   function setVisible(visible: boolean): void {
     group.visible = visible;
+
+    // Load the Earth textures on the first activation (issue #5).
+    if (visible) {
+      ensureTexturesLoaded();
+    }
 
     // Set a default position if Earth hasn't been positioned yet
     // Default: Earth "below" the observer (negative Y in Three.js coords)

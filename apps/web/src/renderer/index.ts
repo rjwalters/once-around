@@ -107,7 +107,10 @@ const _occlusionWorldPos = new THREE.Vector3();
 // writes only happen on transitions (see updateLabelOcclusion).
 interface OcclusionState { __lastOccluded?: boolean }
 
-export function createRenderer(container: HTMLElement): SkyRenderer {
+export function createRenderer(
+  container: HTMLElement,
+  requestRender?: () => void
+): SkyRenderer {
   const ctx = createRendererContext(container);
   const { scene, camera, renderer, labelRenderer, labelsGroup } = ctx;
 
@@ -117,21 +120,45 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   // Add the label manager's flagline mesh to the labels group
   labelsGroup.add(labelManager.getFlagLineMesh());
 
+  // Render-on-demand repaint trigger for lazily-loaded textures (issue #5). When
+  // a texture for a hidden layer finishes loading on an otherwise static frame,
+  // the scene must be marked dirty or the image would not appear until the next
+  // user interaction (PR #31). Defaults to a no-op if no scheduler is wired.
+  const onTextureLoad = requestRender ?? (() => {});
+
+  // Shared Earth night texture (issue #5). Loaded at most once per session, on
+  // the first entry into Hubble or JWST mode (whichever comes first), then reused
+  // by both layers — a single /earth-night.jpg request and a single GPU upload.
+  const sharedTextureLoader = new THREE.TextureLoader();
+  let sharedEarthNightTexture: THREE.Texture | null = null;
+  function getSharedEarthNightTexture(): THREE.Texture {
+    if (!sharedEarthNightTexture) {
+      sharedEarthNightTexture = sharedTextureLoader.load(
+        "/earth-night.jpg",
+        () => onTextureLoad(),
+        undefined,
+        () => console.warn("Earth night texture not found: /earth-night.jpg")
+      );
+      sharedEarthNightTexture.colorSpace = THREE.SRGBColorSpace;
+    }
+    return sharedEarthNightTexture;
+  }
+
   // Create all layers
   const milkyWayLayer = createMilkyWayLayer(scene, renderer);
   const groundLayer = createGroundLayer(scene);
   const starsLayer = createStarsLayer(scene, labelsGroup);
   const constellationsLayer = createConstellationsLayer(scene, labelsGroup);
-  const bodiesLayer = createBodiesLayer(scene, labelsGroup);
+  const bodiesLayer = createBodiesLayer(scene, labelsGroup, onTextureLoad);
   const moonsLayer = createPlanetaryMoonsLayer(scene, labelsGroup);
   const dsoLayer = createDSOLayer(scene, labelsGroup);
   const orbitsLayer = createOrbitsLayer(scene);
   const cometsLayer = createCometsLayer(scene, labelsGroup);
   const eclipseLayer = createEclipseLayer(scene);
   const satellitesLayer = createSatellitesLayer(scene, labelsGroup);
-  const earthLayer = createEarthLayer(scene);
-  const deepFieldsLayer = createDeepFieldsLayer(scene);
-  const jwstLayer = createJWSTLayer(scene);
+  const earthLayer = createEarthLayer(scene, getSharedEarthNightTexture, onTextureLoad);
+  const deepFieldsLayer = createDeepFieldsLayer(scene, onTextureLoad);
+  const jwstLayer = createJWSTLayer(scene, getSharedEarthNightTexture, onTextureLoad);
   const meteorShowerLayer = createMeteorShowerLayer(scene, labelsGroup);
   const remoteViewLayer = createRemoteViewLayer(scene);
 

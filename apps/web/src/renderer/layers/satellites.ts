@@ -47,9 +47,11 @@ const LOD_DETAIL_MIN_PX = 6;   // Above this: detailed sprite fully visible
 // Between 3-6px: crossfade
 
 // Satellite texture URLs (detail sprites)
+// Hubble has no detail texture asset (/hubble.jpg does not exist), so it is
+// intentionally omitted — it renders with its glow sprite at all zoom levels
+// instead of a broken transparent quad + a 404 every session (issue #5).
 const SATELLITE_TEXTURES: { [key: string]: string } = {
   ISS: "/iss.jpg",
-  Hubble: "/hubble.jpg",
 };
 
 export interface SatelliteState {
