@@ -46,6 +46,10 @@ export interface BodiesLayer {
   getSunPosition(): THREE.Vector3;
   /** Get current Moon position */
   getMoonPosition(): THREE.Vector3;
+  /** Copy the current Sun position into `out` (allocation-free hot-path read). */
+  copySunPositionInto(out: THREE.Vector3): void;
+  /** Copy the current Moon position into `out` (allocation-free hot-path read). */
+  copyMoonPositionInto(out: THREE.Vector3): void;
   /** Get Sun-Moon separation in degrees */
   getSunMoonSeparationDeg(): number;
   /** Update body positions and rendering */
@@ -694,6 +698,12 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     labels: bodyLabels,
     getSunPosition: () => currentSunPos.clone(),
     getMoonPosition: () => currentMoonPos.clone(),
+    copySunPositionInto: (out: THREE.Vector3) => {
+      out.copy(currentSunPos);
+    },
+    copyMoonPositionInto: (out: THREE.Vector3) => {
+      out.copy(currentMoonPos);
+    },
     getSunMoonSeparationDeg: () => currentSunMoonSeparationDeg,
     update,
     setHorizonCulling,

@@ -54,6 +54,18 @@ const LOD_POINT_SOURCE_MAX_PX = 4;
 const SUN_AVOIDANCE_HALF_ANGLE_DEG = 45;
 const SUN_AVOIDANCE_HALF_ANGLE_RAD = (SUN_AVOIDANCE_HALF_ANGLE_DEG * Math.PI) / 180;
 
+// Module-level scratch vectors reused every frame to avoid the ~11 Vector3
+// allocations the JWST update() would otherwise make per rendered frame.
+const _sunDir = new THREE.Vector3();          // normalize(sunPosition); also == earthDir
+const _earthPos = new THREE.Vector3();        // Earth on sky sphere toward Sun
+const _moonDir = new THREE.Vector3();         // normalize(moonPosition)
+const _moonOffset = new THREE.Vector3();      // Moon offset from Sun direction
+const _moonDirUnit = new THREE.Vector3();     // unit Moon direction on sky sphere
+const _moonPos = new THREE.Vector3();         // Moon on sky sphere
+const _earthLabelPos = new THREE.Vector3();
+const _moonLabelPos = new THREE.Vector3();
+const _earthDirFromMoon = new THREE.Vector3();
+
 // Sun avoidance zone shader
 const sunAvoidanceVertexShader = `
 varying vec3 vPosition;
@@ -222,17 +234,6 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
   group.add(avoidanceZone);
 
   /**
-   * Calculate Earth's position from JWST at L2.
-   * From L2, Earth is in the direction toward the Sun (between L2 and Sun).
-   */
-  function getEarthPosition(sunPosition: THREE.Vector3): THREE.Vector3 {
-    // Earth is in the same direction as the Sun from L2 (but much closer)
-    // We place it on the sky sphere in the Sun's direction
-    const earthDir = sunPosition.clone().normalize();
-    return earthDir.multiplyScalar(SKY_RADIUS - 1);
-  }
-
-  /**
    * Calculate Earth's phase as seen from the Moon.
    * This determines earthshine brightness.
    * Returns 0 (new Earth from Moon = full moon from Earth) to 1 (full Earth from Moon = new moon from Earth)
@@ -249,38 +250,67 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
     return earthPhase;
   }
 
+  // Last-frame inputs. update() is a no-op when none of the inputs that affect
+  // the geometry changed (static JWST view), avoiding all the recompute below.
+  let lastFov = Number.NaN;
+  let lastCanvasHeight = Number.NaN;
+  const _lastSun = new THREE.Vector3(Number.NaN, Number.NaN, Number.NaN);
+  const _lastMoon = new THREE.Vector3(Number.NaN, Number.NaN, Number.NaN);
+  // Last earthshine category written to the Moon label (avoids redundant DOM writes).
+  let lastEarthshineStrength = "";
+  // Track last computed Earth position for search (normalized direction on sky sphere).
+  const lastEarthPosition = new THREE.Vector3();
+  let hasEarthPosition = false;
+
   function update(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, moonPosition: THREE.Vector3, _currentDate: Date): void {
     if (!visible) return;
 
-    // Update sun avoidance zone direction
-    const sunDir = sunPosition.clone().normalize();
-    avoidanceMaterial.uniforms.uSunDirection.value.copy(sunDir);
+    // Early-return when nothing that affects the geometry changed. The render
+    // scheduler classifies JWST as always-render, so without this guard the
+    // whole recompute below runs every frame even for a static view.
+    if (
+      fov === lastFov &&
+      canvasHeight === lastCanvasHeight &&
+      sunPosition.equals(_lastSun) &&
+      moonPosition.equals(_lastMoon)
+    ) {
+      return;
+    }
+    lastFov = fov;
+    lastCanvasHeight = canvasHeight;
+    _lastSun.copy(sunPosition);
+    _lastMoon.copy(moonPosition);
 
-    // Calculate Earth position (toward Sun from L2, slightly in front)
-    const earthPos = getEarthPosition(sunPosition);
-    const earthDir = earthPos.clone().normalize();
+    // Update sun avoidance zone direction. _sunDir = normalize(sunPosition) is
+    // reused throughout: it is also the Earth direction (earthDir) and the
+    // per-frame "sunDirNorm".
+    _sunDir.copy(sunPosition).normalize();
+    avoidanceMaterial.uniforms.uSunDirection.value.copy(_sunDir);
 
-    // Calculate Moon position from L2
-    // Moon's geocentric position tells us where it is in its orbit
-    // From L2, the Moon appears offset from Earth by up to ~14.4°
-    const moonDir = moonPosition.clone().normalize();
-    const sunDirNorm = sunPosition.clone().normalize();
+    // Calculate Earth position (toward Sun from L2, slightly in front). Earth is
+    // in the same direction as the Sun from L2, placed on the sky sphere.
+    _earthPos.copy(_sunDir).multiplyScalar(SKY_RADIUS - 1);
+    // earthDir === _sunDir (normalize(_earthPos) === normalize(sunPosition)).
 
-    // Calculate Moon's offset from Sun direction (represents its orbital position)
-    // This is the angular difference between Moon and Sun as seen from Earth
-    const moonOffsetFromSun = new THREE.Vector3().subVectors(moonDir, sunDirNorm);
+    // Calculate Moon position from L2. Moon's geocentric position tells us where
+    // it is in its orbit; from L2 the Moon appears offset from Earth by up to ~14.4°.
+    _moonDir.copy(moonPosition).normalize();
 
-    // Scale the offset: from L2, max separation is ~14.4° vs geocentric max of ~180°
+    // Calculate Moon's offset from Sun direction (its orbital position): the
+    // angular difference between Moon and Sun as seen from Earth.
+    _moonOffset.subVectors(_moonDir, _sunDir);
+
+    // Scale the offset: from L2, max separation is ~14.4° vs geocentric max of ~180°.
     const scaleFactor = MOON_MAX_SEPARATION_RAD / Math.PI;
-    const scaledOffset = moonOffsetFromSun.multiplyScalar(scaleFactor * SKY_RADIUS);
+    _moonOffset.multiplyScalar(scaleFactor * SKY_RADIUS);
 
-    // Moon position = Earth position + scaled offset
-    const moonPos = earthPos.clone().add(scaledOffset);
-    // Keep on sky sphere
-    moonPos.normalize().multiplyScalar(SKY_RADIUS - 1);
+    // Moon position = Earth position + scaled offset, kept on the sky sphere.
+    // _moonDirUnit is the unit Moon direction; _moonPos is the sky-sphere position.
+    _moonDirUnit.copy(_earthPos).add(_moonOffset).normalize();
+    _moonPos.copy(_moonDirUnit).multiplyScalar(SKY_RADIUS - 1);
 
     // Calculate Earth's phase as seen from Moon (for earthshine intensity)
-    const earthPhase = calculateEarthPhase(sunDirNorm, moonDir);
+    const earthPhase = calculateEarthPhase(_sunDir, _moonDir);
 
     // Calculate apparent sizes in pixels
     const earthAngDiamDeg = EARTH_ANGULAR_DIAMETER_RAD * (180 / Math.PI);
@@ -298,17 +328,17 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
 
     // Update Earth shader uniforms
     // Sun direction is FROM Earth toward Sun (for lighting calculation)
-    earthMaterial.uniforms.sunDirection.value.copy(sunDirNorm);
+    earthMaterial.uniforms.sunDirection.value.copy(_sunDir);
     earthMaterial.uniforms.pixelSize.value = earthPixelSize;
 
     // Render Earth
     if (earthPixelSize >= LOD_POINT_SOURCE_MAX_PX) {
-      earthSphere.position.copy(earthPos);
+      earthSphere.position.copy(_earthPos);
       earthSphere.scale.setScalar(earthWorldRadius);
       earthSphere.visible = true;
       earthSprite.visible = false;
     } else {
-      earthSprite.position.copy(earthPos);
+      earthSprite.position.copy(_earthPos);
       const minSizePx = 6;
       const spriteAngularSize = (minSizePx / canvasHeight) * fov * (Math.PI / 180);
       const spriteScale = spriteAngularSize * SKY_RADIUS * 2;
@@ -317,27 +347,27 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
       earthSphere.visible = false;
     }
 
-    // Earth label
-    const earthLabelPos = earthPos.clone().normalize().multiplyScalar(SKY_RADIUS - 1 + labelOffset);
-    earthLabel.position.copy(earthLabelPos);
+    // Earth label (normalize(_earthPos) === _sunDir)
+    _earthLabelPos.copy(_sunDir).multiplyScalar(SKY_RADIUS - 1 + labelOffset);
+    earthLabel.position.copy(_earthLabelPos);
 
     // Update Moon shader uniforms
     // Sun direction FROM Moon TO Sun (same as Earth's sun direction approximately)
-    moonMaterial.uniforms.sunDirection.value.copy(sunDirNorm);
+    moonMaterial.uniforms.sunDirection.value.copy(_sunDir);
     // Earth direction FROM Moon TO Earth (Moon is offset from Earth, so calculate direction)
-    const earthDirFromMoon = earthDir.clone().sub(moonPos.clone().normalize()).normalize();
-    moonMaterial.uniforms.earthDirection.value.copy(earthDirFromMoon);
+    _earthDirFromMoon.copy(_sunDir).sub(_moonDirUnit).normalize();
+    moonMaterial.uniforms.earthDirection.value.copy(_earthDirFromMoon);
     // Earthshine intensity based on Earth's phase
     moonMaterial.uniforms.earthPhase.value = earthPhase;
 
     // Render Moon
     if (moonPixelSize >= LOD_POINT_SOURCE_MAX_PX) {
-      moonSphere.position.copy(moonPos);
+      moonSphere.position.copy(_moonPos);
       moonSphere.scale.setScalar(moonWorldRadius);
       moonSphere.visible = true;
       moonSprite.visible = false;
     } else {
-      moonSprite.position.copy(moonPos);
+      moonSprite.position.copy(_moonPos);
       const minSizePx = 4;
       const spriteAngularSize = (minSizePx / canvasHeight) * fov * (Math.PI / 180);
       const spriteScale = spriteAngularSize * SKY_RADIUS * 2;
@@ -346,13 +376,21 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
       moonSphere.visible = false;
     }
 
-    // Moon label - show earthshine status
+    // Moon label - show earthshine status. Only touch the DOM when the category
+    // changes (the string is otherwise identical frame-to-frame).
     const earthshineStrength = earthPhase > 0.7 ? "bright" : earthPhase > 0.3 ? "moderate" : "dim";
-    moonLabelDiv.textContent = `Moon (${earthshineStrength} earthshine)`;
+    if (earthshineStrength !== lastEarthshineStrength) {
+      lastEarthshineStrength = earthshineStrength;
+      moonLabelDiv.textContent = `Moon (${earthshineStrength} earthshine)`;
+    }
 
-    // Moon label position
-    const moonLabelPos = moonPos.clone().normalize().multiplyScalar(SKY_RADIUS - 1 + labelOffset);
-    moonLabel.position.copy(moonLabelPos);
+    // Moon label position (normalize(_moonPos) === _moonDirUnit)
+    _moonLabelPos.copy(_moonDirUnit).multiplyScalar(SKY_RADIUS - 1 + labelOffset);
+    moonLabel.position.copy(_moonLabelPos);
+
+    // Store Earth position (normalized direction on sky sphere) for search.
+    lastEarthPosition.copy(_sunDir);
+    hasEarthPosition = true;
   }
 
   function setVisible(isVisible: boolean): void {
@@ -363,6 +401,10 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
       earthSprite.visible = false;
       moonSphere.visible = false;
       moonSprite.visible = false;
+    } else {
+      // Force a full recompute on the next update() after becoming visible, so
+      // stale last-frame inputs cannot trigger the early-return.
+      lastFov = Number.NaN;
     }
   }
 
@@ -370,28 +412,15 @@ export function createJWSTLayer(scene: THREE.Scene): JWSTLayer {
     return visible;
   }
 
-  // Track last computed Earth position for search
-  let lastEarthPosition: THREE.Vector3 | null = null;
-
-  // Wrap update to track Earth position
-  const originalUpdate = update;
-  function wrappedUpdate(fov: number, canvasHeight: number, sunPosition: THREE.Vector3, moonPosition: THREE.Vector3, currentDate: Date): void {
-    originalUpdate(fov, canvasHeight, sunPosition, moonPosition, currentDate);
-    // Store Earth position (normalized direction on sky sphere)
-    if (visible) {
-      lastEarthPosition = sunPosition.clone().normalize();
-    }
-  }
-
   function getEarthPositionFn(): THREE.Vector3 | null {
-    if (!visible) return null;
+    if (!visible || !hasEarthPosition) return null;
     return lastEarthPosition;
   }
 
   return {
     setVisible,
     isVisible: isVisibleFn,
-    update: wrappedUpdate,
+    update,
     getEarthPosition: getEarthPositionFn,
   };
 }
