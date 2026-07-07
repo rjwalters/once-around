@@ -1,0 +1,17 @@
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.jpg
+  Cache-Control: public, max-age=31536000
+
+/deep-fields/*
+  Cache-Control: public, max-age=31536000
+
+/messier/*
+  Cache-Control: public, max-age=31536000
+
+/data/stars/*
+  Cache-Control: public, max-age=86400
+
+/data/*ephemeris*
+  Cache-Control: no-cache, must-revalidate

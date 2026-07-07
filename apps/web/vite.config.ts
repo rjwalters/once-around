@@ -13,7 +13,42 @@ function getGitCommit(): string {
 }
 
 export default defineConfig({
-  plugins: [wasm(), topLevelAwait()],
+  plugins: [
+    wasm(),
+    topLevelAwait(),
+    {
+      // Inject a preload hint for the hashed wasm asset. The filename is only
+      // known after bundling, so we read it from ctx.bundle in a post-transform.
+      // In dev mode there is no bundle, so this is a no-op.
+      name: "inject-wasm-preload",
+      transformIndexHtml: {
+        order: "post",
+        handler(html, ctx) {
+          const bundle = ctx.bundle;
+          if (!bundle) return html; // dev server: no bundle available
+          const wasmAsset = Object.values(bundle).find(
+            (chunk) => chunk.type === "asset" && chunk.fileName.endsWith(".wasm"),
+          );
+          if (!wasmAsset) return html;
+          return {
+            html,
+            tags: [
+              {
+                tag: "link",
+                attrs: {
+                  rel: "preload",
+                  as: "fetch",
+                  href: `/${wasmAsset.fileName}`,
+                  crossorigin: "",
+                },
+                injectTo: "head",
+              },
+            ],
+          };
+        },
+      },
+    },
+  ],
   define: {
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
     __GIT_COMMIT__: JSON.stringify(getGitCommit()),

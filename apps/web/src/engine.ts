@@ -286,9 +286,12 @@ export function getSatellitePosition(engine: SkyEngine, index: number): {
  */
 export async function loadSatelliteEphemeris(engine: SkyEngine, index: number, url: string): Promise<boolean> {
   try {
-    // Add cache-busting parameter to ensure fresh data
-    const cacheBustUrl = `${url}?v=${Date.now()}`;
-    const response = await fetch(cacheBustUrl);
+    // Fetch the clean URL (no cache-busting query string). The service worker
+    // uses a network-first strategy anchored on `ephemeris.*\.bin$`, so fresh
+    // data is fetched when online and the cached copy is served offline. A
+    // timestamp query suffix would break that regex and defeat both the SW
+    // fallback and the HTTP cache on every visit.
+    const response = await fetch(url);
     if (!response.ok) {
       console.warn(`Failed to load satellite ephemeris from ${url}: ${response.status}`);
       return false;
