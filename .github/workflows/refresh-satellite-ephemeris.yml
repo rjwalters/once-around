@@ -1,0 +1,78 @@
+name: Refresh satellite ephemeris
+
+# The bundled ISS / Hubble ephemeris files cover only a fixed window (see
+# scripts/generate_satellite_ephemeris.py). Once the window elapses, satellite
+# positions and ISS pass predictions go stale. This workflow regenerates the
+# data from NASA Horizons on a schedule and commits the refreshed binaries so
+# the site stays current without manual intervention.
+#
+# Safety net: even if a run fails (e.g. Horizons is unreachable) or the deploy
+# lags, the web UI detects out-of-range coverage and shows a "data out of date"
+# indicator instead of silently rendering stale positions (see iss-passes-ui.ts).
+
+on:
+  schedule:
+    # Weekly, Mondays 06:00 UTC. The generated window (default 45 days) is far
+    # wider than the 7-day cadence, so several consecutive failures can occur
+    # before coverage actually lapses.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: "Days of ephemeris to generate from today"
+        required: false
+        default: "45"
+
+# Never run two refreshes concurrently — they would race on the same commit.
+concurrency:
+  group: refresh-satellite-ephemeris
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    name: Regenerate ISS & Hubble ephemeris
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compute end date
+        id: dates
+        run: |
+          WINDOW="${{ github.event.inputs.window_days || '45' }}"
+          END="$(date -u -d "+${WINDOW} days" +%Y-%m-%d)"
+          echo "window=${WINDOW}" >> "$GITHUB_OUTPUT"
+          echo "end=${END}" >> "$GITHUB_OUTPUT"
+          echo "Generating ${WINDOW} days of ephemeris (through ${END})"
+
+      - name: Generate ISS ephemeris
+        run: |
+          python scripts/generate_satellite_ephemeris.py iss \
+            --end "${{ steps.dates.outputs.end }}" \
+            --output apps/web/public/data/iss_ephemeris.bin
+
+      - name: Generate Hubble ephemeris
+        run: |
+          python scripts/generate_satellite_ephemeris.py hubble \
+            --end "${{ steps.dates.outputs.end }}" \
+            --output apps/web/public/data/hubble_ephemeris.bin
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/public/data/iss_ephemeris.bin apps/web/public/data/hubble_ephemeris.bin
+          if git diff --cached --quiet; then
+            echo "Ephemeris unchanged — nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore(data): refresh ISS & Hubble ephemeris (through ${{ steps.dates.outputs.end }})"
+          git push

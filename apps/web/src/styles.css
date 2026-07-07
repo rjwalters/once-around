@@ -3072,6 +3072,25 @@ canvas {
   font-style: italic;
 }
 
+/* Stale-data warning: shown when the loaded ephemeris no longer covers "now". */
+.iss-passes-stale {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 176, 32, 0.12);
+  border-left: 3px solid #ffb020;
+  color: #d9c08a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.iss-passes-stale-icon {
+  color: #ffb020;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 /* Next pass card */
 .iss-next-pass {
   padding: 12px;

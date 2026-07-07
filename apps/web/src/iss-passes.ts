@@ -100,6 +100,53 @@ export function passScanWindow(
 }
 
 /**
+ * Coverage status of a satellite ephemeris relative to a reference time.
+ *
+ * - `ok`: the loaded ephemeris covers `now` — positions and passes are valid.
+ * - `stale`: the ephemeris ended in the past. Satellite positions and pass
+ *   predictions are unavailable; the bundled data needs to be regenerated.
+ * - `future`: the ephemeris starts in the future (rare — e.g. a clock set
+ *   wrong or freshly generated data not yet in range).
+ * - `missing`: no ephemeris is loaded for this satellite.
+ */
+export type EphemerisStatus =
+  | { state: "ok"; startJD: number; endJD: number }
+  | { state: "stale"; startJD: number; endJD: number; coverageEnd: Date }
+  | { state: "future"; startJD: number; endJD: number; coverageStart: Date }
+  | { state: "missing" };
+
+/**
+ * Determine whether a satellite's loaded ephemeris still covers the current
+ * time. This is the single source of truth for the UI's staleness indicator:
+ * when data goes stale the WASM engine silently returns no position (and the
+ * pass scan finds nothing), so the UI must detect the out-of-range condition
+ * explicitly rather than showing a misleading "no passes" state.
+ *
+ * @param engine - The SkyEngine instance
+ * @param satelliteIndex - Satellite index (default: ISS = 0)
+ * @param nowMs - Reference time in Unix milliseconds (default: Date.now())
+ */
+export function getEphemerisStatus(
+  engine: SkyEngine,
+  satelliteIndex: number = SATELLITE_ISS,
+  nowMs: number = Date.now()
+): EphemerisStatus {
+  const range = engine.satellite_ephemeris_range(satelliteIndex);
+  if (!range || range.length < 2) {
+    return { state: "missing" };
+  }
+  const [startJD, endJD] = range;
+  const nowJD = nowMs / MS_PER_DAY + JD_UNIX_EPOCH;
+  if (nowJD > endJD) {
+    return { state: "stale", startJD, endJD, coverageEnd: jdToDate(endJD) };
+  }
+  if (nowJD < startJD) {
+    return { state: "future", startJD, endJD, coverageStart: jdToDate(startJD) };
+  }
+  return { state: "ok", startJD, endJD };
+}
+
+/**
  * Convert the flat `find_passes` buffer into `ISSPass[]`.
  * Shared by the synchronous path and the Web Worker path.
  */
