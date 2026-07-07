@@ -6,6 +6,7 @@ pub mod planetary_moons;
 pub mod planets;
 pub mod satellites;
 pub mod time;
+pub mod time_context;
 
 // Legacy module alias for backwards compatibility
 pub mod iss {
@@ -17,23 +18,25 @@ pub mod iss {
 
 pub use catalog::{Star, StarCatalog};
 pub use comets::{
-    compute_all_comet_positions, compute_comet_position,
-    Comet, CometElements, CometPosition,
+    compute_all_comet_positions, compute_all_comet_positions_with_ctx, compute_comet_position,
+    compute_comet_position_with_ctx, Comet, CometElements, CometPosition,
 };
 pub use coords::{ra_dec_to_cartesian, CartesianCoord};
 pub use minor_bodies::{
-    compute_all_minor_body_positions, compute_minor_body_position,
-    MinorBody, MinorBodyPosition,
+    compute_all_minor_body_positions, compute_all_minor_body_positions_with_ctx,
+    compute_minor_body_position, compute_minor_body_position_with_ctx, MinorBody,
+    MinorBodyPosition,
 };
 pub use planetary_moons::{
-    compute_all_planetary_moon_positions, compute_planetary_moon_position,
-    PlanetaryMoon, PlanetaryMoonPosition,
+    compute_all_planetary_moon_positions, compute_all_planetary_moon_positions_with_ctx,
+    compute_planetary_moon_position, PlanetaryMoon, PlanetaryMoonPosition,
 };
 pub use planets::{
-    compute_all_body_positions, compute_moon_position_full, compute_planet_position,
-    CelestialBody, MoonPosition, Planet,
+    compute_all_body_positions, compute_all_body_positions_with_ctx, compute_moon_position_full,
+    compute_planet_position, compute_planet_position_with_ctx, CelestialBody, MoonPosition, Planet,
 };
 pub use time::SkyTime;
+pub use time_context::TimeContext;
 
 // Legacy ISS exports for backwards compatibility
 pub use iss::{compute_iss_position, IssEphemeris, IssEphemerisPoint, IssPosition};

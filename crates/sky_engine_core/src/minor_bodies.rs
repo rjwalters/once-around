@@ -3,9 +3,10 @@
 //! Implements heliocentric Keplerian orbits for solar system bodies not covered
 //! by VSOP87. Uses JPL orbital elements with proper 3D orbital plane orientation.
 
-use crate::coords::{ecliptic_to_equatorial, true_obliquity, CartesianCoord};
-use crate::planets::{Planet, AU_TO_KM};
+use crate::coords::{ecliptic_to_equatorial, CartesianCoord};
+use crate::planets::AU_TO_KM;
 use crate::time::SkyTime;
+use crate::time_context::TimeContext;
 use std::f64::consts::PI;
 
 /// Heliocentric Keplerian orbital elements for a minor body.
@@ -444,15 +445,30 @@ fn compute_heliocentric_ecliptic(elem: &OrbitalElements, jde: f64) -> (f64, f64,
 }
 
 /// Compute position of a minor body as seen from Earth.
+///
+/// Thin wrapper that constructs its own [`TimeContext`]; retained for standalone
+/// callers. Inside `recompute()` use [`compute_minor_body_position_with_ctx`].
 pub fn compute_minor_body_position(body: MinorBody, time: &SkyTime) -> MinorBodyPosition {
+    let ctx = TimeContext::new(time);
+    compute_minor_body_position_with_ctx(body, &ctx)
+}
+
+/// Compute a minor body's position using a shared [`TimeContext`].
+///
+/// Bit-identical to [`compute_minor_body_position`]: shares Earth's heliocentric
+/// vector and the true obliquity, which would otherwise be recomputed identically.
+pub fn compute_minor_body_position_with_ctx(
+    body: MinorBody,
+    ctx: &TimeContext,
+) -> MinorBodyPosition {
     let elem = body.elements();
-    let jde = time.julian_date_tdb();
+    let jde = ctx.jde;
 
     // Get heliocentric position of the minor body (ecliptic coordinates, AU)
     let (body_x, body_y, body_z) = compute_heliocentric_ecliptic(elem, jde);
 
     // Get heliocentric position of Earth (ecliptic coordinates, AU)
-    let earth_pos = crate::planets::heliocentric_position(Planet::Earth, jde);
+    let earth_pos = ctx.earth_helio;
 
     // Geocentric position of the minor body (AU)
     let geo_x = body_x - earth_pos.0;
@@ -472,7 +488,7 @@ pub fn compute_minor_body_position(body: MinorBody, time: &SkyTime) -> MinorBody
     let lat = (geo_z / distance_au).asin();
 
     // Convert to equatorial coordinates using true obliquity
-    let obliquity = true_obliquity(jde);
+    let obliquity = ctx.true_obliquity_rad;
     let direction = ecliptic_to_equatorial(lon, lat, obliquity).normalize();
 
     // Angular diameter
@@ -492,7 +508,15 @@ pub fn compute_minor_body_position(body: MinorBody, time: &SkyTime) -> MinorBody
 /// Returns a fixed-size array (matching `MinorBody::ALL`) rather than a heap-allocated
 /// `Vec`, avoiding a per-call allocation in the 5 Hz orbit-worker recompute path.
 pub fn compute_all_minor_body_positions(time: &SkyTime) -> [MinorBodyPosition; 15] {
-    std::array::from_fn(|i| compute_minor_body_position(MinorBody::ALL[i], time))
+    let ctx = TimeContext::new(time);
+    compute_all_minor_body_positions_with_ctx(&ctx)
+}
+
+/// Compute positions for all minor bodies using a shared [`TimeContext`].
+pub fn compute_all_minor_body_positions_with_ctx(
+    ctx: &TimeContext,
+) -> [MinorBodyPosition; 15] {
+    std::array::from_fn(|i| compute_minor_body_position_with_ctx(MinorBody::ALL[i], ctx))
 }
 
 #[cfg(test)]

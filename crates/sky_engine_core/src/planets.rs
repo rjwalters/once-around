@@ -1,10 +1,21 @@
 use crate::coords::{
-    compute_aberration, compute_nutation, compute_sun_aberration, ecliptic_to_equatorial,
-    true_obliquity, CartesianCoord,
+    compute_aberration, compute_sun_aberration, ecliptic_to_equatorial, CartesianCoord,
 };
 use crate::time::SkyTime;
+use crate::time_context::TimeContext;
 use std::f64::consts::PI;
 use vsop87::vsop87a;
+
+// Test-only counter of `heliocentric_position(Planet::Earth, _)` evaluations.
+//
+// Used by the eval-count acceptance test to assert that a single `recompute()`
+// evaluates the full VSOP87-Earth series exactly once (deduped via `TimeContext`).
+// Only Earth calls are counted; other planets are still evaluated per body.
+// Thread-local so parallel tests do not cross-contaminate.
+#[cfg(test)]
+thread_local! {
+    pub static EARTH_VSOP_EVAL_COUNT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
 
 // Planet and Sun radii in km (IAU values)
 pub const SUN_RADIUS_KM: f64 = 696340.0;
@@ -118,6 +129,11 @@ impl CelestialBody {
 /// Compute heliocentric position of a planet using VSOP87A.
 /// Returns (x, y, z) in AU, ecliptic coordinates.
 pub fn heliocentric_position(planet: Planet, jde: f64) -> (f64, f64, f64) {
+    #[cfg(test)]
+    if planet == Planet::Earth {
+        EARTH_VSOP_EVAL_COUNT.with(|c| c.set(c.get() + 1));
+    }
+
     let coords = match planet {
         Planet::Mercury => vsop87a::mercury(jde),
         Planet::Venus => vsop87a::venus(jde),
@@ -139,11 +155,25 @@ pub fn compute_planet_position(planet: Planet, time: &SkyTime) -> CartesianCoord
 
 /// Compute the full position data for a planet (direction, distance, angular diameter).
 /// Returns apparent position including nutation corrections for improved accuracy.
+///
+/// Thin wrapper that constructs its own [`TimeContext`]; retained for standalone
+/// callers. Inside `recompute()` use [`compute_planet_position_with_ctx`] with a
+/// shared context to avoid re-evaluating Earth's VSOP87 and nutation series.
 pub fn compute_planet_position_full(planet: Planet, time: &SkyTime) -> PlanetPosition {
-    let jde = time.julian_date_tdb();
+    let ctx = TimeContext::new(time);
+    compute_planet_position_with_ctx(planet, &ctx)
+}
+
+/// Compute the full position data for a planet using a shared [`TimeContext`].
+///
+/// Bit-identical to [`compute_planet_position_full`]: the only shared values used
+/// (Earth's heliocentric vector, nutation Δψ, and true obliquity) are precomputed
+/// with the same functions and would otherwise be recomputed here identically.
+pub fn compute_planet_position_with_ctx(planet: Planet, ctx: &TimeContext) -> PlanetPosition {
+    let jde = ctx.jde;
 
     // Get heliocentric positions (ecliptic coordinates) in AU
-    let earth_pos = heliocentric_position(Planet::Earth, jde);
+    let earth_pos = ctx.earth_helio;
     let planet_pos = heliocentric_position(planet, jde);
 
     // Geocentric position (planet relative to Earth) in AU
@@ -159,14 +189,11 @@ pub fn compute_planet_position_full(planet: Planet, time: &SkyTime) -> PlanetPos
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Get nutation values
-    let nutation = compute_nutation(jde);
-
     // Apply nutation in longitude to get apparent ecliptic longitude
-    let apparent_lon = lon + nutation.delta_psi;
+    let apparent_lon = lon + ctx.nutation.delta_psi;
 
     // Convert to equatorial coordinates using true obliquity (includes nutation)
-    let obliquity = true_obliquity(jde);
+    let obliquity = ctx.true_obliquity_rad;
     let direction = ecliptic_to_equatorial(apparent_lon, lat, obliquity).normalize();
 
     // Angular diameter: 2 * atan(radius / distance)
@@ -193,11 +220,22 @@ pub fn compute_sun_position(time: &SkyTime) -> CartesianCoord {
 
 /// Compute the full position data for the Sun (direction, distance, angular diameter).
 /// Returns apparent position including nutation corrections for improved accuracy.
+///
+/// Thin wrapper that constructs its own [`TimeContext`]; retained for standalone
+/// callers. Inside `recompute()` use [`compute_sun_position_with_ctx`].
 pub fn compute_sun_position_full(time: &SkyTime) -> SunPosition {
-    let jde = time.julian_date_tdb();
+    let ctx = TimeContext::new(time);
+    compute_sun_position_with_ctx(&ctx)
+}
+
+/// Compute the full position data for the Sun using a shared [`TimeContext`].
+///
+/// Bit-identical to [`compute_sun_position_full`].
+pub fn compute_sun_position_with_ctx(ctx: &TimeContext) -> SunPosition {
+    let jde = ctx.jde;
 
     // Get Earth's heliocentric position in AU
-    let earth_pos = heliocentric_position(Planet::Earth, jde);
+    let earth_pos = ctx.earth_helio;
 
     // Sun is in the opposite direction from Earth's position
     let geo_x = -earth_pos.0;
@@ -212,18 +250,15 @@ pub fn compute_sun_position_full(time: &SkyTime) -> SunPosition {
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Get nutation values
-    let nutation = compute_nutation(jde);
-
     // Apply nutation in longitude to get apparent ecliptic longitude
-    let apparent_lon = lon + nutation.delta_psi;
+    let apparent_lon = lon + ctx.nutation.delta_psi;
 
     // Apply aberration correction (~20.5 arcseconds)
     let aberration = compute_sun_aberration(jde);
     let apparent_lon = apparent_lon + aberration;
 
     // Convert to equatorial coordinates using true obliquity (includes nutation)
-    let obliquity = true_obliquity(jde);
+    let obliquity = ctx.true_obliquity_rad;
     let direction = ecliptic_to_equatorial(apparent_lon, lat, obliquity).normalize();
 
     // Angular diameter: 2 * atan(radius / distance)
@@ -287,7 +322,17 @@ pub fn planet_radius_km(planet: Planet) -> f64 {
 /// Uses an improved lunar ephemeris based on Meeus's Astronomical Algorithms Chapter 47.
 /// This version includes the E factor correction and more perturbation terms for better accuracy.
 pub fn compute_moon_position_full(time: &SkyTime) -> MoonPosition {
-    let jde = time.julian_date_tdb();
+    let ctx = TimeContext::new(time);
+    compute_moon_position_with_ctx(&ctx)
+}
+
+/// Compute the Moon's apparent position using a shared [`TimeContext`].
+///
+/// Bit-identical to [`compute_moon_position_full`]. The Meeus lunar series itself
+/// is unchanged; only the shared Earth heliocentric vector (used for the aberration
+/// Sun longitude), nutation Δψ, and true obliquity are taken from `ctx`.
+pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
+    let jde = ctx.jde;
 
     // Julian centuries from J2000.0
     let t = (jde - 2451545.0) / 36525.0;
@@ -527,14 +572,14 @@ pub fn compute_moon_position_full(time: &SkyTime) -> MoonPosition {
     let lon = l_prime_r + sum_l / 1000000.0 * PI / 180.0;
     let lat = sum_b / 1000000.0 * PI / 180.0;
 
-    // Get nutation values
-    let nutation = compute_nutation(jde);
+    // Get nutation values (shared)
+    let nutation = ctx.nutation;
 
     // Apply nutation in longitude to get apparent ecliptic longitude
     let apparent_lon = lon + nutation.delta_psi;
 
     // Compute Sun's ecliptic longitude for aberration calculation
-    let earth_pos = heliocentric_position(Planet::Earth, jde);
+    let earth_pos = ctx.earth_helio;
     let sun_lon = (-earth_pos.1).atan2(-earth_pos.0);
 
     // Apply aberration correction (shifts Moon position due to Earth's orbital motion)
@@ -548,7 +593,7 @@ pub fn compute_moon_position_full(time: &SkyTime) -> MoonPosition {
 
     // Convert to equatorial coordinates using true obliquity (includes nutation)
     // This gives apparent position rather than mean position
-    let obliquity = true_obliquity(jde);
+    let obliquity = ctx.true_obliquity_rad;
     let direction = ecliptic_to_equatorial(apparent_lon, apparent_lat, obliquity).normalize();
 
     MoonPosition {
@@ -617,16 +662,28 @@ pub struct CelestialBodyPosition {
 }
 
 /// Compute full position data (with angular diameters) for all visible celestial bodies.
+///
+/// Thin wrapper that constructs one shared [`TimeContext`]. Prefer
+/// [`compute_all_body_positions_with_ctx`] when a context already exists for the
+/// current `recompute()`.
 pub fn compute_all_body_positions_full(time: &SkyTime) -> [CelestialBodyPosition; 9] {
-    let sun = compute_sun_position_full(time);
-    let moon = compute_moon_position_full(time);
-    let mercury = compute_planet_position_full(Planet::Mercury, time);
-    let venus = compute_planet_position_full(Planet::Venus, time);
-    let mars = compute_planet_position_full(Planet::Mars, time);
-    let jupiter = compute_planet_position_full(Planet::Jupiter, time);
-    let saturn = compute_planet_position_full(Planet::Saturn, time);
-    let uranus = compute_planet_position_full(Planet::Uranus, time);
-    let neptune = compute_planet_position_full(Planet::Neptune, time);
+    let ctx = TimeContext::new(time);
+    compute_all_body_positions_with_ctx(&ctx)
+}
+
+/// Compute full position data for all visible celestial bodies using a shared
+/// [`TimeContext`]. Bit-identical to [`compute_all_body_positions_full`], but the
+/// Earth VSOP87 and nutation series are evaluated only once (in the context).
+pub fn compute_all_body_positions_with_ctx(ctx: &TimeContext) -> [CelestialBodyPosition; 9] {
+    let sun = compute_sun_position_with_ctx(ctx);
+    let moon = compute_moon_position_with_ctx(ctx);
+    let mercury = compute_planet_position_with_ctx(Planet::Mercury, ctx);
+    let venus = compute_planet_position_with_ctx(Planet::Venus, ctx);
+    let mars = compute_planet_position_with_ctx(Planet::Mars, ctx);
+    let jupiter = compute_planet_position_with_ctx(Planet::Jupiter, ctx);
+    let saturn = compute_planet_position_with_ctx(Planet::Saturn, ctx);
+    let uranus = compute_planet_position_with_ctx(Planet::Uranus, ctx);
+    let neptune = compute_planet_position_with_ctx(Planet::Neptune, ctx);
 
     [
         CelestialBodyPosition {

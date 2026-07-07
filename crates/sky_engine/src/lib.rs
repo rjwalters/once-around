@@ -1,12 +1,13 @@
 use sky_engine_core::{
     catalog::StarCatalog,
-    comets::{compute_all_comet_positions, Comet},
+    comets::{compute_all_comet_positions_with_ctx, Comet},
     coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, compute_lst, ra_dec_to_cartesian},
-    minor_bodies::{compute_all_minor_body_positions, MinorBody},
-    planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
-    planets::{compute_all_body_positions_full, compute_moon_position_full, compute_planet_position_full, compute_sun_position, CelestialBody, Planet},
+    minor_bodies::{compute_all_minor_body_positions_with_ctx, MinorBody},
+    planetary_moons::{compute_all_planetary_moon_positions_with_ctx, PlanetaryMoon},
+    planets::{compute_all_body_positions_with_ctx, compute_moon_position_full, compute_planet_position_full, compute_sun_position, CelestialBody, Planet},
     satellites::{compute_satellite_position, SatelliteEphemeris, SatelliteId},
     time::SkyTime,
+    time_context::TimeContext,
 };
 use std::f64::consts::PI;
 use wasm_bindgen::prelude::*;
@@ -47,6 +48,19 @@ pub struct SkyEngine {
 
     // Cached visible star count
     visible_count: usize,
+
+    // Star output buffers only change when the magnitude limit or the catalog change
+    // (stars are J2000-fixed and time-invariant). This flag lets `recompute_stars`
+    // skip the full-catalog scan on time-only recomputes (the common playback / tour
+    // / pass-scan case). Set on construction, `set_mag_limit`, and `add_stars`.
+    stars_dirty: bool,
+}
+
+// Test-only counter of `recompute_stars` full-catalog scans (vs. skips). Lets the
+// dirty-flag test assert that a time-only recompute does not rescan the catalog.
+#[cfg(test)]
+thread_local! {
+    static STAR_SCAN_COUNT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
 #[wasm_bindgen]
@@ -86,6 +100,7 @@ impl SkyEngine {
             satellite_ephemerides: vec![None; SatelliteId::ALL.len()],
             satellites_pos: vec![0.0; SatelliteId::ALL.len() * 6], // 6 floats per satellite
             visible_count: 0,
+            stars_dirty: true, // first recompute() must populate the star buffers
         };
 
         // Compute all star positions once (for constellation drawing)
@@ -110,7 +125,10 @@ impl SkyEngine {
     /// Set the magnitude limit for visible stars.
     /// Stars fainter than this limit won't be included in output buffers.
     pub fn set_mag_limit(&mut self, mag: f32) {
-        self.mag_limit = mag;
+        if mag != self.mag_limit {
+            self.mag_limit = mag;
+            self.stars_dirty = true;
+        }
     }
 
     /// Get the current magnitude limit.
@@ -158,10 +176,15 @@ impl SkyEngine {
     /// Call this after changing time or magnitude limit.
     pub fn recompute(&mut self) {
         self.recompute_stars();
-        self.recompute_bodies();
-        self.recompute_planetary_moons();
-        self.recompute_minor_bodies();
-        self.recompute_comets();
+
+        // Compute the per-time-step shared context ONCE and thread it through every
+        // body path. This dedupes the ~50 Earth-VSOP87 and ~74 nutation evaluations
+        // that the sub-functions previously performed independently at the same instant.
+        let ctx = TimeContext::new(&self.time);
+        self.recompute_bodies(&ctx);
+        self.recompute_planetary_moons(&ctx);
+        self.recompute_minor_bodies(&ctx);
+        self.recompute_comets(&ctx);
         self.recompute_satellites();
     }
 
@@ -238,12 +261,24 @@ impl SkyEngine {
 
             // Recompute all star positions (for constellation drawing)
             self.compute_all_stars();
+
+            // The magnitude-filtered visible buffers must be rebuilt to include the
+            // new stars on the next recompute().
+            self.stars_dirty = true;
         }
 
         Ok(added)
     }
 
     fn recompute_stars(&mut self) {
+        // Stars are J2000-fixed; the visible buffers only change when the magnitude
+        // limit or the catalog change. Skip the full-catalog scan otherwise.
+        if !self.stars_dirty {
+            return;
+        }
+        #[cfg(test)]
+        STAR_SCAN_COUNT.with(|c| c.set(c.get() + 1));
+
         let mut pos_idx = 0;
         let mut meta_idx = 0;
         let mut count = 0;
@@ -272,14 +307,14 @@ impl SkyEngine {
         }
 
         self.visible_count = count;
+        self.stars_dirty = false;
     }
 
-    fn recompute_bodies(&mut self) {
-        let positions = compute_all_body_positions_full(&self.time);
+    fn recompute_bodies(&mut self, ctx: &TimeContext) {
+        let positions = compute_all_body_positions_with_ctx(ctx);
 
-        // Compute GMST for topocentric corrections
-        let jd_ut1 = self.time.julian_date_utc(); // Close enough to UT1 for our purposes
-        let gmst = compute_gmst(jd_ut1);
+        // GMST for topocentric corrections (shared from the context).
+        let gmst = ctx.gmst;
 
         for (i, body_pos) in positions.iter().enumerate() {
             let direction = if i == 1 {
@@ -287,13 +322,12 @@ impl SkyEngine {
                 // This can shift the Moon's position by up to ~1° depending on observer location
                 let (ra, dec) = cartesian_to_ra_dec(&body_pos.direction);
 
-                // Get Moon distance from the full computation
-                let moon_pos = compute_moon_position_full(&self.time);
-
+                // Moon distance is already in positions[1] (this element) — no need to
+                // re-run the ~180-term Meeus lunar series a second time.
                 let (topo_ra, topo_dec) = apply_topocentric_correction(
                     ra,
                     dec,
-                    moon_pos.distance_km,
+                    body_pos.distance_km,
                     self.observer_lat_rad,
                     self.observer_lon_rad,
                     gmst,
@@ -314,8 +348,8 @@ impl SkyEngine {
         }
     }
 
-    fn recompute_planetary_moons(&mut self) {
-        let positions = compute_all_planetary_moon_positions(&self.time);
+    fn recompute_planetary_moons(&mut self, ctx: &TimeContext) {
+        let positions = compute_all_planetary_moon_positions_with_ctx(ctx);
         for (i, moon_pos) in positions.iter().enumerate() {
             let (x, y, z) = moon_pos.direction.to_f32();
             let idx = i * 4;
@@ -326,8 +360,8 @@ impl SkyEngine {
         }
     }
 
-    fn recompute_minor_bodies(&mut self) {
-        let positions = compute_all_minor_body_positions(&self.time);
+    fn recompute_minor_bodies(&mut self, ctx: &TimeContext) {
+        let positions = compute_all_minor_body_positions_with_ctx(ctx);
         for (i, body_pos) in positions.iter().enumerate() {
             let (x, y, z) = body_pos.direction.to_f32();
             let idx = i * 4;
@@ -338,8 +372,8 @@ impl SkyEngine {
         }
     }
 
-    fn recompute_comets(&mut self) {
-        let positions = compute_all_comet_positions(&self.time);
+    fn recompute_comets(&mut self, ctx: &TimeContext) {
+        let positions = compute_all_comet_positions_with_ctx(ctx);
         for (i, comet_pos) in positions.iter().enumerate() {
             let (x, y, z) = comet_pos.direction.to_f32();
             let idx = i * 4;
@@ -1020,6 +1054,7 @@ pub fn log(s: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sky_engine_core::planets::compute_all_body_positions_full;
 
     /// Equivalence proof for the orbit-worker optimization: `fill_planet_track` must produce
     /// exactly the same equatorial unit vectors that the full `recompute()` path writes into
@@ -1287,6 +1322,57 @@ mod tests {
                 "pass {i} max-altitude mismatch: {max_alt} vs {ref_max_alt}"
             );
         }
+    }
+
+    /// Item 4: `recompute_stars` must skip the full-catalog scan on time-only
+    /// recomputes (stars are J2000-fixed) but still rescan when the magnitude limit
+    /// changes, and the visible buffers must stay correct either way.
+    #[test]
+    fn recompute_stars_skips_scan_on_time_only_change() {
+        let mut engine = SkyEngine::new(&[]).expect("engine");
+        // Constructor performed exactly one star scan.
+        STAR_SCAN_COUNT.with(|c| assert_eq!(c.get(), 1, "constructor should scan stars once"));
+
+        let visible_before = engine.visible_stars();
+        let buf_before: Vec<f32> =
+            engine.stars_pos[..visible_before * 3].to_vec();
+
+        // Time-only change: several recomputes must NOT rescan the catalog.
+        STAR_SCAN_COUNT.with(|c| c.set(0));
+        for (h, m) in [(1u8, 0u8), (2, 30), (12, 0)] {
+            engine.set_time_utc(2026, 7, 6, h, m, 0.0);
+            engine.recompute();
+        }
+        STAR_SCAN_COUNT.with(|c| {
+            assert_eq!(c.get(), 0, "time-only recompute must not rescan the star catalog")
+        });
+        assert_eq!(engine.visible_stars(), visible_before, "visible count unchanged");
+        assert_eq!(
+            &engine.stars_pos[..visible_before * 3],
+            &buf_before[..],
+            "star buffer unchanged on time-only recompute"
+        );
+
+        // Magnitude-limit change: the catalog must be rescanned and the visible set
+        // must shrink for a brighter (smaller) limit.
+        STAR_SCAN_COUNT.with(|c| c.set(0));
+        engine.set_mag_limit(2.0);
+        engine.recompute();
+        STAR_SCAN_COUNT.with(|c| {
+            assert_eq!(c.get(), 1, "mag-limit change must trigger exactly one rescan")
+        });
+        assert!(
+            engine.visible_stars() <= visible_before,
+            "a brighter magnitude limit should not increase the visible star count"
+        );
+
+        // Setting the SAME mag limit again must not rescan.
+        STAR_SCAN_COUNT.with(|c| c.set(0));
+        engine.set_mag_limit(2.0);
+        engine.recompute();
+        STAR_SCAN_COUNT.with(|c| {
+            assert_eq!(c.get(), 0, "re-setting the same mag limit must not rescan")
+        });
     }
 
     #[test]
