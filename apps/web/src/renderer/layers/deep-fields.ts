@@ -55,6 +55,12 @@ export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
   // Track visibility state
   let visible = true;
 
+  // Cache the last fov/canvasHeight used to size deep fields. The per-mesh
+  // opacity only depends on these two values, so when neither changes we can
+  // skip recomputing 30 uniform sizes and only refresh the billboard rotation.
+  let lastFov = NaN;
+  let lastCanvasHeight = NaN;
+
   // Create a mesh for each deep field
   for (const field of DEEP_FIELD_DATA) {
     // Calculate the world-space size of the quad
@@ -133,18 +139,29 @@ export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
       return;
     }
 
+    // Opacity/visibility only depend on fov and canvasHeight. When neither has
+    // changed, skip the 30 size/opacity recomputations and only refresh the
+    // billboard orientation of already-visible meshes.
+    const dimensionsChanged = fov !== lastFov || canvasHeight !== lastCanvasHeight;
+    if (dimensionsChanged) {
+      lastFov = fov;
+      lastCanvasHeight = canvasHeight;
+    }
+
     for (const dfm of deepFieldMeshes) {
-      // Calculate apparent size in pixels
-      const sizePixels = calculateSizePixels(dfm.field.sizeArcmin, fov, canvasHeight);
+      if (dimensionsChanged) {
+        // Calculate apparent size in pixels
+        const sizePixels = calculateSizePixels(dfm.field.sizeArcmin, fov, canvasHeight);
 
-      // Calculate opacity based on size thresholds
-      const opacity = smoothstep(DEEP_FIELD_FADE_START_PX, DEEP_FIELD_FADE_END_PX, sizePixels);
+        // Calculate opacity based on size thresholds
+        const opacity = smoothstep(DEEP_FIELD_FADE_START_PX, DEEP_FIELD_FADE_END_PX, sizePixels);
 
-      // Update material opacity
-      dfm.material.uniforms.uOpacity.value = opacity;
+        // Update material opacity
+        dfm.material.uniforms.uOpacity.value = opacity;
 
-      // Show/hide mesh based on opacity
-      dfm.mesh.visible = opacity > 0.01;
+        // Show/hide mesh based on opacity
+        dfm.mesh.visible = opacity > 0.01;
+      }
 
       if (dfm.mesh.visible) {
         // Billboard toward camera - copy camera orientation so plane faces viewer
@@ -155,6 +172,9 @@ export function createDeepFieldsLayer(scene: THREE.Scene): DeepFieldsLayer {
 
   function setVisible(isVisible: boolean): void {
     visible = isVisible;
+    // Force the next update() to recompute opacity/visibility regardless of
+    // whether fov/canvasHeight changed while the layer was toggled.
+    lastFov = NaN;
     if (!isVisible) {
       for (const dfm of deepFieldMeshes) {
         dfm.mesh.visible = false;
