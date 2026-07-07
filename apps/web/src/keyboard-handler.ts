@@ -22,6 +22,8 @@ export interface KeyboardHandlerOptions {
   togglePlayback: () => void;
   focusSearch: () => void;
   showHelp: () => void;
+  /** Toggle the guide-star (FGS) lock (only acts in Hubble/JWST modes). */
+  toggleGuideStarLock?: () => void;
 }
 
 /**
@@ -46,6 +48,7 @@ export function setupKeyboardHandler(options: KeyboardHandlerOptions): void {
     togglePlayback,
     focusSearch,
     showHelp,
+    toggleGuideStarLock,
   } = options;
 
   window.addEventListener("keydown", (event) => {
@@ -86,6 +89,9 @@ export function setupKeyboardHandler(options: KeyboardHandlerOptions): void {
         break;
       case "h":
         toggleHorizon();
+        break;
+      case "g":
+        toggleGuideStarLock?.();
         break;
       case "e":
         handleNextEclipse();

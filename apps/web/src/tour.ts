@@ -236,6 +236,14 @@ export interface TourCallbacks {
   /** Resolve a body's position at a given datetime. Required if using target-based keyframes. */
   resolveBodyPosition?: (target: TargetBody, datetime: Date) => BodyPosition;
 
+  /**
+   * Called when a tour begins playing (at the start of `play()`), before any
+   * camera/time/viewpoint changes are applied. Used to tear down interaction
+   * modes that must not coexist with a tour (e.g. the FGS guide-star lock,
+   * which otherwise keeps snapping the camera back during keyframe dwells).
+   */
+  onTourStart?: (tour: TourDefinition) => void;
+
   /** Called when playback state changes */
   onStateChange?: (state: TourPlaybackState) => void;
 
@@ -501,6 +509,12 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
       console.warn('Cannot play empty tour');
       return;
     }
+
+    // Tear down interaction modes that must not coexist with a tour. Fired
+    // before any camera/time changes so a lingering FGS guide-star lock is
+    // released up front (most tours carry no viewMode, so the view-mode-change
+    // path never runs and would otherwise leave the lock fighting the tour).
+    callbacks.onTourStart?.(tour);
 
     currentTour = tour;
     currentKeyframeIndex = 0;

@@ -83,6 +83,12 @@ export interface TourSetupDependencies {
   } | null;
   getDefaultLocation: () => { latitude: number; longitude: number };
   getMagnitude: () => number;
+  /**
+   * Invoked when a tour starts playing, before any camera/time changes. Used to
+   * release the FGS guide-star lock so it does not fight the tour's programmatic
+   * camera moves during keyframe dwells.
+   */
+  onTourStart?: () => void;
 }
 
 export interface TourSetupResult {
@@ -103,6 +109,7 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
     getLocationManager,
     getDefaultLocation,
     getMagnitude,
+    onTourStart,
   } = deps;
 
   // Throttle expensive engine work during animated transitions to ~15Hz. The
@@ -265,6 +272,9 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
         return locationManager.getLocation();
       }
       return getDefaultLocation();
+    },
+    onTourStart: () => {
+      onTourStart?.();
     },
     onStateChange: (state: TourPlaybackState) => {
       updateTourUI(state);

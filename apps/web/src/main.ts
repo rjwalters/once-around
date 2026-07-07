@@ -35,6 +35,7 @@ import { setupTourSystem } from "./tour-setup";
 import { setupSearch } from "./search-setup";
 import { createAnimationLoop } from "./animation-loop";
 import { createRenderScheduler } from "./render-scheduler";
+import { createGuideStarLock } from "./guide-star";
 
 // Build-time constants injected by Vite
 declare const __BUILD_TIME__: string;
@@ -144,6 +145,13 @@ async function main(): Promise<void> {
     setIndicatorLabel: (info: ViewIndicatorInfo | null) => void;
   } | null = null;
 
+  // Guide-star lock holder - set later when guideStarLock is created, referenced
+  // from the view-mode change callback (which is defined before creation).
+  let guideStarLockRef: {
+    onViewModeChange: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => void;
+    release: () => void;
+  } | null = null;
+
   // Track current date (set later after initialization)
   let currentDate = new Date();
 
@@ -163,6 +171,11 @@ async function main(): Promise<void> {
       const magInput = document.getElementById("magnitude") as HTMLInputElement | null;
       return magInput ? parseFloat(magInput.value) : 6.5;
     },
+    // Release any FGS guide-star lock when a tour starts: most tours carry no
+    // viewMode, so the view-mode-change release path never fires, and a lingering
+    // lock would keep snapping the camera back onto the guide star during the
+    // tour's keyframe dwells.
+    onTourStart: () => guideStarLockRef?.release(),
   });
 
   // Add listeners for user interactions that should pause tour
@@ -678,6 +691,8 @@ async function main(): Promise<void> {
       if (issPassesUI) {
         issPassesUI.setVisible(mode === 'topocentric');
       }
+      // Show/hide the guide-star lock button; auto-release when leaving space modes.
+      guideStarLockRef?.onViewModeChange(mode);
       settingsSaver.save({ viewMode: mode });
       // Keep URL in sync with view mode
       const viewModeUrlMap: Record<string, UrlState['view']> = {
@@ -724,6 +739,19 @@ async function main(): Promise<void> {
 
   // Set the reference for tour system to use
   viewModeManagerRef = viewModeManager;
+
+  // Guide-star (FGS) lock — simulates space-telescope fine-guidance pointing.
+  // Available only in Hubble/JWST modes; acquires the nearest bright star to the
+  // current pointing, holds it centered, and draws an FGS crosshair reticle.
+  const guideStarLock = createGuideStarLock({
+    container,
+    camera: renderer.camera,
+    controls,
+    getViewMode: () => viewModeManager.getMode(),
+    requestRender,
+  });
+  guideStarLockRef = guideStarLock;
+  guideStarLock.setupEventListeners();
 
   viewModeManager.setupEventListeners();
 
@@ -1071,6 +1099,7 @@ async function main(): Promise<void> {
         helpModal.classList.remove("hidden");
       }
     },
+    toggleGuideStarLock: () => guideStarLock.toggle(),
   });
 
   // Flush settings before page unload
@@ -1119,6 +1148,7 @@ async function main(): Promise<void> {
     engine,
     renderScheduler,
     isARModeEnabled: () => arModeManager.isEnabled(),
+    guideStar: guideStarLock,
   });
 
   // Enable scintillation if starting in topocentric mode

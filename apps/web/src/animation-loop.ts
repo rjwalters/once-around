@@ -61,6 +61,16 @@ export interface AnimationLoopDependencies {
   renderScheduler: RenderScheduler;
   /** Whether AR device-orientation mode is active (always-render gate). */
   isARModeEnabled: () => boolean;
+  /**
+   * Optional guide-star (FGS) lock. `hold()` re-asserts pointing on the guide
+   * star (epsilon-gated, so it only requests a render on real drift) and
+   * `renderOverlay()` repositions the FGS reticle over the star on rendered
+   * frames only.
+   */
+  guideStar?: {
+    hold: (controlsAnimating: boolean) => void;
+    renderOverlay: () => void;
+  };
 }
 
 export function createAnimationLoop(deps: AnimationLoopDependencies): () => void {
@@ -75,6 +85,7 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     engine,
     renderScheduler,
     isARModeEnabled,
+    guideStar,
   } = deps;
 
   // Pre-allocated vectors reused every frame to avoid per-frame GC pressure.
@@ -96,6 +107,11 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     // render-skip decision so a newly-started animation is not missed.
     controls.update();
     tourEngine.update();
+
+    // Guide-star lock re-asserts pointing before the render-skip decision so a
+    // drift correction can trigger this frame's render. Epsilon-gated: a settled,
+    // on-target lock does nothing and does not force a render.
+    guideStar?.hold(controls.isAnimating());
 
     const viewMode = getViewMode();
 
@@ -188,6 +204,10 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
       renderer.copyMoonPositionInto(moonPosJwst);
       renderer.updateJWST(currentFov, sunPosJwst, moonPosJwst, currentDate);
     }
+
+    // Reposition the FGS reticle over the guide star. Done on rendered frames
+    // only (after the render-skip gate) so the DOM overlay tracks the WebGL frame.
+    guideStar?.renderOverlay();
 
     renderer.render();
   }

@@ -2714,6 +2714,107 @@ canvas {
   display: none;
 }
 
+/* Guide-star (FGS) lock button — only shown in Hubble/JWST modes */
+.guide-star-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #222;
+  border: 1px solid #444;
+  color: #9aa;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  box-sizing: border-box;
+  transition: all 0.15s;
+}
+
+.guide-star-btn:hover {
+  background: #333;
+  border-color: #555;
+  color: #cde;
+}
+
+.guide-star-btn.active {
+  background: #12302a;
+  border-color: #35e0b0;
+  color: #35e0b0;
+}
+
+.guide-star-btn.hidden {
+  display: none;
+}
+
+/* Hide the guide-star button during tours (view buttons are hidden too) */
+.view-mode-section.tour-active .guide-star-btn {
+  display: none;
+}
+
+/* FGS crosshair reticle — projected onto the locked guide star */
+.fgs-reticle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+  z-index: 50;
+  will-change: transform;
+}
+
+.fgs-reticle-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  animation: fgs-lock-pulse 2s ease-in-out infinite;
+}
+
+.fgs-reticle .fgs-ring {
+  fill: none;
+  stroke: #35e0b0;
+  stroke-width: 1.25;
+  opacity: 0.85;
+}
+
+.fgs-reticle .fgs-tick {
+  stroke: #35e0b0;
+  stroke-width: 1.25;
+  opacity: 0.9;
+}
+
+.fgs-reticle .fgs-dot {
+  fill: #35e0b0;
+}
+
+.fgs-reticle-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 6px);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #35e0b0;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+}
+
+@keyframes fgs-lock-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fgs-reticle-svg {
+    animation: none;
+  }
+}
+
 /* Help/Keyboard Shortcuts Modal */
 .help-modal {
   position: fixed;
