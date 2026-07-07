@@ -5,7 +5,25 @@
  */
 
 import type { SkyEngine } from "./wasm/sky_engine";
-import { ISSPass, findISSPasses, getNextPassSummary } from "./iss-passes";
+import { ISSPass, findISSPasses, getNextPassSummary, parsePassBuffer } from "./iss-passes";
+
+/** Sun altitude limit for dark sky (civil twilight). Mirrors iss-passes.ts default. */
+const SUN_ALTITUDE_LIMIT = -6;
+
+interface WorkerResultMessage {
+  type: "result";
+  requestId: number;
+  buffer: Float64Array;
+}
+interface WorkerErrorMessage {
+  type: "error";
+  requestId: number;
+  error: string;
+}
+interface WorkerReadyMessage {
+  type: "ready";
+}
+type WorkerMessage = WorkerResultMessage | WorkerErrorMessage | WorkerReadyMessage;
 
 export interface ISSPassesUIOptions {
   /** Container element ID */
@@ -28,6 +46,8 @@ export class ISSPassesUI {
   private maxPasses: number;
   private isComputing = false;
   private visible = false;
+  private worker: Worker | null = null;
+  private latestRequestId = 0;
 
   constructor(options: ISSPassesUIOptions) {
     this.container = document.getElementById(options.containerId);
@@ -35,10 +55,51 @@ export class ISSPassesUI {
     this.minAltitude = options.minAltitude ?? 10;
     this.maxPasses = options.maxPasses ?? 10;
 
+    this.initWorker();
+
     if (this.container) {
       this.container.style.display = 'none';
       this.render();
     }
+  }
+
+  /**
+   * Create the pass-computation Web Worker so the scan never blocks the main
+   * thread. Falls back to the synchronous main-thread path if Workers are
+   * unavailable (e.g. non-browser environments).
+   */
+  private initWorker(): void {
+    if (typeof Worker === "undefined") return;
+    try {
+      this.worker = new Worker(
+        new URL("./workers/iss-passes-worker.ts", import.meta.url),
+        { type: "module" }
+      );
+      this.worker.onmessage = (event: MessageEvent<WorkerMessage>) =>
+        this.onWorkerMessage(event.data);
+      this.worker.onerror = (e) => {
+        console.error("ISS passes worker error:", e);
+      };
+    } catch (e) {
+      console.warn("ISS passes worker unavailable; using main thread:", e);
+      this.worker = null;
+    }
+  }
+
+  /** Handle a message from the pass-computation worker. */
+  private onWorkerMessage(msg: WorkerMessage): void {
+    if (msg.type === "ready") return;
+    // Ignore results from superseded requests (e.g. rapid location changes).
+    if (msg.requestId !== this.latestRequestId) return;
+
+    if (msg.type === "result") {
+      this.passes = parsePassBuffer(msg.buffer);
+    } else {
+      console.error("Error computing ISS passes:", msg.error);
+      this.passes = [];
+    }
+    this.isComputing = false;
+    this.render();
   }
 
   /**
@@ -82,7 +143,7 @@ export class ISSPassesUI {
    * Compute upcoming passes.
    */
   private computePasses(): void {
-    if (!this.engine || this.isComputing) return;
+    if (!this.engine) return;
 
     // Check if ephemeris is loaded
     const range = this.engine.satellite_ephemeris_range(0);
@@ -92,10 +153,30 @@ export class ISSPassesUI {
       return;
     }
 
+    // Preferred path: run the scan in the Web Worker (never blocks the main
+    // thread). A newer request supersedes any in-flight one via requestId.
+    if (this.worker) {
+      this.isComputing = true;
+      this.render(); // Show loading state
+      const requestId = ++this.latestRequestId;
+      this.worker.postMessage({
+        type: "compute",
+        requestId,
+        observerLat: this.engine.observer_lat(),
+        observerLon: this.engine.observer_lon(),
+        minAltitude: this.minAltitude,
+        maxPasses: this.maxPasses,
+        sunAltitudeLimit: SUN_ALTITUDE_LIMIT,
+        nowMs: Date.now()
+      });
+      return;
+    }
+
+    // Fallback: no worker available. The WASM scan is a single fast call, but
+    // defer via setTimeout so the current event (e.g. location change) yields first.
+    if (this.isComputing) return;
     this.isComputing = true;
     this.render(); // Show loading state
-
-    // Use setTimeout to avoid blocking the UI
     setTimeout(() => {
       try {
         this.passes = findISSPasses(this.engine!, {
