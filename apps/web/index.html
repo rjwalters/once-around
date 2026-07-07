@@ -11,6 +11,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="Explore the night sky with an interactive planetarium. View stars, planets, constellations, deep sky objects, and satellites from any location and time." />
     <title>Once Around the Night Sky</title>
+    <!-- Preload critical star-catalog data so fetches start during JS parse
+         rather than after the main bundle downloads. The hashed wasm preload is
+         injected at build time by the inject-wasm-preload plugin in vite.config.ts. -->
+    <link rel="preload" as="fetch" crossorigin href="/data/stars/bsc5-tier1.bin" />
+    <link rel="preload" as="fetch" crossorigin href="/data/stars/constellation-stars.bin" />
     <!-- Critical CSS for loading overlay (must be inline to show before JS loads) -->
     <style>
       /* Use !important to prevent any external CSS from overriding */
