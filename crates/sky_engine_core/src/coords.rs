@@ -125,6 +125,7 @@ pub fn mean_obliquity(jde: f64) -> f64 {
 }
 
 /// Nutation values (Δψ and Δε)
+#[derive(Debug, Clone, Copy)]
 pub struct Nutation {
     /// Nutation in longitude (Δψ) in radians
     pub delta_psi: f64,
@@ -132,10 +133,23 @@ pub struct Nutation {
     pub delta_epsilon: f64,
 }
 
+// Test-only counter of `compute_nutation` evaluations.
+//
+// Used by the eval-count acceptance test to assert that a single `recompute()`
+// evaluates the 63-term nutation series exactly once (deduped via `TimeContext`).
+// Thread-local so parallel tests do not cross-contaminate.
+#[cfg(test)]
+thread_local! {
+    pub static NUTATION_EVAL_COUNT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
 /// Compute nutation in longitude and obliquity for a given Julian Date.
 /// Uses the IAU 1980 nutation theory with the main terms from Meeus Table 22.A.
 /// This provides accuracy of about 0.5 arcseconds for most applications.
 pub fn compute_nutation(jde: f64) -> Nutation {
+    #[cfg(test)]
+    NUTATION_EVAL_COUNT.with(|c| c.set(c.get() + 1));
+
     // Julian centuries from J2000.0
     let t = (jde - 2451545.0) / 36525.0;
     let t2 = t * t;

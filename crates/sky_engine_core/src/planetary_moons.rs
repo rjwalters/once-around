@@ -9,8 +9,9 @@
 //! to match the planet's actual axial orientation in space.
 
 use crate::coords::CartesianCoord;
-use crate::planets::{compute_planet_position_full, Planet};
+use crate::planets::{compute_planet_position_with_ctx, Planet, PlanetPosition};
 use crate::time::SkyTime;
+use crate::time_context::TimeContext;
 use std::f64::consts::PI;
 
 /// Planetary pole coordinates in J2000 equatorial frame.
@@ -494,8 +495,24 @@ pub fn compute_planetary_moon_position(
     moon: PlanetaryMoon,
     time: &SkyTime,
 ) -> PlanetaryMoonPosition {
+    let ctx = TimeContext::new(time);
+    let parent_pos = compute_planet_position_with_ctx(moon.parent(), &ctx);
+    compute_planetary_moon_position_with_parent(moon, ctx.jde, &parent_pos)
+}
+
+/// Compute a planetary moon's position given its parent planet's already-computed
+/// position and the shared TDB Julian date.
+///
+/// Bit-identical to [`compute_planetary_moon_position`]. The parent position must be
+/// the one produced by `compute_planet_position_with_ctx(moon.parent(), ctx)` (equal
+/// to the old `compute_planet_position_full(moon.parent(), time)`), so that all 18
+/// moons sharing a parent reuse a single planet evaluation instead of recomputing it.
+pub fn compute_planetary_moon_position_with_parent(
+    moon: PlanetaryMoon,
+    jde: f64,
+    parent_pos: &PlanetPosition,
+) -> PlanetaryMoonPosition {
     let elem = moon.elements();
-    let jde = time.julian_date_tdb();
 
     // Days since J2000 epoch
     let t = jde - 2451545.0;
@@ -532,8 +549,7 @@ pub fn compute_planetary_moon_position(
     let y_orbit = r_from_parent * true_anomaly.sin();
     let z_orbit = 0.0; // Moons orbit in planet's equatorial plane
 
-    // Get parent planet position from Earth
-    let parent_pos = compute_planet_position_full(elem.parent, time);
+    // Parent planet position from Earth (precomputed once per parent, shared).
     let parent_dist_km = parent_pos.distance_km;
 
     // Get the planet's pole orientation
@@ -572,31 +588,60 @@ pub fn compute_planetary_moon_position(
 }
 
 /// Compute positions for all planetary moons.
+///
+/// Thin wrapper that constructs one shared [`TimeContext`]. Prefer
+/// [`compute_all_planetary_moon_positions_with_ctx`] inside `recompute()`.
 pub fn compute_all_planetary_moon_positions(time: &SkyTime) -> [PlanetaryMoonPosition; 18] {
+    let ctx = TimeContext::new(time);
+    compute_all_planetary_moon_positions_with_ctx(&ctx)
+}
+
+/// Compute positions for all planetary moons using a shared [`TimeContext`].
+///
+/// The 5 distinct parent planets (Jupiter, Saturn, Uranus, Neptune, Mars) are each
+/// evaluated exactly once here and shared across their moons, instead of the
+/// previous per-moon `compute_planet_position_full` (which recomputed Saturn 6×,
+/// Uranus 5×, Jupiter 4×, etc.). Bit-identical to
+/// [`compute_all_planetary_moon_positions`].
+pub fn compute_all_planetary_moon_positions_with_ctx(
+    ctx: &TimeContext,
+) -> [PlanetaryMoonPosition; 18] {
+    // Evaluate each distinct parent planet once.
+    let jupiter = compute_planet_position_with_ctx(Planet::Jupiter, ctx);
+    let saturn = compute_planet_position_with_ctx(Planet::Saturn, ctx);
+    let uranus = compute_planet_position_with_ctx(Planet::Uranus, ctx);
+    let neptune = compute_planet_position_with_ctx(Planet::Neptune, ctx);
+    let mars = compute_planet_position_with_ctx(Planet::Mars, ctx);
+
+    let jde = ctx.jde;
+    let moon = |m: PlanetaryMoon, parent: &PlanetPosition| {
+        compute_planetary_moon_position_with_parent(m, jde, parent)
+    };
+
     [
         // Jupiter's Galilean moons (0-3)
-        compute_planetary_moon_position(PlanetaryMoon::Io, time),
-        compute_planetary_moon_position(PlanetaryMoon::Europa, time),
-        compute_planetary_moon_position(PlanetaryMoon::Ganymede, time),
-        compute_planetary_moon_position(PlanetaryMoon::Callisto, time),
+        moon(PlanetaryMoon::Io, &jupiter),
+        moon(PlanetaryMoon::Europa, &jupiter),
+        moon(PlanetaryMoon::Ganymede, &jupiter),
+        moon(PlanetaryMoon::Callisto, &jupiter),
         // Saturn's major moons (4-9)
-        compute_planetary_moon_position(PlanetaryMoon::Mimas, time),
-        compute_planetary_moon_position(PlanetaryMoon::Enceladus, time),
-        compute_planetary_moon_position(PlanetaryMoon::Tethys, time),
-        compute_planetary_moon_position(PlanetaryMoon::Dione, time),
-        compute_planetary_moon_position(PlanetaryMoon::Rhea, time),
-        compute_planetary_moon_position(PlanetaryMoon::Titan, time),
+        moon(PlanetaryMoon::Mimas, &saturn),
+        moon(PlanetaryMoon::Enceladus, &saturn),
+        moon(PlanetaryMoon::Tethys, &saturn),
+        moon(PlanetaryMoon::Dione, &saturn),
+        moon(PlanetaryMoon::Rhea, &saturn),
+        moon(PlanetaryMoon::Titan, &saturn),
         // Uranus's major moons (10-14)
-        compute_planetary_moon_position(PlanetaryMoon::Miranda, time),
-        compute_planetary_moon_position(PlanetaryMoon::Ariel, time),
-        compute_planetary_moon_position(PlanetaryMoon::Umbriel, time),
-        compute_planetary_moon_position(PlanetaryMoon::Titania, time),
-        compute_planetary_moon_position(PlanetaryMoon::Oberon, time),
+        moon(PlanetaryMoon::Miranda, &uranus),
+        moon(PlanetaryMoon::Ariel, &uranus),
+        moon(PlanetaryMoon::Umbriel, &uranus),
+        moon(PlanetaryMoon::Titania, &uranus),
+        moon(PlanetaryMoon::Oberon, &uranus),
         // Neptune's major moon (15)
-        compute_planetary_moon_position(PlanetaryMoon::Triton, time),
+        moon(PlanetaryMoon::Triton, &neptune),
         // Mars's moons (16-17)
-        compute_planetary_moon_position(PlanetaryMoon::Phobos, time),
-        compute_planetary_moon_position(PlanetaryMoon::Deimos, time),
+        moon(PlanetaryMoon::Phobos, &mars),
+        moon(PlanetaryMoon::Deimos, &mars),
     ]
 }
 
@@ -604,6 +649,7 @@ pub fn compute_all_planetary_moon_positions(time: &SkyTime) -> [PlanetaryMoonPos
 mod tests {
     use super::*;
     use crate::coords::cartesian_to_ra_dec;
+    use crate::planets::compute_planet_position_full;
 
     #[test]
     fn test_all_moon_positions() {

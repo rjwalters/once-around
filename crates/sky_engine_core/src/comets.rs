@@ -3,9 +3,10 @@
 //! Supports elliptical (e < 1), parabolic (e = 1), and hyperbolic (e > 1) orbits.
 //! Uses perihelion time and perihelion distance rather than mean anomaly at epoch.
 
-use crate::coords::{ecliptic_to_equatorial, true_obliquity, CartesianCoord};
-use crate::planets::{Planet, AU_TO_KM};
+use crate::coords::{ecliptic_to_equatorial, CartesianCoord};
+use crate::planets::AU_TO_KM;
 use crate::time::SkyTime;
+use crate::time_context::TimeContext;
 use std::f64::consts::PI;
 
 /// Gaussian gravitational constant squared (AU^3/day^2)
@@ -421,15 +422,27 @@ fn compute_comet_magnitude(elem: &CometElements, geo_distance_au: f64, helio_dis
 }
 
 /// Compute position of a comet as seen from Earth.
+///
+/// Thin wrapper that constructs its own [`TimeContext`]; retained for standalone
+/// callers. Inside `recompute()` use [`compute_comet_position_with_ctx`].
 pub fn compute_comet_position(comet: Comet, time: &SkyTime) -> CometPosition {
+    let ctx = TimeContext::new(time);
+    compute_comet_position_with_ctx(comet, &ctx)
+}
+
+/// Compute a comet's position using a shared [`TimeContext`].
+///
+/// Bit-identical to [`compute_comet_position`]: shares Earth's heliocentric vector
+/// and the true obliquity, which would otherwise be recomputed identically here.
+pub fn compute_comet_position_with_ctx(comet: Comet, ctx: &TimeContext) -> CometPosition {
     let elem = comet.elements();
-    let jde = time.julian_date_tdb();
+    let jde = ctx.jde;
 
     // Get heliocentric position of the comet (ecliptic coordinates, AU)
     let (comet_x, comet_y, comet_z) = compute_heliocentric_ecliptic_comet(elem, jde);
 
     // Get heliocentric position of Earth (ecliptic coordinates, AU)
-    let earth_pos = crate::planets::heliocentric_position(Planet::Earth, jde);
+    let earth_pos = ctx.earth_helio;
 
     // Geocentric position of the comet (AU)
     let geo_x = comet_x - earth_pos.0;
@@ -449,7 +462,7 @@ pub fn compute_comet_position(comet: Comet, time: &SkyTime) -> CometPosition {
     let lat = (geo_z / distance_au).asin();
 
     // Convert to equatorial coordinates using true obliquity
-    let obliquity = true_obliquity(jde);
+    let obliquity = ctx.true_obliquity_rad;
     let direction = ecliptic_to_equatorial(lon, lat, obliquity).normalize();
 
     // Compute magnitude
@@ -469,7 +482,13 @@ pub fn compute_comet_position(comet: Comet, time: &SkyTime) -> CometPosition {
 /// Returns a fixed-size array (matching `Comet::ALL`) rather than a heap-allocated
 /// `Vec`, avoiding a per-call allocation in the 5 Hz orbit-worker recompute path.
 pub fn compute_all_comet_positions(time: &SkyTime) -> [CometPosition; 7] {
-    std::array::from_fn(|i| compute_comet_position(Comet::ALL[i], time))
+    let ctx = TimeContext::new(time);
+    compute_all_comet_positions_with_ctx(&ctx)
+}
+
+/// Compute positions for all comets using a shared [`TimeContext`].
+pub fn compute_all_comet_positions_with_ctx(ctx: &TimeContext) -> [CometPosition; 7] {
+    std::array::from_fn(|i| compute_comet_position_with_ctx(Comet::ALL[i], ctx))
 }
 
 #[cfg(test)]
