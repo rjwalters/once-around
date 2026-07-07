@@ -11,6 +11,7 @@ const DYNAMIC_CACHE = `once-around-dynamic-${CACHE_VERSION}`;
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
+  '/test.html',
   '/manifest.json',
   '/favicon.svg',
   '/icon-192.svg',

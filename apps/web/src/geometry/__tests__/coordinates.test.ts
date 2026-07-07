@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  angularSeparation,
   eclipticToEquatorialRaDec,
   equatorialToHorizontal,
   horizontalToEquatorial,
@@ -67,6 +68,46 @@ describe("equatorialToHorizontal / horizontalToEquatorial round-trip", () => {
       const raDiff = Math.abs(((back.ra - ra + 540) % 360) - 180);
       expect(raDiff).toBeCloseTo(0, 5);
     }
+  });
+});
+
+describe("angularSeparation", () => {
+  it("returns 0° for identical alt/az inputs", () => {
+    expect(angularSeparation(30, 120, 30, 120)).toBeCloseTo(0, 9);
+    expect(angularSeparation(-45, 200, -45, 200)).toBeCloseTo(0, 9);
+  });
+
+  it("returns 90° for orthogonal directions", () => {
+    // Zenith (alt 90) vs any horizon point (alt 0) are 90° apart.
+    expect(angularSeparation(90, 0, 0, 0)).toBeCloseTo(90, 9);
+    expect(angularSeparation(90, 0, 0, 137)).toBeCloseTo(90, 9);
+    // Two horizon points 90° apart in azimuth.
+    expect(angularSeparation(0, 0, 0, 90)).toBeCloseTo(90, 9);
+  });
+
+  it("returns 180° for antipodal directions", () => {
+    // Zenith vs nadir.
+    expect(angularSeparation(90, 0, -90, 0)).toBeCloseTo(180, 9);
+    // Opposite points on the horizon.
+    expect(angularSeparation(0, 0, 0, 180)).toBeCloseTo(180, 9);
+  });
+
+  it("matches a known reference pair (60° azimuth gap on the horizon)", () => {
+    // Two points on the horizon separated by 60° in azimuth are 60° apart.
+    expect(angularSeparation(0, 10, 0, 70)).toBeCloseTo(60, 9);
+    // A 3-4-5-style check: alt 30, az 0 vs alt 30, az 60.
+    // cos(sep) = sin²30 + cos²30·cos60 = 0.25 + 0.75·0.5 = 0.625
+    const expected = (Math.acos(0.625) * 180) / Math.PI;
+    expect(angularSeparation(30, 0, 30, 60)).toBeCloseTo(expected, 9);
+  });
+
+  it("is symmetric and azimuth-reference independent", () => {
+    const a = angularSeparation(20, 45, -10, 200);
+    const b = angularSeparation(-10, 200, 20, 45);
+    expect(a).toBeCloseTo(b, 9);
+    // Shifting both azimuths by the same offset does not change the result.
+    const shifted = angularSeparation(20, 45 + 33, -10, 200 + 33);
+    expect(shifted).toBeCloseTo(a, 9);
   });
 });
 

@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { execSync } from "child_process";
+import { resolve } from "path";
 import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
 
@@ -56,6 +57,14 @@ export default defineConfig({
   build: {
     target: "esnext",
     rollupOptions: {
+      // Multi-page build. `main` is the full star-map app; `test` is a
+      // standalone AR calibration diagnostics page (test.html) that imports
+      // only the geometry modules + wasm engine, so it never pulls in the
+      // Three.js renderer or the star-map UI bundle.
+      input: {
+        main: resolve(__dirname, "index.html"),
+        test: resolve(__dirname, "test.html"),
+      },
       output: {
         manualChunks: {
           three: ["three"],
