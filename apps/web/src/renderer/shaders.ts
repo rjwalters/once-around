@@ -480,17 +480,27 @@ void main() {
 // Milky Way procedural shader
 // -----------------------------------------------------------------------------
 
-export const milkyWayVertexShader = `
-varying vec3 vPosition;
+// The Milky Way is a static feature for a given limiting magnitude, so rather
+// than evaluating the expensive procedural FBM (72 hash evals/pixel) every
+// frame we bake it once into an equirectangular texture and display that on a
+// textured sphere. These bake shaders render a fullscreen NDC quad; the
+// fragment shader reconstructs the same view direction the display
+// SphereGeometry has at each UV and runs the identical FBM/coloring/alpha
+// logic. Re-baking only happens when uLimitingMag changes.
+
+// Passthrough vertex shader for the fullscreen NDC quad (PlaneGeometry(2, 2)).
+// position.xy already spans clip space (-1..1), so no camera transform is used.
+export const milkyWayBakeVertexShader = `
+varying vec2 vUv;
 
 void main() {
-  vPosition = position;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vUv = uv;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
 }
 `;
 
-export const milkyWayFragmentShader = `
-varying vec3 vPosition;
+export const milkyWayBakeFragmentShader = `
+varying vec2 vUv;
 uniform float uLimitingMag; // Limiting magnitude of the sky
 
 // Transformation matrix from equatorial to galactic coordinates (column-major for GLSL)
@@ -553,8 +563,24 @@ void main() {
     return;
   }
 
-  // Normalize position to get direction on unit sphere (Three.js Y-up coords)
-  vec3 dir = normalize(vPosition);
+  // Reconstruct the view direction the display SphereGeometry has at this UV.
+  // Three.js SphereGeometry (phiStart=0, phiLength=2PI, thetaStart=0,
+  // thetaLength=PI) stores uv = (u, 1 - v) where:
+  //   x = -cos(phi) * sin(theta), y = cos(theta), z = sin(phi) * sin(theta)
+  //   phi = u * 2PI, theta = v * PI
+  // so from the stored uv: phi = vUv.x * 2PI, theta = (1 - vUv.y) * PI.
+  // Reconstructing dir here (instead of sampling vPosition) means the baked
+  // texel at each UV matches exactly what the sphere samples — no seam, since
+  // phi = 0 and phi = 2PI map to the identical direction.
+  const float PI = 3.14159265358979;
+  float phi = vUv.x * 2.0 * PI;
+  float theta = (1.0 - vUv.y) * PI;
+  float sinTheta = sin(theta);
+  vec3 dir = normalize(vec3(
+    -cos(phi) * sinTheta,
+    cos(theta),
+    sin(phi) * sinTheta
+  ));
 
   // Convert from Three.js (Y-up) to equatorial (Z-up) before galactic transform
   // Three.js: X=RA0, Y=north pole, Z=RA90

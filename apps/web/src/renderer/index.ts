@@ -118,7 +118,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   labelsGroup.add(labelManager.getFlagLineMesh());
 
   // Create all layers
-  const milkyWayLayer = createMilkyWayLayer(scene);
+  const milkyWayLayer = createMilkyWayLayer(scene, renderer);
   const groundLayer = createGroundLayer(scene);
   const starsLayer = createStarsLayer(scene, labelsGroup);
   const constellationsLayer = createConstellationsLayer(scene, labelsGroup);
