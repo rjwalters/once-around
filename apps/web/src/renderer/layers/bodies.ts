@@ -311,14 +311,21 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   // Zenith direction for proper horizon culling (set by setHorizonCulling)
   const zenithDirection = new THREE.Vector3(0, 1, 0);
 
+  // Reusable scratch buffer for reading minor-body positions (avoids a
+  // per-body Float32Array allocation each update).
+  const minorPosScratch = new Float32Array(3);
+
   /**
    * Check if a position is above the horizon.
    * Uses dot product with zenith - positive means above horizon.
    */
   function isAboveHorizon(pos: THREE.Vector3): boolean {
     if (!horizonCullingEnabled) return true;
-    // Dot product with zenith: positive = above horizon
-    return pos.clone().normalize().dot(zenithDirection) > -0.01; // Small tolerance for objects near horizon
+    // Equivalent to pos.clone().normalize().dot(zenithDirection) > -0.01 but
+    // without allocating a normalized clone. Since |pos| > 0, multiplying the
+    // threshold by |pos| preserves the exact comparison.
+    // Small tolerance for objects near horizon.
+    return pos.dot(zenithDirection) > -0.01 * pos.length();
   }
 
   function update(engine: SkyEngine, fov: number, canvasHeight: number, labelManager?: LabelManager): void {
@@ -511,12 +518,12 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
 
     for (let i = 0; i < MINOR_BODY_COUNT; i++) {
       const idx = i * 4; // 4 floats per minor body: x, y, z, angular_diameter
-      // Minor bodies buffer uses same coordinate system as main bodies
-      const minorPos = readPositionFromBuffer(
-        new Float32Array([minorBodiesBuffer[idx], minorBodiesBuffer[idx + 1], minorBodiesBuffer[idx + 2]]),
-        0,
-        radius
-      );
+      // Minor bodies buffer uses same coordinate system as main bodies.
+      // Copy x/y/z into a reusable scratch buffer instead of allocating one.
+      minorPosScratch[0] = minorBodiesBuffer[idx];
+      minorPosScratch[1] = minorBodiesBuffer[idx + 1];
+      minorPosScratch[2] = minorBodiesBuffer[idx + 2];
+      const minorPos = readPositionFromBuffer(minorPosScratch, 0, radius);
       const angDiam = minorBodiesBuffer[idx + 3];
 
       // Calculate pixel size for LOD selection
