@@ -581,11 +581,15 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     const elapsed = (performance.now() - scintillationStartTime) / 1000;
     scintillationUniforms.time.value = elapsed;
 
-    // Compute zenith direction in Three.js coordinates
-    // Zenith is at RA=LST, Dec=latitude
-    const zenith = raDecToPosition(lst, latitude, 1);
-    zenith.normalize();
-    scintillationUniforms.zenith.value.copy(zenith);
+    // Compute zenith direction in Three.js coordinates, writing directly into
+    // the uniform to avoid a per-frame Vector3 allocation.
+    // Zenith is at RA=LST, Dec=latitude. Equivalent to raDecToPosition(lst, latitude, 1).
+    const raRad = (lst * Math.PI) / 180;
+    const decRad = (latitude * Math.PI) / 180;
+    const cosDec = Math.cos(decRad);
+    scintillationUniforms.zenith.value
+      .set(-cosDec * Math.cos(raRad), Math.sin(decRad), cosDec * Math.sin(raRad))
+      .normalize();
   }
 
   return {

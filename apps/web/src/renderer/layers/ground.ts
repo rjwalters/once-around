@@ -148,6 +148,15 @@ export function createGroundLayer(scene: THREE.Scene): GroundLayer {
     initialized = true;
   }
 
+  // Pre-allocated vectors/quaternions reused every frame in updateForTime to
+  // avoid per-frame GC pressure.
+  const _zenith = new THREE.Vector3();
+  const _nadir = new THREE.Vector3();
+  const _defaultPole = new THREE.Vector3(0, -1, 0);
+  const _quaternion = new THREE.Quaternion();
+  const _inverseQuat = new THREE.Quaternion();
+  const _northInLocal = new THREE.Vector3();
+
   function updateForTime(date: Date): void {
     // Don't update until properly initialized with observer location
     if (!initialized || !group.visible) return;
@@ -172,30 +181,27 @@ export function createGroundLayer(scene: THREE.Scene): GroundLayer {
     const eqZ = sinLat;
 
     // Convert to Three.js (Y-up): (-X, Z, Y)
-    const zenith = new THREE.Vector3(-eqX, eqZ, eqY).normalize();
-    const nadir = zenith.clone().negate();
+    _zenith.set(-eqX, eqZ, eqY).normalize();
+    _nadir.copy(_zenith).negate();
 
     // Create quaternion to rotate from default pole (-Y) to nadir
-    const defaultPole = new THREE.Vector3(0, -1, 0);
-    const quaternion = new THREE.Quaternion();
-    quaternion.setFromUnitVectors(defaultPole, nadir);
+    _quaternion.setFromUnitVectors(_defaultPole, _nadir);
 
     // Apply rotation to the group
     group.position.set(0, 0, 0);
-    group.quaternion.copy(quaternion);
+    group.quaternion.copy(_quaternion);
 
     // Align cardinal labels so North points toward celestial north pole
-    const celestialNorth = new THREE.Vector3(0, 1, 0);
-    const inverseQuat = quaternion.clone().invert();
-    const northInLocal = celestialNorth.clone().applyQuaternion(inverseQuat);
+    _inverseQuat.copy(_quaternion).invert();
+    _northInLocal.set(0, 1, 0).applyQuaternion(_inverseQuat);
 
     // Project onto local horizon plane (XZ plane)
-    northInLocal.y = 0;
+    _northInLocal.y = 0;
 
     // Handle edge case at poles
-    if (northInLocal.lengthSq() > 0.001) {
-      northInLocal.normalize();
-      const angle = Math.atan2(northInLocal.z, northInLocal.x);
+    if (_northInLocal.lengthSq() > 0.001) {
+      _northInLocal.normalize();
+      const angle = Math.atan2(_northInLocal.z, _northInLocal.x);
       cardinalLabelsGroup.rotation.y = -angle;
     }
   }

@@ -61,6 +61,11 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     engine,
   } = deps;
 
+  // Pre-allocated vectors reused every frame to avoid per-frame GC pressure.
+  // updateHorizonZenith copies the value, so reusing this instance is safe.
+  const zenith = new THREE.Vector3();
+  const hubbleNadir = new THREE.Vector3();
+
   function animate(): void {
     requestAnimationFrame(animate);
     controls.update();
@@ -90,7 +95,7 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
       const sinLst = Math.sin(lstRad);
       // Equatorial coords (Z-up): eqX = cosLat*cosLst, eqY = cosLat*sinLst, eqZ = sinLat
       // Convert to Three.js (Y-up): (-eqX, eqZ, eqY)
-      const zenith = new THREE.Vector3(-cosLat * cosLst, sinLat, cosLat * sinLst);
+      zenith.set(-cosLat * cosLst, sinLat, cosLat * sinLst);
       renderer.updateHorizonZenith(zenith);
     }
 
@@ -100,7 +105,7 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
       const hubblePos = renderer.getSatellitePosition(1, engine);
       if (hubblePos) {
         // Nadir is opposite to satellite position (toward Earth center)
-        const nadir = new THREE.Vector3(-hubblePos.x, -hubblePos.y, -hubblePos.z).normalize();
+        const nadir = hubbleNadir.set(-hubblePos.x, -hubblePos.y, -hubblePos.z).normalize();
         renderer.updateEarthPosition(nadir);
       }
       renderer.updateEarthRotation(currentDate, location.longitude);
