@@ -7,7 +7,23 @@ import {
   calculateSunMoonSeparation,
   type BodyPositions,
 } from "./body-positions";
+import { createThrottleGate } from "./throttle-gate";
 import type { ViewIndicatorInfo } from "./view-mode";
+
+/**
+ * Max engine-update rate during animated tour transitions. ~15Hz (67ms) keeps
+ * `engine.recompute()` + `renderer.updateFromEngine()` off the 60fps hot path
+ * while remaining visually indistinguishable for a sub-second time sweep. The
+ * camera slerp is independent and continues at full frame rate.
+ */
+const TOUR_ENGINE_THROTTLE_MS = 67;
+
+/**
+ * Delay before applying `updateDSOs` after the last FOV change during a tour's
+ * FOV animation. Mirrors the 150ms zoom-debounce in main.ts so star LOD is only
+ * recomputed once the zoom settles instead of every transition frame.
+ */
+const TOUR_FOV_DEBOUNCE_MS = 150;
 
 // Display names and icons for spacecraft in tour viewpoints
 const SPACECRAFT_DISPLAY: Record<string, ViewIndicatorInfo> = {
@@ -71,7 +87,7 @@ export interface TourSetupResult {
   tourEngine: ReturnType<typeof createTourEngine>;
   updateTourUI: (state: TourPlaybackState) => void;
   handleTourInterrupt: () => void;
-  setTimeForTour: (date: Date) => void;
+  setTimeForTour: (date: Date, force?: boolean) => void;
 }
 
 export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
@@ -87,24 +103,54 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
     getMagnitude,
   } = deps;
 
-  // Helper to update time and trigger all necessary updates
-  function setTimeForTour(date: Date): void {
+  // Throttle expensive engine work during animated transitions to ~15Hz. The
+  // camera slerp runs independently at full frame rate (see tour.ts update()).
+  const engineUpdateGate = createThrottleGate(TOUR_ENGINE_THROTTLE_MS);
+
+  // Cache the datetime input element (previously queried on every frame).
+  // Looked up lazily and retried until found so it survives being called before
+  // the DOM node exists.
+  let datetimeInput: HTMLInputElement | null = null;
+  function getDatetimeInput(): HTMLInputElement | null {
+    if (!datetimeInput) {
+      datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
+    }
+    return datetimeInput;
+  }
+  function writeDatetimeInput(date: Date): void {
+    const input = getDatetimeInput();
+    if (!input) return;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    input.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  // Helper to update time and trigger all necessary updates.
+  //
+  // During an animated transition this is called every rAF; the throttle gate
+  // caps the full recompute + scene rebuild to ~15Hz. `force = true` bypasses
+  // the throttle and MUST be used for discrete/terminal sets (instant time mode
+  // and the exact final keyframe time at t >= 1) so engine time never lingers
+  // on a stale throttle step. The datetime input is only written on forced
+  // updates — updating it mid-transition is not user-visible.
+  function setTimeForTour(date: Date, force = false): void {
+    if (!engineUpdateGate.shouldRun(performance.now(), force)) {
+      return;
+    }
+
     applyTimeToEngine(engine, date);
     engine.recompute();
     renderer.updateFromEngine(engine, renderer.camera.fov);
 
-    // Update datetime input display
-    const datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
-    if (datetimeInput) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    if (force) {
+      // Reflect the settled time in the datetime input at transition end.
+      writeDatetimeInput(date);
     }
 
-    // Update eclipse rendering
+    // Update eclipse rendering (throttled to the same cadence).
     const bodyPos = getBodyPositions();
     const sunMoonSep = calculateSunMoonSeparation(bodyPos);
     if (sunMoonSep !== null) {
@@ -133,17 +179,37 @@ export function setupTourSystem(deps: TourSetupDependencies): TourSetupResult {
     }
   }
 
+  // Debounced star LOD update for FOV animation. updateDSOs is expensive, so
+  // during a continuous FOV sweep defer it until the zoom settles (trailing
+  // edge, ~150ms) rather than running it every transition frame. Mirrors the
+  // debouncedFovUpdate pattern in main.ts.
+  let fovUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
+  let pendingDso: { fov: number; mag: number } | null = null;
+  function debouncedUpdateDSOs(fov: number, mag: number): void {
+    pendingDso = { fov, mag };
+    if (fovUpdateTimeout === null) {
+      fovUpdateTimeout = setTimeout(() => {
+        if (pendingDso !== null) {
+          renderer.updateDSOs(pendingDso.fov, pendingDso.mag);
+        }
+        fovUpdateTimeout = null;
+        pendingDso = null;
+      }, TOUR_FOV_DEBOUNCE_MS);
+    }
+  }
+
   // Create tour engine
   const tourEngine = createTourEngine({
     animateToRaDec: (ra, dec, durationMs) => {
       controls.animateToRaDec(ra, dec, durationMs);
     },
     setFov: (fov) => {
+      // Camera FOV / projection updates are cheap and stay un-debounced so the
+      // zoom itself is smooth; only the star-LOD recompute is deferred.
       renderer.camera.fov = fov;
       renderer.camera.updateProjectionMatrix();
-      // Update star LOD for new FOV
       const mag = getMagnitude();
-      renderer.updateDSOs(fov, mag);
+      debouncedUpdateDSOs(fov, mag);
     },
     getFov: () => renderer.camera.fov,
     setTime: setTimeForTour,

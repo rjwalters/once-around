@@ -215,8 +215,15 @@ export interface TourCallbacks {
   /** Get current camera FOV */
   getFov: () => number;
 
-  /** Set simulation time and trigger updates */
-  setTime: (date: Date) => void;
+  /**
+   * Set simulation time and trigger updates.
+   * @param force When true, bypass any engine-update throttle and apply this
+   *   time immediately. Used for discrete/terminal sets (instant time mode and
+   *   the exact final keyframe time) so engine time never lingers on a stale
+   *   throttle step. Omitted (falsy) for per-frame interpolation, which is
+   *   throttled by the integration layer.
+   */
+  setTime: (date: Date, force?: boolean) => void;
 
   /** Set observer location (lat/lon) */
   setLocation?: (latitude: number, longitude: number, name?: string) => void;
@@ -556,9 +563,9 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     // Start camera animation
     callbacks.animateToRaDec(ra, dec, firstKeyframe.transitionDuration);
     
-    // If instant time mode, set time immediately
+    // If instant time mode, set time immediately (forced: discrete set)
     if (firstKeyframe.timeMode === 'instant') {
-      callbacks.setTime(targetTime);
+      callbacks.setTime(targetTime, true);
     }
 
     // Notify caption
@@ -677,9 +684,9 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
     // Start camera animation
     callbacks.animateToRaDec(ra, dec, keyframe.transitionDuration);
     
-    // If instant time mode, set time immediately
+    // If instant time mode, set time immediately (forced: discrete set)
     if (keyframe.timeMode === 'instant') {
-      callbacks.setTime(targetTime);
+      callbacks.setTime(targetTime, true);
     }
 
     // Update caption
@@ -711,7 +718,7 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
         // Instant transition
         callbacks.setFov(targetFov);
         if (currentTimeMode === 'animate') {
-          callbacks.setTime(targetTime);
+          callbacks.setTime(targetTime, true);
         }
         // Set location immediately for instant transitions
         if (hasLocationChange && targetLocation && callbacks.setLocation) {
@@ -734,7 +741,9 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
       const newFov = lerp(startFov, targetFov, eased);
       callbacks.setFov(newFov);
 
-      // Interpolate time if in animate mode
+      // Interpolate time if in animate mode. Per-frame sets are throttled by
+      // the integration layer (setTimeForTour); the exact terminal time is
+      // applied via a forced set in the t >= 1 branch below.
       if (currentTimeMode === 'animate') {
         const newTime = lerpTime(startTime, targetTime, eased);
         callbacks.setTime(newTime);
@@ -765,6 +774,12 @@ export function createTourEngine(callbacks: TourCallbacks): TourEngine {
 
       // Check if transition complete
       if (t >= 1) {
+        // Apply the exact terminal time, bypassing the engine-update throttle,
+        // so engine state lands precisely on targetTime rather than the last
+        // ~15Hz throttle step.
+        if (currentTimeMode === 'animate') {
+          callbacks.setTime(targetTime, true);
+        }
         phase = 'hold';
         segmentStartTime = performance.now();
         notifyStateChange();
