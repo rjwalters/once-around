@@ -44,6 +44,7 @@ export function createEclipseLayer(scene: THREE.Scene): EclipseLayer {
   scene.add(mesh);
 
   let coronaTime = 0;
+  let lastTimeStamp = performance.now();
 
   function update(sunMoonSeparationDeg: number, sunMesh: THREE.Mesh, camera: THREE.Camera): void {
     // Calculate corona intensity based on separation
@@ -78,8 +79,17 @@ export function createEclipseLayer(scene: THREE.Scene): EclipseLayer {
   }
 
   function updateTime(): void {
-    // Update corona animation time (~60fps assumed)
-    coronaTime += 0.016;
+    // Advance corona animation using real elapsed time so the animation speed
+    // is refresh-rate independent (previously hardcoded ~60 fps as 0.016 s).
+    const now = performance.now();
+    // Clamp dt to avoid a large jump after the tab was backgrounded/throttled.
+    const dt = Math.min(0.1, Math.max(0, (now - lastTimeStamp) / 1000));
+    lastTimeStamp = now;
+
+    // Skip the uniform write entirely when the corona is not being rendered.
+    if (!mesh.visible) return;
+
+    coronaTime += dt;
     material.uniforms.uTime.value = coronaTime;
   }
 
