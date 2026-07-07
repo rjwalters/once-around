@@ -361,7 +361,7 @@ Location-aware totality path tools in the eclipse banner (`eclipsePaths.ts`, `ec
 
 ## Deep Sky Objects
 
-DSO ellipse markers and 28 deep field images rendered with full visual treatment.
+DSO ellipse markers and 30 deep field images rendered with full visual treatment.
 
 ### Deep Field Images
 
