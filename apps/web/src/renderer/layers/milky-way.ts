@@ -14,6 +14,8 @@ import { MILKY_WAY_RADIUS } from "../constants";
 import {
   milkyWayBakeVertexShader,
   milkyWayBakeFragmentShader,
+  milkyWayDisplayVertexShader,
+  milkyWayDisplayFragmentShader,
 } from "../shaders";
 
 // Equirectangular bake resolution. 2048x1024 avoids visible banding for this
@@ -50,10 +52,11 @@ export function createMilkyWayLayer(
 ): MilkyWayLayer {
   // Render target holding the baked equirect texture. Linear filtering avoids
   // banding; no mipmaps are needed for a full-screen background sphere. The
-  // texture keeps the default LinearSRGBColorSpace so the display path matches
-  // the previous direct-render appearance: the bake stores the shader's raw
-  // linear output, and the final sRGB encode happens once when the display
-  // sphere is drawn to the canvas — identical to the old direct render.
+  // texture keeps its default NoColorSpace: the bake shader writes raw,
+  // un-encoded RGBA (RGBA8) and the custom display shader below samples and
+  // writes it straight to the canvas without any sRGB OETF. This reproduces the
+  // original custom ShaderMaterial's raw passthrough — the old Milky Way applied
+  // zero color-space encodes, so neither does this path.
   const renderTarget = new THREE.WebGLRenderTarget(BAKE_WIDTH, BAKE_HEIGHT, {
     minFilter: THREE.LinearFilter,
     magFilter: THREE.LinearFilter,
@@ -85,12 +88,18 @@ export function createMilkyWayLayer(
   bakeQuad.frustumCulled = false;
   bakeScene.add(bakeQuad);
 
-  // Display sphere textured with the baked equirect. MeshBasicMaterial with
-  // transparent + default NormalBlending reproduces the original blend mode,
-  // sampling the straight-alpha RGBA from the baked texture.
+  // Display sphere textured with the baked equirect. A custom ShaderMaterial
+  // (rather than MeshBasicMaterial) samples the straight-alpha RGBA and writes
+  // it raw to gl_FragColor with no colorspace_fragment, so no sRGB encode is
+  // added — matching the original direct-render output exactly. transparent +
+  // default NormalBlending reproduces the original blend mode.
   const geometry = new THREE.SphereGeometry(MILKY_WAY_RADIUS, 64, 32);
-  const material = new THREE.MeshBasicMaterial({
-    map: renderTarget.texture,
+  const material = new THREE.ShaderMaterial({
+    vertexShader: milkyWayDisplayVertexShader,
+    fragmentShader: milkyWayDisplayFragmentShader,
+    uniforms: {
+      uBakedTexture: { value: renderTarget.texture },
+    },
     side: THREE.BackSide,
     transparent: true,
     depthWrite: false,

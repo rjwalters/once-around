@@ -487,6 +487,18 @@ void main() {
 // fragment shader reconstructs the same view direction the display
 // SphereGeometry has at each UV and runs the identical FBM/coloring/alpha
 // logic. Re-baking only happens when uLimitingMag changes.
+//
+// Color-space note: like every other celestial shader in this file, both the
+// bake and display shaders write raw values to gl_FragColor and deliberately
+// omit `#include <colorspace_fragment>`. The original Milky Way was a custom
+// ShaderMaterial that wrote its raw RGB straight to the sRGB canvas (zero
+// encodes). The bake shader stores that same raw RGBA into an RGBA8
+// (NoColorSpace) render target with NoBlending, and the custom display shader
+// below samples it and writes it straight to the canvas — again with no
+// colorspace_fragment, so no sRGB OETF is applied. This reproduces the old
+// direct-render appearance byte-for-byte. (A built-in material such as
+// MeshBasicMaterial would append linearToOutputTexel and add an sRGB encode the
+// original never had, brightening/tint-shifting the result.)
 
 // Passthrough vertex shader for the fullscreen NDC quad (PlaneGeometry(2, 2)).
 // position.xy already spans clip space (-1..1), so no camera transform is used.
@@ -637,6 +649,33 @@ void main() {
   // Final output - subtle glow, not overpowering the stars
   float alpha = brightness * 0.4 * visibility;
   gl_FragColor = vec4(color * brightness * 0.5 * visibility, alpha);
+}
+`;
+
+// Display shaders for the baked equirect texture. Standard sphere projection in
+// the vertex shader; the fragment shader samples the baked texture and writes it
+// straight to gl_FragColor. Crucially it omits `#include <colorspace_fragment>`,
+// so no sRGB OETF encode is applied — reproducing the old custom ShaderMaterial's
+// raw passthrough exactly. Using a built-in MeshBasicMaterial here would add that
+// encode (via linearToOutputTexel) and shift the appearance.
+export const milkyWayDisplayVertexShader = `
+varying vec2 vUv;
+
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export const milkyWayDisplayFragmentShader = `
+varying vec2 vUv;
+uniform sampler2D uBakedTexture;
+
+void main() {
+  // Raw passthrough of the baked straight-alpha RGBA. No colorspace_fragment,
+  // so the value written to the canvas is identical to what the bake stored,
+  // matching the original direct-render (un-encoded) output.
+  gl_FragColor = texture2D(uBakedTexture, vUv);
 }
 `;
 
