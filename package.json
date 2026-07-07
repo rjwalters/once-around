@@ -1,6 +1,6 @@
 {
   "name": "once-around",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "Visualizer for Paul Fellows' Once Around astronomy series",
   "main": "index.js",
   "scripts": {
