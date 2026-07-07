@@ -42,8 +42,12 @@ export function createRendererContext(container: HTMLElement): RendererContext {
   camera.lookAt(0, 0, 1);
 
   // WebGL renderer
+  // MSAA is only enabled on low-DPR (DPR < 2) displays. On retina/HiDPI
+  // screens the subpixel grid already anti-aliases edges, so MSAA adds GPU
+  // cost with little visible benefit on this mostly point/sprite star field.
+  // (issue #14) Retina visual verification is a post-merge step.
   const renderer = new THREE.WebGLRenderer({
-    antialias: true,
+    antialias: window.devicePixelRatio < 2,
     alpha: false,
   });
   renderer.setSize(container.clientWidth, container.clientHeight);

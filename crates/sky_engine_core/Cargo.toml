@@ -6,3 +6,10 @@ edition.workspace = true
 [dependencies]
 hifitime.workspace = true
 vsop87.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "recompute"
+harness = false

@@ -19,3 +19,13 @@ vsop87 = "2"
 [profile.release]
 opt-level = "s"
 lto = true
+
+# The hot math crate (VSOP87 planetary series + IAU nutation/obliquity) is
+# opt-level = 3 so LLVM auto-vectorizes and unrolls the trig loops that dominate
+# recompute() cost. codegen-units = 1 maximizes inlining within the crate before
+# LTO. The rest of the wasm module stays at the workspace default "s" to keep
+# binary size down. See issue #14 for before/after measurements
+# (benches/recompute.rs: compute_all_body_positions_full ~19% faster).
+[profile.release.package.sky_engine_core]
+opt-level = 3
+codegen-units = 1
