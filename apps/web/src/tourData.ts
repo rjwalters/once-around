@@ -530,6 +530,172 @@ export const HALLEY_2061_TOUR: TourDefinition = {
 };
 
 /**
+ * Great Comet of 1811 Tour (C/1811 F1)
+ *
+ * The Great Comet of 1811 was one of the most spectacular comets in history,
+ * remaining visible to the naked eye for a remarkable ~9 months.
+ * Discovered March 25, 1811 by Honoré Flaugergues from Viviers, France.
+ * Perihelion: September 12, 1811 (1.04 AU from Sun - it never came near the Sun).
+ * Its coma swelled larger than the Sun itself - among the largest ever recorded.
+ * Orbital period: ~3,000 years. Famous for the excellent "Comet Wine" vintage of 1811.
+ */
+export const GREAT_COMET_1811_TOUR: TourDefinition = {
+  id: 'great-comet-1811',
+  name: 'The Great Comet of 1811',
+  description: 'A magnificent comet visible for nine months',
+  keyframes: [
+    {
+      // Discovery in spring 1811
+      target: 'great-comet-1811',
+      fov: 40,
+      datetime: '1811-04-15T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 44.48,
+        longitude: 4.69,
+        name: 'Viviers, France',
+      },
+      caption: 'Spring 1811 - Honoré Flaugergues discovers a faint comet. Few suspect it will become one of history\'s greatest.',
+    },
+    {
+      // Summer brightening
+      target: 'great-comet-1811',
+      fov: 20,
+      datetime: '1811-08-15T21:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'By late summer, the comet is an easy naked-eye object with a lengthening tail',
+    },
+    {
+      // Perihelion
+      target: 'great-comet-1811',
+      fov: 10,
+      datetime: '1811-09-12T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'September 12, 1811 - Perihelion at 1.04 AU. Unlike a sungrazer, it never nears the Sun, yet blazes brilliantly',
+    },
+    {
+      // Peak splendor in autumn
+      target: 'great-comet-1811',
+      fov: 8,
+      datetime: '1811-10-20T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'October 1811 - At its finest: a brilliant head and a curved tail stretching across the evening sky',
+    },
+    {
+      // The enormous coma
+      target: 'great-comet-1811',
+      fov: 15,
+      datetime: '1811-11-20T20:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'The coma swelled larger than the Sun - the vintage it presided over is still remembered as "Comet Wine"',
+    },
+    {
+      // Fading after nine months
+      target: 'great-comet-1811',
+      fov: 30,
+      datetime: '1812-01-10T20:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'January 1812 - After nine months of visibility, the Great Comet fades. It will not return for ~3,000 years',
+    },
+  ],
+};
+
+/**
+ * Comet Ikeya-Seki Tour (C/1965 S1)
+ *
+ * Comet Ikeya-Seki was one of the brightest comets of the last millennium.
+ * Discovered September 18, 1965 by Japanese amateurs Kaoru Ikeya and Tsutomu Seki.
+ * A Kreutz sungrazer, it skimmed just ~450,000 km above the Sun's surface.
+ * Perihelion: October 21, 1965 (0.008 AU - it grazed the Sun!)
+ * Peak brightness: magnitude ~-10, briefly visible in broad daylight beside the Sun.
+ * Its nucleus split into fragments; orbital period ~880 years.
+ */
+export const IKEYA_SEKI_1965_TOUR: TourDefinition = {
+  id: 'ikeya-seki-1965',
+  name: 'Comet Ikeya-Seki (1965)',
+  description: 'A sungrazer that blazed in the daytime sky',
+  keyframes: [
+    {
+      // Discovery by two amateur astronomers in Japan
+      target: 'ikeya-seki',
+      fov: 40,
+      datetime: '1965-09-18T19:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 33.56,
+        longitude: 133.53,
+        name: 'Kochi, Japan',
+      },
+      caption: 'September 1965 - Amateurs Kaoru Ikeya and Tsutomu Seki independently spot a faint comet in the pre-dawn sky',
+    },
+    {
+      // Diving toward the Sun
+      target: 'ikeya-seki',
+      fov: 20,
+      datetime: '1965-10-15T19:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'October 1965 - On a Kreutz sungrazer orbit, the comet dives sunward and brightens dramatically',
+    },
+    {
+      // Perihelion - daylight visibility beside the Sun
+      target: 'ikeya-seki',
+      fov: 10,
+      datetime: '1965-10-21T05:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'October 21, 1965 - Skimming 450,000 km above the Sun, Ikeya-Seki reaches magnitude -10, visible in broad daylight',
+    },
+    {
+      // The magnificent morning tail
+      target: 'ikeya-seki',
+      fov: 12,
+      datetime: '1965-10-25T19:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'Late October - Past perihelion, the comet unfurls a magnificent tail across the pre-dawn sky',
+    },
+    {
+      // Long tail, fragmented nucleus
+      target: 'ikeya-seki',
+      fov: 20,
+      datetime: '1965-11-05T19:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'November 1965 - The tail stretches over 45 degrees. Solar tides have split the nucleus into fragments',
+    },
+    {
+      // Fading away
+      target: 'ikeya-seki',
+      fov: 35,
+      datetime: '1965-12-01T19:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: 'December 1965 - The great sungrazer fades - one of a Kreutz family born when a giant comet shattered long ago',
+    },
+  ],
+};
+
+/**
  * Betelgeuse Nova Tour (Hypothetical)
  *
  * A hypothetical tour showing what it might look like when Betelgeuse
@@ -1936,6 +2102,8 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   HALE_BOPP_1997_TOUR,
   HALLEY_1986_TOUR,
   HALLEY_2061_TOUR,
+  GREAT_COMET_1811_TOUR,
+  IKEYA_SEKI_1965_TOUR,
   BETELGEUSE_NOVA_TOUR,
   SN_1054_TOUR,
   SN_1572_TOUR,

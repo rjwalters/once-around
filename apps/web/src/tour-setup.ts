@@ -50,6 +50,8 @@ const TARGET_TO_NAME: Record<TargetBody, string> = {
   neowise: "C/2020 F3 NEOWISE",
   "tsuchinshan-atlas": "C/2023 A3 T-ATLAS",
   "hale-bopp": "C/1995 O1 Hale-Bopp",
+  "great-comet-1811": "C/1811 F1 (1811)",
+  "ikeya-seki": "C/1965 S1 Ikeya-Seki",
 };
 
 export interface TourSetupDependencies {
