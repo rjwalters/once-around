@@ -14,6 +14,7 @@
     "preview": "pnpm --filter once-around-web preview",
     "test": "playwright test",
     "test:unit": "pnpm --filter once-around-web test:unit",
+    "typecheck": "pnpm --filter once-around-web typecheck",
     "test:perf": "playwright test tests/performance.spec.ts --reporter=list",
     "test:ui": "playwright test --ui"
   },
