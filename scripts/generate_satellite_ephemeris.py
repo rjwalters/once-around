@@ -31,6 +31,8 @@ import argparse
 import json
 import struct
 import sys
+import time
+import urllib.error
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta
@@ -89,12 +91,25 @@ def fetch_satellite_vectors(
     query_string = urllib.parse.urlencode(params)
     url = f"{HORIZONS_API_URL}?{query_string}"
 
-    # Make the request
+    # Make the request. Horizons can take minutes to generate large vector
+    # tables (45 days at 1-min steps is ~65k rows) and times out sporadically
+    # from CI runners, so allow a generous timeout and retry with backoff.
     req = urllib.request.Request(url)
     req.add_header("User-Agent", "once-around-satellite-ephemeris/1.0")
 
-    with urllib.request.urlopen(req, timeout=120) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=300) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            break
+        except (urllib.error.URLError, TimeoutError) as e:
+            if attempt == attempts:
+                raise
+            wait_s = 30 * attempt
+            print(f"Horizons request failed ({e}); retrying in {wait_s}s "
+                  f"(attempt {attempt}/{attempts})...")
+            time.sleep(wait_s)
 
     if "error" in data:
         raise RuntimeError(f"Horizons API error: {data['error']}")
