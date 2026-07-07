@@ -39,3 +39,30 @@ export function readPositionFromBuffer(buffer: Float32Array, index: number, scal
   const offset = index * 3;
   return rustToThreeJS(buffer[offset], buffer[offset + 1], buffer[offset + 2], scale);
 }
+
+/**
+ * Read a position from a WASM buffer into an existing Vector3, converting to
+ * Three.js coords. Allocation-free variant of {@link readPositionFromBuffer}
+ * for hot loops that process thousands of stars per frame.
+ *
+ * Mirrors the axis mapping of {@link rustToThreeJS}: x = -rustX, y = rustZ, z = rustY.
+ *
+ * @param buffer - Float32Array from WASM (interleaved x,y,z per body)
+ * @param index - Body/star index (multiplied by 3 to get buffer offset)
+ * @param scale - Scale factor to apply
+ * @param out - Destination Vector3 (written in place and returned)
+ */
+export function readPositionInPlace(
+  buffer: Float32Array,
+  index: number,
+  scale: number,
+  out: THREE.Vector3
+): THREE.Vector3 {
+  const offset = index * 3;
+  out.set(
+    -buffer[offset] * scale,
+    buffer[offset + 2] * scale,
+    buffer[offset + 1] * scale
+  );
+  return out;
+}
