@@ -5,7 +5,7 @@
  */
 
 import type { SkyEngine } from "./wasm/sky_engine";
-import { ISSPass, findISSPasses, getNextPassSummary, parsePassBuffer } from "./iss-passes";
+import { ISSPass, EphemerisStatus, findISSPasses, getEphemerisStatus, getNextPassSummary, parsePassBuffer } from "./iss-passes";
 
 /** Sun altitude limit for dark sky (civil twilight). Mirrors iss-passes.ts default. */
 const SUN_ALTITUDE_LIMIT = -6;
@@ -145,9 +145,10 @@ export class ISSPassesUI {
   private computePasses(): void {
     if (!this.engine) return;
 
-    // Check if ephemeris is loaded
-    const range = this.engine.satellite_ephemeris_range(0);
-    if (!range || range.length < 2) {
+    // Check ephemeris coverage. If it is missing or no longer covers the
+    // current time, there is nothing to scan — skip the worker entirely and let
+    // render() surface the appropriate "not loaded" or "out of date" message.
+    if (getEphemerisStatus(this.engine, 0).state !== "ok") {
       this.passes = [];
       this.render();
       return;
@@ -234,6 +235,28 @@ export class ISSPassesUI {
   }
 
   /**
+   * Build the "data out of date" panel shown when the loaded ephemeris no
+   * longer covers the current time. Satellite positions and pass predictions
+   * are unavailable in this state, so tell the user plainly rather than
+   * showing an empty or misleading "no passes" panel.
+   */
+  private renderStale(status: Extract<EphemerisStatus, { state: "stale" | "future" }>): string {
+    const detail =
+      status.state === "stale"
+        ? `Satellite ephemeris data expired on ${this.formatDate(status.coverageEnd)}. ISS positions and pass predictions are unavailable until the bundled data is refreshed.`
+        : `Satellite ephemeris data does not begin until ${this.formatDate(status.coverageStart)}. Check that your device clock is set correctly.`;
+    return `
+      <div class="iss-passes-header">
+        <span class="iss-passes-title">ISS Pass Predictions</span>
+      </div>
+      <div class="iss-passes-stale" role="status">
+        <span class="iss-passes-stale-icon" aria-hidden="true">⚠</span>
+        <span class="iss-passes-stale-text">${detail}</span>
+      </div>
+    `;
+  }
+
+  /**
    * Render the UI.
    */
   private render(): void {
@@ -245,9 +268,19 @@ export class ISSPassesUI {
       return;
     }
 
-    const range = this.engine.satellite_ephemeris_range(0);
-    if (!range || range.length < 2) {
+    const status = getEphemerisStatus(this.engine, 0);
+
+    // No ephemeris loaded at all (e.g. failed to fetch) — render nothing.
+    if (status.state === "missing") {
       this.container.innerHTML = '';
+      return;
+    }
+
+    // Ephemeris no longer covers the current time. The engine silently returns
+    // no satellite position in this case, so make the staleness explicit
+    // instead of implying "there just aren't any passes".
+    if (status.state === "stale" || status.state === "future") {
+      this.container.innerHTML = this.renderStale(status);
       return;
     }
 

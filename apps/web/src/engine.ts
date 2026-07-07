@@ -1,4 +1,9 @@
 import init, { SkyEngine } from "./wasm/sky_engine";
+import { SATELLITE_ISS, SATELLITE_HUBBLE, SATELLITES, type SatelliteInfo } from "./satellites-config";
+
+// Re-export satellite config so existing importers of `./engine` keep working.
+// The canonical, WASM-free definitions live in `./satellites-config`.
+export { SATELLITE_ISS, SATELLITE_HUBBLE, SATELLITES, type SatelliteInfo };
 
 let wasmMemory: WebAssembly.Memory | null = null;
 
@@ -222,28 +227,6 @@ export function getCometsBuffer(engine: SkyEngine): Float32Array {
   const len = engine.comets_pos_len();
   return new Float32Array(memory.buffer, ptr, len);
 }
-
-// Satellite indices (must match Rust SatelliteId order)
-export const SATELLITE_ISS = 0;
-export const SATELLITE_HUBBLE = 1;
-
-/**
- * Satellite info for frontend use.
- */
-export interface SatelliteInfo {
-  index: number;
-  name: string;
-  fullName: string;
-  ephemerisUrl: string;
-}
-
-/**
- * All supported satellites.
- */
-export const SATELLITES: SatelliteInfo[] = [
-  { index: SATELLITE_ISS, name: "ISS", fullName: "International Space Station", ephemerisUrl: "/data/iss_ephemeris.bin" },
-  { index: SATELLITE_HUBBLE, name: "Hubble", fullName: "Hubble Space Telescope", ephemerisUrl: "/data/hubble_ephemeris.bin" },
-];
 
 /**
  * Create a Float32Array view into the satellites position buffer.
