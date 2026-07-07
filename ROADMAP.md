@@ -40,9 +40,9 @@ Ride on Voyager, see what it saw at Jupiter flyby.
 
 ## Technical Debt
 
-- **Eclipse ground track on globe** - Eclipse paths (2026) shipped with an SVG mini-map; a 3D on-sphere ground track and engine-computed Besselian elements were deferred.
-- **Minor-body accuracy** - Most minor bodies use estimated mean anomalies (Ceres is ~18° off Horizons); refine elements or document the limitation.
-- **Rust tests in CI** - `cargo test` (golden + Horizons accuracy suites) runs only locally; CI covers just web typecheck + unit tests.
+- **Golden-test portability** - The bit-exact golden position suite pins macOS/Apple Silicon f64 values that differ 1-2 ULP from Linux libm, so it is excluded from the CI Rust job (see PR #68 for options: regenerate on Linux, macOS runner, or relax the exact-equality contract).
+- **Engine-computed eclipse circumstances** - Local contact times still use the curated chord-factor estimate; a topocentric Sun-Moon minimum search (or full Besselian elements) needs a time-parameterized ephemeris callable from the TS layer (see PR #70).
+- **Minor-body element refresh cadence** - Main-belt asteroids drift ~12-15′ by 2030 and NEO elements are invalid across Earth encounters (two-body limits, documented per body in minor_bodies.rs); refreshing elements periodically would keep them tight.
 
 ---
 
