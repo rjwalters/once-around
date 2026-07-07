@@ -4,7 +4,7 @@ use sky_engine_core::{
     coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, compute_lst, ra_dec_to_cartesian},
     minor_bodies::{compute_all_minor_body_positions, MinorBody},
     planetary_moons::{compute_all_planetary_moon_positions, PlanetaryMoon},
-    planets::{compute_all_body_positions_full, compute_moon_position_full, compute_sun_position, CelestialBody},
+    planets::{compute_all_body_positions_full, compute_moon_position_full, compute_planet_position_full, compute_sun_position, CelestialBody, Planet},
     satellites::{compute_satellite_position, SatelliteEphemeris, SatelliteId},
     time::SkyTime,
 };
@@ -159,6 +159,62 @@ impl SkyEngine {
         self.recompute_minor_bodies();
         self.recompute_comets();
         self.recompute_satellites();
+    }
+
+    /// Compute the apparent equatorial direction (J2000 unit vector) of a single planet
+    /// across `count` time samples, without recomputing the Moon, other planets, planetary
+    /// moons, minor bodies, comets, satellites, or the star filter.
+    ///
+    /// This is the targeted evaluation path used for drawing planet orbit tracks. Compared to
+    /// calling `set_time_utc` + `recompute()` per sample (which evaluates all 9 bodies plus 18
+    /// moons, 7 comets, satellites and the magnitude filter just to read one planet's 3 floats),
+    /// this evaluates only the requested planet and is roughly two orders of magnitude cheaper
+    /// per sample.
+    ///
+    /// # Arguments
+    /// * `body_index` - CelestialBody ordering: 2=Mercury, 3=Venus, 4=Mars, 5=Jupiter,
+    ///   6=Saturn, 7=Uranus, 8=Neptune. Values 0 (Sun) and 1 (Moon) and anything out of range
+    ///   are invalid and yield an all-zero buffer.
+    /// * `start_jd` - Julian Date (UTC) of the first sample.
+    /// * `step_days` - Spacing between consecutive samples, in days.
+    /// * `count` - Number of samples to compute.
+    ///
+    /// Returns a flat `Vec<f32>` (surfaced to JS as a `Float32Array`) of length `count * 3`
+    /// holding (x, y, z) equatorial unit vectors. These are byte-for-byte the same values that
+    /// `recompute()` writes into the bodies position buffer for that planet at the same instant,
+    /// so the renderer applies its own Y-up / radius conversion exactly as before; no coordinate
+    /// transform is baked in here.
+    pub fn fill_planet_track(
+        &self,
+        body_index: usize,
+        start_jd: f64,
+        step_days: f64,
+        count: usize,
+    ) -> Vec<f32> {
+        // CelestialBody index -> Planet enum. Earth has no CelestialBody slot, so there is a
+        // gap: CelestialBody index 2..=8 maps to Mercury..=Neptune (Earth is skipped entirely).
+        let planet = match body_index {
+            2 => Planet::Mercury,
+            3 => Planet::Venus,
+            4 => Planet::Mars,
+            5 => Planet::Jupiter,
+            6 => Planet::Saturn,
+            7 => Planet::Uranus,
+            8 => Planet::Neptune,
+            _ => return vec![0.0; count * 3],
+        };
+
+        let mut out = Vec::with_capacity(count * 3);
+        for i in 0..count {
+            let jd = start_jd + i as f64 * step_days;
+            let time = SkyTime::from_jd(jd);
+            let dir = compute_planet_position_full(planet, &time).direction;
+            let (x, y, z) = dir.to_f32();
+            out.push(x);
+            out.push(y);
+            out.push(z);
+        }
+        out
     }
 
     /// Add more stars to the catalog from binary data.
@@ -718,4 +774,81 @@ impl SkyEngine {
 #[wasm_bindgen]
 pub fn log(s: &str) {
     web_sys::console::log_1(&s.into());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Equivalence proof for the orbit-worker optimization: `fill_planet_track` must produce
+    /// exactly the same equatorial unit vectors that the full `recompute()` path writes into
+    /// the bodies position buffer. `recompute_bodies` stores, for each planet index i (2..=8),
+    /// `compute_all_body_positions_full(&time)[i].direction.to_f32()`, so we compare against
+    /// that canonical source across several Julian Dates and all 7 planet indices.
+    #[test]
+    fn fill_planet_track_matches_full_recompute() {
+        // Empty catalog -> embedded bright stars; planet math is independent of the catalog.
+        let engine = SkyEngine::new(&[]).expect("engine");
+
+        // A spread of JDs: J2000, ~2020, ~2026, and a far-future date.
+        let test_jds = [2451545.0_f64, 2458849.5, 2461041.5, 2470000.0];
+
+        for &jd in &test_jds {
+            let full = compute_all_body_positions_full(&SkyTime::from_jd(jd));
+
+            for body_index in 2usize..=8 {
+                // Single-sample track at exactly this JD (step is irrelevant for count == 1).
+                let track = engine.fill_planet_track(body_index, jd, 0.0, 1);
+                assert_eq!(track.len(), 3, "expected 3 floats per sample");
+
+                let (ex, ey, ez) = full[body_index].direction.to_f32();
+
+                assert_eq!(
+                    track[0], ex,
+                    "x mismatch for body {body_index} at jd {jd}"
+                );
+                assert_eq!(
+                    track[1], ey,
+                    "y mismatch for body {body_index} at jd {jd}"
+                );
+                assert_eq!(
+                    track[2], ez,
+                    "z mismatch for body {body_index} at jd {jd}"
+                );
+            }
+        }
+    }
+
+    /// A multi-sample track must be internally consistent: sample i of an N-sample call at
+    /// (start_jd, step_days) must equal a single-sample call at start_jd + i * step_days.
+    #[test]
+    fn fill_planet_track_samples_are_time_indexed() {
+        let engine = SkyEngine::new(&[]).expect("engine");
+        let start_jd = 2461041.5_f64;
+        let step_days = 12.5_f64;
+        let count = 8usize;
+
+        // Jupiter (index 5).
+        let track = engine.fill_planet_track(5, start_jd, step_days, count);
+        assert_eq!(track.len(), count * 3);
+
+        for i in 0..count {
+            let jd = start_jd + i as f64 * step_days;
+            let single = engine.fill_planet_track(5, jd, 0.0, 1);
+            assert_eq!(track[i * 3], single[0], "x mismatch at sample {i}");
+            assert_eq!(track[i * 3 + 1], single[1], "y mismatch at sample {i}");
+            assert_eq!(track[i * 3 + 2], single[2], "z mismatch at sample {i}");
+        }
+    }
+
+    /// Invalid body indices (Sun, Moon, out-of-range) yield an all-zero buffer of the right size.
+    #[test]
+    fn fill_planet_track_invalid_index_is_zeroed() {
+        let engine = SkyEngine::new(&[]).expect("engine");
+        for bad in [0usize, 1, 9, 100] {
+            let track = engine.fill_planet_track(bad, 2451545.0, 1.0, 5);
+            assert_eq!(track.len(), 15);
+            assert!(track.iter().all(|&v| v == 0.0), "index {bad} should be zero");
+        }
+    }
 }

@@ -9,9 +9,16 @@
 
 import * as THREE from "three";
 import type { SkyEngine } from "../../wasm/sky_engine";
-import { getBodiesPositionBuffer } from "../../engine";
 import { ORBIT_PLANET_INDICES, ORBIT_NUM_POINTS, ORBIT_PERIODS_DAYS, BODY_COLORS, SKY_RADIUS } from "../constants";
-import { readPositionFromBuffer } from "../utils/coordinates";
+
+// Julian Date of the Unix epoch (1970-01-01T00:00:00Z).
+const JD_UNIX_EPOCH = 2440587.5;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+// Minimum real (wall-clock) time between worker/main-thread orbit recomputes. During fast
+// playback the simulation date can jump more than a day per tick (5 ticks/s), which defeats
+// the 1-day hysteresis below; this caps the recompute dispatch rate to <=2/s regardless of
+// playback speed.
+const MIN_DISPATCH_INTERVAL_MS = 500;
 
 // Worker message types
 interface ComputeMessage {
@@ -79,6 +86,8 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
   // Track computation state
   let computePromise: Promise<void> | null = null;
   let lastComputeDate: Date | null = null;
+  // Wall-clock time (performance.now()) of the last dispatched recompute, for real-time debounce.
+  let lastDispatchMs = 0;
 
   // Web Worker for off-thread computation
   let worker: Worker | null = null;
@@ -168,12 +177,22 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
    * Compute orbital paths using worker if available, otherwise main thread.
    */
   async function compute(engine: SkyEngine, centerDate: Date): Promise<void> {
-    // Skip if already computed for the same date (within 1 day)
-    if (lastComputeDate && Math.abs(centerDate.getTime() - lastComputeDate.getTime()) < 86400000) {
+    // Skip if already computed for the same date (within 1 day). Gates redundant same-day
+    // recomputes when the simulation is paused or stepping slowly.
+    if (lastComputeDate && Math.abs(centerDate.getTime() - lastComputeDate.getTime()) < MS_PER_DAY) {
+      if (computePromise) return computePromise;
+    }
+
+    // Real-time debounce: during fast playback the date jumps >1 day per tick so the hysteresis
+    // above fails every tick, saturating the worker at 5 msg/s. Skip new dispatches until at least
+    // MIN_DISPATCH_INTERVAL_MS of wall-clock time has elapsed, returning the in-flight promise.
+    const nowMs = performance.now();
+    if (nowMs - lastDispatchMs < MIN_DISPATCH_INTERVAL_MS) {
       if (computePromise) return computePromise;
     }
 
     lastComputeDate = centerDate;
+    lastDispatchMs = nowMs;
 
     // Try worker first
     if (worker && workerReady) {
@@ -202,39 +221,32 @@ export function createOrbitsLayer(scene: THREE.Scene): OrbitsLayer {
    */
   async function computeOnMainThread(engine: SkyEngine, centerDate: Date): Promise<void> {
     const radius = SKY_RADIUS - 1;
-    const msPerDay = 24 * 60 * 60 * 1000;
+
+    // Julian Date (UTC) of the requested center instant.
+    const centerJd = centerDate.getTime() / MS_PER_DAY + JD_UNIX_EPOCH;
 
     for (let planetIdx = 0; planetIdx < ORBIT_PLANET_INDICES.length; planetIdx++) {
       const bodyIdx = ORBIT_PLANET_INDICES[planetIdx];
       const orbitPeriod = ORBIT_PERIODS_DAYS[bodyIdx];
       const halfSpan = orbitPeriod / 2;
+      const stepDays = orbitPeriod / (ORBIT_NUM_POINTS - 1);
+      const startJd = centerJd - halfSpan;
+
+      // Targeted planet-only evaluation, matching the worker path: one call computes all
+      // samples for this planet without recomputing moons, comets, satellites or stars.
+      // Returns raw equatorial unit vectors (x, y, z).
+      const raw = engine.fill_planet_track(bodyIdx, startJd, stepDays, ORBIT_NUM_POINTS);
 
       const positions = new Float32Array(ORBIT_NUM_POINTS * 3);
-
       for (let i = 0; i < ORBIT_NUM_POINTS; i++) {
-        // Calculate date for this sample point
-        const t = i / (ORBIT_NUM_POINTS - 1);
-        const dayOffset = -halfSpan + t * orbitPeriod;
-        const sampleDate = new Date(centerDate.getTime() + dayOffset * msPerDay);
+        const eqX = raw[i * 3];
+        const eqY = raw[i * 3 + 1];
+        const eqZ = raw[i * 3 + 2];
 
-        // Set engine time and compute
-        engine.set_time_utc(
-          sampleDate.getUTCFullYear(),
-          sampleDate.getUTCMonth() + 1,
-          sampleDate.getUTCDate(),
-          sampleDate.getUTCHours(),
-          sampleDate.getUTCMinutes(),
-          sampleDate.getUTCSeconds()
-        );
-        engine.recompute();
-
-        // Get position from engine buffer
-        const bodyPositions = getBodiesPositionBuffer(engine);
-        const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
-
-        positions[i * 3] = pos.x;
-        positions[i * 3 + 1] = pos.y;
-        positions[i * 3 + 2] = pos.z;
+        // Convert equatorial (Z-up) to Three.js (Y-up): (x, y, z) -> (-x, z, y), scaled to radius.
+        positions[i * 3] = -eqX * radius;
+        positions[i * 3 + 1] = eqZ * radius;
+        positions[i * 3 + 2] = eqY * radius;
       }
 
       // Update this planet's orbit line geometry
