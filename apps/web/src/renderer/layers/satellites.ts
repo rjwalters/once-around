@@ -26,7 +26,6 @@ import { LABEL_PRIORITY } from "../label-manager";
 // Visual configuration
 const COLOR_ILLUMINATED = new THREE.Color(1.0, 0.95, 0.8); // Bright yellowish-white
 const COLOR_SHADOW = new THREE.Color(0.3, 0.3, 0.4);       // Dim blue-gray (in shadow)
-const POINT_SIZE = 0.15; // Point size when rendered
 
 // Satellite-specific colors (optional differentiation)
 const SATELLITE_COLORS: { [key: string]: THREE.Color } = {
@@ -55,9 +54,10 @@ const SATELLITE_TEXTURES: { [key: string]: string } = {
 
 export interface SatelliteState {
   info: SatelliteInfo;
-  mesh: THREE.Points;
   label: CSS2DObject;
   labelDiv: HTMLDivElement;
+  /** Last text written to labelDiv (guards redundant DOM writes) */
+  lastLabelText: string;
   hasData: boolean;
   visible: boolean;
   // LOD support
@@ -104,28 +104,6 @@ function createSatelliteMesh(
   scene: THREE.Scene,
   labelsGroup: THREE.Group
 ): SatelliteState {
-  // Create point geometry (legacy, still used for basic rendering)
-  const geometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(3);
-  const colors = new Float32Array(3);
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-
-  // Create material
-  const material = new THREE.PointsMaterial({
-    size: POINT_SIZE,
-    vertexColors: true,
-    transparent: true,
-    opacity: 1.0,
-    sizeAttenuation: false,
-    depthTest: false,
-  });
-
-  const mesh = new THREE.Points(geometry, material);
-  mesh.visible = false;
-  mesh.renderOrder = 100; // Render on top
-  scene.add(mesh);
-
   // Create glow sprite (point source representation)
   const color = SATELLITE_COLORS[info.name] ?? COLOR_ILLUMINATED;
   const glowMaterial = createGlowSpriteMaterial(color);
@@ -162,9 +140,9 @@ function createSatelliteMesh(
 
   return {
     info,
-    mesh,
     label,
     labelDiv: div,
+    lastLabelText: info.name,
     hasData: false,
     visible: false,
     detailSprite,
@@ -198,7 +176,6 @@ export function createSatellitesLayer(scene: THREE.Scene, labelsGroup: THREE.Gro
     enabled = value;
     if (!enabled) {
       for (const sat of satelliteStates) {
-        sat.mesh.visible = false;
         sat.label.visible = false;
         sat.visible = false;
         sat.glowSprite.visible = false;
@@ -269,13 +246,12 @@ function updateSatellite(
   canvasHeight: number,
   labelManager?: LabelManager
 ): void {
-  const { info, mesh, label, labelDiv, glowSprite, glowMaterial, detailSprite, detailMaterial } = sat;
+  const { info, label, labelDiv, glowSprite, glowMaterial, detailSprite, detailMaterial } = sat;
 
   // Check if we have ephemeris data
   sat.hasData = engine.has_satellite_ephemeris(info.index);
 
   if (!enabled || !sat.hasData) {
-    mesh.visible = false;
     label.visible = false;
     sat.visible = false;
     glowSprite.visible = false;
@@ -285,12 +261,11 @@ function updateSatellite(
 
   // Check if current time is within ephemeris range
   if (!engine.satellite_in_range(info.index)) {
-    mesh.visible = false;
     label.visible = false;
     sat.visible = false;
     glowSprite.visible = false;
     if (detailSprite) detailSprite.visible = false;
-    labelDiv.textContent = `${info.name} (no data)`;
+    setLabelText(sat, `${info.name} (no data)`);
     return;
   }
 
@@ -302,7 +277,6 @@ function updateSatellite(
 
   if (!visible && !pos.aboveHorizon) {
     // Below horizon - don't show
-    mesh.visible = false;
     label.visible = false;
     sat.visible = false;
     glowSprite.visible = false;
@@ -325,9 +299,6 @@ function updateSatellite(
   const baseColor = SATELLITE_COLORS[info.name] ?? COLOR_ILLUMINATED;
   const color = pos.illuminated ? baseColor : COLOR_SHADOW;
   const opacity = pos.illuminated ? 1.0 : 0.4;
-
-  // Hide legacy point mesh - we use sprites now
-  mesh.visible = false;
 
   // Position both sprites
   glowSprite.position.copy(satPos);
@@ -388,18 +359,28 @@ function updateSatellite(
       });
     }
 
-    // Update label text with status and distance
+    // Update label text with status and distance (only when it changed)
     const distText = pos.distanceKm > 0 ? ` (${Math.round(pos.distanceKm)} km)` : '';
     if (pos.illuminated) {
-      labelDiv.textContent = info.name + distText;
+      setLabelText(sat, info.name + distText);
       labelDiv.classList.remove("satellite-in-shadow");
     } else {
-      labelDiv.textContent = `${info.name} (shadow)${distText}`;
+      setLabelText(sat, `${info.name} (shadow)${distText}`);
       labelDiv.classList.add("satellite-in-shadow");
     }
   } else {
     label.visible = false;
   }
+}
+
+/**
+ * Write label text only when it differs from the last written value, avoiding
+ * redundant DOM writes each frame.
+ */
+function setLabelText(sat: SatelliteState, text: string): void {
+  if (sat.lastLabelText === text) return;
+  sat.lastLabelText = text;
+  sat.labelDiv.textContent = text;
 }
 
 // Re-export legacy ISS layer interface for backwards compatibility
