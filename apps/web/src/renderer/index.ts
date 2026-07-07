@@ -89,6 +89,10 @@ export interface SkyRenderer {
   ): void;
   render(): void;
   resize(width: number, height: number): void;
+  /** Whether the eclipse corona is currently rendered (needs continuous frames). */
+  isCoronaActive(): boolean;
+  /** Whether any managed label is mid-fade (needs continuous frames until settled). */
+  hasFadesInProgress(): boolean;
 }
 
 export function createRenderer(container: HTMLElement): SkyRenderer {
@@ -474,6 +478,14 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     labelRenderer.render(scene, camera);
   }
 
+  function isCoronaActive(): boolean {
+    return eclipseLayer.isCoronaActive();
+  }
+
+  function hasFadesInProgress(): boolean {
+    return labelManager.hasFadesInProgress();
+  }
+
   function resize(width: number, height: number): void {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
@@ -537,5 +549,7 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     isOccludedByEarth,
     render,
     resize,
+    isCoronaActive,
+    hasFadesInProgress,
   };
 }

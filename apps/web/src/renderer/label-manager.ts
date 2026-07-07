@@ -502,6 +502,21 @@ export class LabelManager {
   }
 
   /**
+   * Whether any label is mid-fade (its current opacity has not yet reached its
+   * target). Used by the render scheduler to keep rendering frames until all
+   * label fades settle, so fades don't freeze part-way when the scene is
+   * otherwise static.
+   */
+  hasFadesInProgress(): boolean {
+    for (const state of this.labelStates.values()) {
+      if (Math.abs(state.currentOpacity - state.targetOpacity) > MIN_OPACITY_THRESHOLD) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Reset all label states (useful when switching view modes).
    */
   reset(): void {

@@ -3,17 +3,26 @@ import { computeGMST } from "./geometry/time";
 import type { BodyPositions } from "./body-positions";
 import type { SkyEngine } from "./wasm/sky_engine";
 import { getHeliocentricPositions } from "./spacecraftPositions";
+import { isAlwaysRenderMode, type RenderScheduler } from "./render-scheduler";
 
 export interface AnimationLoopDependencies {
   controls: {
     update: () => void;
     getFov: () => number;
+    /** Whether a multi-frame camera animation is running (always-render gate). */
+    isAnimating: () => boolean;
   };
   tourEngine: {
     update: () => void;
+    /** Whether a tour is playing/paused (always-render gate). */
+    isActive: () => boolean;
   };
   renderer: {
     render: () => void;
+    /** Corona shader is visible and animating (always-render gate). */
+    isCoronaActive: () => boolean;
+    /** A label fade is mid-animation (always-render gate). */
+    hasFadesInProgress: () => boolean;
     updateGroundPlaneForTime: (date: Date) => void;
     updateScintillation: (latitude: number, lst: number) => void;
     updateHorizonZenith: (zenith: THREE.Vector3) => void;
@@ -46,6 +55,10 @@ export interface AnimationLoopDependencies {
   getObserverLocation: () => { latitude: number; longitude: number };
   getBodyPositions: () => BodyPositions;
   engine: SkyEngine;
+  /** Render scheduler gating the expensive WebGL + CSS2D render calls. */
+  renderScheduler: RenderScheduler;
+  /** Whether AR device-orientation mode is active (always-render gate). */
+  isARModeEnabled: () => boolean;
 }
 
 export function createAnimationLoop(deps: AnimationLoopDependencies): () => void {
@@ -59,6 +72,8 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     getObserverLocation,
     getBodyPositions,
     engine,
+    renderScheduler,
+    isARModeEnabled,
   } = deps;
 
   // Pre-allocated vectors reused every frame to avoid per-frame GC pressure.
@@ -68,11 +83,32 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
 
   function animate(): void {
     requestAnimationFrame(animate);
+
+    // controls.update() and tourEngine.update() must run every frame: they
+    // advance in-progress animations and (via onCameraChange / setTimeForTour)
+    // call requestRender() when they change something. Run them before the
+    // render-skip decision so a newly-started animation is not missed.
     controls.update();
     tourEngine.update();
 
-    const currentDate = getCurrentDate();
     const viewMode = getViewMode();
+
+    // Render-on-demand gate: skip the expensive WebGL draw + CSS2D style writes
+    // when the scene is clean AND no mode needs continuous frames. Any dirty
+    // source (camera, time, toggle, resize, ...) calls requestRender().
+    const alwaysRender = isAlwaysRenderMode({
+      viewMode,
+      arEnabled: isARModeEnabled(),
+      coronaActive: renderer.isCoronaActive(),
+      fadesInProgress: renderer.hasFadesInProgress(),
+      controlsAnimating: controls.isAnimating(),
+      tourActive: tourEngine.isActive(),
+    });
+    if (!renderScheduler.shouldRender(alwaysRender)) {
+      return;
+    }
+
+    const currentDate = getCurrentDate();
     const location = getObserverLocation();
 
     // Update ground plane position for current sidereal time

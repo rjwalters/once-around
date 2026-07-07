@@ -34,6 +34,7 @@ import {
 import { setupTourSystem } from "./tour-setup";
 import { setupSearch } from "./search-setup";
 import { createAnimationLoop } from "./animation-loop";
+import { createRenderScheduler } from "./render-scheduler";
 
 // Build-time constants injected by Vite
 declare const __BUILD_TIME__: string;
@@ -73,6 +74,13 @@ async function main(): Promise<void> {
 
   // Create Three.js renderer
   const renderer = createRenderer(container);
+
+  // Render-on-demand scheduler. Every code path that changes something the
+  // renderer draws must call requestRender(); the animation loop skips the
+  // WebGL + CSS2D render calls on clean, static frames. Starts dirty so the
+  // first frame always renders.
+  const renderScheduler = createRenderScheduler();
+  const requestRender = renderScheduler.requestRender;
 
   // Helper to update rendered star count display
   const starCountEl = document.getElementById("star-count");
@@ -163,6 +171,10 @@ async function main(): Promise<void> {
 
   // Save camera changes (debounced) and update URL
   controls.onCameraChange = () => {
+    // Any camera movement (drag, zoom, keyboard, programmatic jump, controls
+    // fly-to animation, or AR device orientation) routes through here — mark
+    // the scene dirty so the next frame re-renders.
+    requestRender();
     const state = controls.getCameraState();
     settingsSaver.save({
       cameraQuaternion: state.quaternion,
@@ -194,6 +206,7 @@ async function main(): Promise<void> {
           const magInput = document.getElementById("magnitude") as HTMLInputElement | null;
           const mag = magInput ? parseFloat(magInput.value) : 6.5;
           renderer.updateDSOs(pendingFov, mag);
+          requestRender();
         }
         fovUpdateTimeout = null;
         pendingFov = null;
@@ -203,6 +216,9 @@ async function main(): Promise<void> {
 
   // Update star LOD when FOV changes (zooming) - debounced for performance
   controls.onFovChange = (fov: number) => {
+    // FOV change repaints immediately; the debounced updateFromEngine below
+    // will request another render once the star LOD is recomputed.
+    requestRender();
     debouncedFovUpdate(fov);
   };
 
@@ -262,7 +278,10 @@ async function main(): Promise<void> {
     stopTimePlayback: () => timeControls?.stopPlayback(),
     applyTimeToEngine: (date) => applyTimeToEngine(engine, date),
     recomputeEngine: () => engine.recompute(),
-    updateRenderer: () => renderer.updateFromEngine(engine, renderer.camera.fov),
+    updateRenderer: () => {
+      renderer.updateFromEngine(engine, renderer.camera.fov);
+      requestRender();
+    },
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     positionToRaDec,
     calculateSunMoonSeparation,
@@ -285,6 +304,7 @@ async function main(): Promise<void> {
     // Defer heavy update to avoid blocking interaction
     setTimeout(() => {
       renderer.updateFromEngine(engine, renderer.camera.fov);
+      requestRender();
     }, 0);
 
     // Initialize ISS pass predictions UI
@@ -356,6 +376,7 @@ async function main(): Promise<void> {
       settingsSaver.save({ datetime: date.toISOString() });
       // Update URL with new time
       updateUrlState({ t: date.toISOString() });
+      requestRender();
     },
     onMagnitudeChange: (mag: number) => {
       engine.set_mag_limit(mag);
@@ -369,6 +390,7 @@ async function main(): Promise<void> {
       settingsSaver.save({ magnitude: mag });
       // Update URL with new magnitude
       updateUrlState({ mag });
+      requestRender();
     },
   });
 
@@ -382,6 +404,7 @@ async function main(): Promise<void> {
     constellationCheckbox.addEventListener("change", () => {
       renderer.setConstellationsVisible(constellationCheckbox.checked);
       settingsSaver.save({ constellationsVisible: constellationCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -395,6 +418,7 @@ async function main(): Promise<void> {
     labelsCheckbox.addEventListener("change", () => {
       renderer.setLabelsVisible(labelsCheckbox.checked);
       settingsSaver.save({ labelsVisible: labelsCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -429,6 +453,7 @@ async function main(): Promise<void> {
       videoMarkers.setVisible(videosCheckbox.checked);
       videoMarkers.setLabelsVisible(videosCheckbox.checked);
       settingsSaver.save({ videosVisible: videosCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -456,6 +481,7 @@ async function main(): Promise<void> {
       // Clear any focused orbit when toggling
       orbitFocus?.resetFocus();
       settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -482,6 +508,7 @@ async function main(): Promise<void> {
         renderer.updateDSOs(currentFov, currentMag);
       }
       settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -506,6 +533,7 @@ async function main(): Promise<void> {
         renderer.updateDeepFields(currentFov);
       }
       settingsSaver.save({ deepFieldsVisible: deepFieldsCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -528,6 +556,7 @@ async function main(): Promise<void> {
         renderer.updateMeteorShowers(currentDate);
       }
       settingsSaver.save({ meteorShowersVisible: meteorShowersCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -541,6 +570,7 @@ async function main(): Promise<void> {
     issCheckbox.addEventListener("change", () => {
       renderer.setISSVisible(issCheckbox.checked);
       settingsSaver.save({ issVisible: issCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -553,6 +583,9 @@ async function main(): Promise<void> {
       nightVisionCheckbox.checked = enabled;
     }
     settingsSaver.save({ nightVisionEnabled: enabled });
+    // Night vision is a CSS filter on the canvas (no WebGL repaint strictly
+    // required), but request a frame so the change is reflected promptly.
+    requestRender();
   }
 
   if (nightVisionCheckbox) {
@@ -587,6 +620,7 @@ async function main(): Promise<void> {
         renderer.setGroundPlaneVisible(horizonCheckbox.checked);
       }
       settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
+      requestRender();
     });
   }
 
@@ -636,12 +670,14 @@ async function main(): Promise<void> {
         geocentric: 'geo', topocentric: 'topo', hubble: 'hubble', jwst: 'jwst',
       };
       updateUrlState({ view: viewModeUrlMap[mode] });
+      requestRender();
     },
     onHorizonChange: (visible) => {
       if (horizonCheckbox && horizonCheckbox.checked !== visible) {
         horizonCheckbox.checked = visible;
         renderer.setGroundPlaneVisible(visible);
         settingsSaver.save({ horizonVisible: visible });
+        requestRender();
       }
     },
     onLSTChange: (lstDeg) => {
@@ -656,15 +692,19 @@ async function main(): Promise<void> {
     // Space telescope mode callbacks
     onHubbleModeChange: (enabled) => {
       renderer.setHubbleMode(enabled);
+      requestRender();
     },
     onJWSTModeChange: (enabled) => {
       renderer.setJWSTMode(enabled);
+      requestRender();
     },
     onScintillationChange: (enabled) => {
       renderer.setScintillationEnabled(enabled);
+      requestRender();
     },
     onResetVideoOcclusion: () => {
       videoMarkers.resetOcclusion();
+      requestRender();
     },
   });
 
@@ -712,6 +752,7 @@ async function main(): Promise<void> {
       const intensity = parseFloat(seeingSelect.value);
       renderer.setScintillationIntensity(intensity);
       settingsSaver.save({ seeingIntensity: intensity });
+      requestRender();
     });
   }
 
@@ -766,6 +807,8 @@ async function main(): Promise<void> {
         if (issPassesUI) {
           issPassesUI.refresh();
         }
+        // Ground plane / topocentric orientation changed — repaint.
+        requestRender();
       },
     }
   );
@@ -879,8 +922,12 @@ async function main(): Promise<void> {
     setOrbitsVisible: (visible) => {
       if (orbitsCheckbox) orbitsCheckbox.checked = visible;
       renderer.setOrbitsVisible(visible);
+      requestRender();
     },
-    focusOrbit: (bodyIndex) => renderer.focusOrbit(bodyIndex),
+    focusOrbit: (bodyIndex) => {
+      renderer.focusOrbit(bodyIndex);
+      requestRender();
+    },
     computeOrbits: () => void renderer.computeOrbits(engine, currentDate),
     saveOrbitsVisible: (visible) => settingsSaver.save({ orbitsVisible: visible }),
   });
@@ -897,6 +944,7 @@ async function main(): Promise<void> {
   // Handle window resize
   window.addEventListener("resize", () => {
     renderer.resize(window.innerWidth, window.innerHeight);
+    requestRender();
   });
 
   // Keyboard shortcuts
@@ -906,6 +954,7 @@ async function main(): Promise<void> {
         labelsCheckbox.checked = !labelsCheckbox.checked;
         renderer.setLabelsVisible(labelsCheckbox.checked);
         settingsSaver.save({ labelsVisible: labelsCheckbox.checked });
+        requestRender();
       }
     },
     toggleConstellations: () => {
@@ -913,6 +962,7 @@ async function main(): Promise<void> {
         constellationCheckbox.checked = !constellationCheckbox.checked;
         renderer.setConstellationsVisible(constellationCheckbox.checked);
         settingsSaver.save({ constellationsVisible: constellationCheckbox.checked });
+        requestRender();
       }
     },
     toggleVideos: () => {
@@ -921,6 +971,7 @@ async function main(): Promise<void> {
         videoMarkers.setVisible(videosCheckbox.checked);
         videoMarkers.setLabelsVisible(videosCheckbox.checked);
         settingsSaver.save({ videosVisible: videosCheckbox.checked });
+        requestRender();
       }
     },
     toggleOrbits: () => {
@@ -932,6 +983,7 @@ async function main(): Promise<void> {
         }
         orbitFocus?.resetFocus();
         settingsSaver.save({ orbitsVisible: orbitsCheckbox.checked });
+        requestRender();
       }
     },
     toggleDSOs: () => {
@@ -944,6 +996,7 @@ async function main(): Promise<void> {
           renderer.updateDSOs(currentFov, currentMag);
         }
         settingsSaver.save({ dsosVisible: dsosCheckbox.checked });
+        requestRender();
       }
     },
     toggleDeepFields: () => {
@@ -955,6 +1008,7 @@ async function main(): Promise<void> {
           renderer.updateDeepFields(currentFov);
         }
         settingsSaver.save({ deepFieldsVisible: deepFieldsCheckbox.checked });
+        requestRender();
       }
     },
     toggleMeteorShowers: () => {
@@ -965,6 +1019,7 @@ async function main(): Promise<void> {
           renderer.updateMeteorShowers(currentDate);
         }
         settingsSaver.save({ meteorShowersVisible: meteorShowersCheckbox.checked });
+        requestRender();
       }
     },
     toggleNightVision: () => {
@@ -980,6 +1035,7 @@ async function main(): Promise<void> {
           renderer.setGroundPlaneVisible(horizonCheckbox.checked);
         }
         settingsSaver.save({ horizonVisible: horizonCheckbox.checked });
+        requestRender();
       }
     },
     handleNextEclipse: handleNextEclipseClick,
@@ -1047,6 +1103,8 @@ async function main(): Promise<void> {
     }),
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     engine,
+    renderScheduler,
+    isARModeEnabled: () => arModeManager.isEnabled(),
   });
 
   // Enable scintillation if starting in topocentric mode
@@ -1077,6 +1135,7 @@ async function main(): Promise<void> {
     // Force a full update to ensure everything is initialized
     renderer.updateFromEngine(engine, settings.fov);
     updateRenderedStars();
+    requestRender();
 
     // Initial eclipse detection
     const initialBodyPos = getBodyPositionsFromEngine(engine);
