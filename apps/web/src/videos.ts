@@ -17,6 +17,32 @@ export interface VideoPlacement {
   url: string;
 }
 
+/**
+ * Wrap a zero-arg async factory so it runs at most once; every subsequent call
+ * returns the same in-flight/settled promise. Used to guarantee a single
+ * `/videos.json` network request per session, shared by the marker layer and
+ * the search index (issue #6).
+ */
+export function once<T>(factory: () => Promise<T>): () => Promise<T> {
+  let cached: Promise<T> | null = null;
+  return () => (cached ??= factory());
+}
+
+/**
+ * Shared, deduplicated loader for `/videos.json`. The fetch is lazy (fires on
+ * first call) and memoized, so the marker layer and the search index share a
+ * single request. Failures resolve to an empty array so callers degrade
+ * gracefully instead of rejecting.
+ */
+export const getVideosData = once<VideoPlacement[]>(() =>
+  fetch("/videos.json")
+    .then((response) => response.json() as Promise<VideoPlacement[]>)
+    .catch((e) => {
+      console.warn("Failed to load videos.json:", e);
+      return [] as VideoPlacement[];
+    })
+);
+
 const SKY_RADIUS = 50;
 const VIDEO_MARKER_COLOR = new THREE.Color(0.6, 0.3, 0.9); // Purple
 const LABEL_REPULSION_DISTANCE = 3.5; // Minimum distance between labels before repulsion kicks in
@@ -421,18 +447,17 @@ export interface VideoMarkersLayer {
   resetOcclusion(): void;
 }
 
-export async function createVideoMarkersLayer(
+export function createVideoMarkersLayer(
   scene: THREE.Scene,
   _onVideoClick: (video: VideoPlacement) => void,
-  bodyPositions?: BodyPositions
-): Promise<VideoMarkersLayer> {
-  // Load video placements
-  const response = await fetch("/videos.json");
-  const videos: VideoPlacement[] = await response.json();
-
-  // Group videos by location to handle co-located videos
-  // Pass body positions so moving objects can be matched to their planets
-  const videoGroups = groupVideosByLocation(videos, bodyPositions);
+  bodyPositions?: BodyPositions,
+  onReady?: () => void
+): VideoMarkersLayer {
+  // The layer is created and returned synchronously with empty, hidden groups,
+  // then populated once the shared /videos.json fetch resolves (issue #6). This
+  // keeps the render loop and loading-overlay dismissal off the network critical
+  // path. All three consumer closures below tolerate the pre-population empty
+  // state (movingVideoMeshes / labels iterate as no-ops; markerMeshes starts []).
 
   // Create group for all video markers
   const group = new THREE.Group();
@@ -472,153 +497,20 @@ export async function createVideoMarkersLayer(
     depthWrite: false,
   });
 
-  // Store positions for repulsion calculation
+  // Store positions for repulsion calculation. Populated during async build and
+  // later mutated by updateMovingPositions().
   const labelPositions = new Map<string, THREE.Vector3>();
   const markerPositions = new Map<string, THREE.Vector3>();
 
-  // Static (non-moving) ring/arc geometries have their world transform baked in
-  // and are merged into a single mesh after the loop, collapsing ~80 static rings
-  // into one draw call. Moving markers keep individual meshes (see below).
-  const staticRingGeometries: THREE.BufferGeometry[] = [];
-  const bakeObject = new THREE.Object3D();
-  function bakeTransform(geometry: THREE.BufferGeometry, pos: THREE.Vector3): void {
-    // Reproduce mesh.position.copy(pos); mesh.lookAt(0,0,0) as a baked vertex transform.
-    bakeObject.position.copy(pos);
-    bakeObject.lookAt(0, 0, 0);
-    bakeObject.updateMatrix();
-    geometry.applyMatrix4(bakeObject.matrix);
-  }
+  // Maps video ID -> flag line segment index (filled during async population).
+  const videoFlagLineIndex = new Map<string, number>();
 
-  // Process each video group
-  for (const videoGroup of videoGroups) {
-    const totalInGroup = videoGroup.videos.length;
-    const position = videoGroup.position;
-
-    for (let sliceIndex = 0; sliceIndex < totalInGroup; sliceIndex++) {
-      const video = videoGroup.videos[sliceIndex];
-
-      // Create geometry based on whether this is a single video or grouped
-      let ringGeometry: THREE.BufferGeometry;
-      let hitGeometry: THREE.BufferGeometry;
-
-      if (totalInGroup === 1) {
-        // Single video: use full ring (existing behavior)
-        ringGeometry = createRingGeometry(0.475, 0.625, 24);
-        hitGeometry = new THREE.CircleGeometry(1.2, 24);
-      } else {
-        // Multiple videos: use arc slices (pie chart style)
-        ringGeometry = createArcGeometry(0.475, 0.625, sliceIndex, totalInGroup, 24);
-        hitGeometry = createArcHitGeometry(1.2, sliceIndex, totalInGroup, 24);
-      }
-
-      // Create the larger clickable hit-area mesh. It shares a single material
-      // (no per-marker clone) and is hidden: Raycaster.intersectObjects tests the
-      // mesh array directly and does not consult visibility, so hit-testing is
-      // unchanged while the hidden mesh costs zero draw calls / fill.
-      const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial);
-      marker.position.copy(position);
-      marker.lookAt(0, 0, 0);
-      marker.visible = false;
-      marker.userData = { videoId: video.id };
-      markers.set(video.id, marker);
-      videoDataMap.set(video.id, video);
-      group.add(marker);
-
-      // Create the visible ring/arc.
-      // - Moving markers (planets/moons/comets) update their position each frame,
-      //   so they keep an individual mesh sharing the single marker material.
-      // - Static markers have their transform baked into the geometry and are
-      //   merged into one mesh after the loop (single draw call).
-      const movingBodyName = video.moving ? matchVideoToBody(video.object) : null;
-      if (movingBodyName) {
-        const ringMesh = new THREE.Mesh(ringGeometry, markerMaterial);
-        ringMesh.position.copy(position);
-        ringMesh.lookAt(0, 0, 0);
-        group.add(ringMesh);
-
-        if (!movingVideoMeshes.has(movingBodyName)) {
-          movingVideoMeshes.set(movingBodyName, []);
-        }
-        movingVideoMeshes.get(movingBodyName)!.push({ videoId: video.id, ringMesh, hitMesh: marker });
-      } else {
-        bakeTransform(ringGeometry, position);
-        staticRingGeometries.push(ringGeometry);
-      }
-
-      // Store marker position for repulsion constraint
-      markerPositions.set(video.id, position.clone());
-
-      // Create label sprite
-      const labelText = video.object || video.title;
-      const labelSprite = createTextSprite(labelText);
-
-      // Calculate label position based on whether this is grouped or single
-      let labelPosition: THREE.Vector3;
-
-      if (totalInGroup === 1) {
-        // Single video: use "down" direction (existing behavior)
-        const radial = position.clone().normalize();
-        const worldUp = new THREE.Vector3(0, 1, 0);
-        const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
-        const down = new THREE.Vector3().crossVectors(radial, east).normalize();
-        const labelOffset = 1.5;
-        labelPosition = position.clone().add(down.multiplyScalar(labelOffset));
-      } else {
-        // Grouped videos: radial positioning based on arc slice
-        labelPosition = calculateGroupedLabelPosition(position, sliceIndex, totalInGroup, 2.0);
-      }
-
-      // Store initial label position for repulsion
-      labelPositions.set(video.id, labelPosition.clone());
-
-      labels.set(video.id, labelSprite);
-      labelsGroup.add(labelSprite);
-    }
-  }
-
-  // Merge all static ring/arc geometries into a single mesh -> one draw call.
-  if (staticRingGeometries.length > 0) {
-    const mergedRingGeometry = mergeGeometries(staticRingGeometries, false);
-    if (mergedRingGeometry) {
-      group.add(new THREE.Mesh(mergedRingGeometry, markerMaterial));
-      // The vertex data was copied into the merged buffer; free the sources.
-      for (const geometry of staticRingGeometries) geometry.dispose();
-    } else {
-      // Defensive fallback (uniform RingGeometry should always merge): render the
-      // individual geometries, whose transforms are already baked in.
-      for (const geometry of staticRingGeometries) {
-        group.add(new THREE.Mesh(geometry, markerMaterial));
-      }
-    }
-  }
-
-  // Apply repulsion to spread out overlapping labels
-  applyLabelRepulsion(labelPositions, markerPositions);
-
-  // Update sprite positions with repelled positions
-  for (const [id, sprite] of labels) {
-    const newPosition = labelPositions.get(id);
-    if (newPosition) {
-      sprite.position.copy(newPosition);
-    }
-  }
-
-  // Create flag lines connecting markers to labels
-  const flagLinePositions: number[] = [];
-  for (const video of videos) {
-    const markerPos = markerPositions.get(video.id);
-    const labelPos = labelPositions.get(video.id);
-    if (markerPos && labelPos) {
-      // Line from marker to label
-      flagLinePositions.push(markerPos.x, markerPos.y, markerPos.z);
-      flagLinePositions.push(labelPos.x, labelPos.y, labelPos.z);
-    }
-  }
-
+  // Flag lines connecting markers to labels. Created empty up front and filled
+  // once video data resolves; updateMovingPositions() mutates this same geometry.
   const flagLinesGeometry = new THREE.BufferGeometry();
   flagLinesGeometry.setAttribute(
     "position",
-    new THREE.BufferAttribute(new Float32Array(flagLinePositions), 3)
+    new THREE.BufferAttribute(new Float32Array(0), 3)
   );
   const flagLinesMaterial = new THREE.LineBasicMaterial({
     color: VIDEO_MARKER_COLOR,
@@ -628,11 +520,180 @@ export async function createVideoMarkersLayer(
   const flagLines = new THREE.LineSegments(flagLinesGeometry, flagLinesMaterial);
   labelsGroup.add(flagLines);
 
-  // Setup click handling.
-  // The hit-mesh set is fixed after construction (moving markers reuse the same
-  // mesh objects and only mutate their transforms), so snapshot it once instead
-  // of rebuilding the array on every pointer move / click.
-  const markerMeshes = Array.from(markers.values());
+  // Hit-mesh snapshot for raycasting. Empty until population completes, then
+  // reassigned (issue #6: this must be a reassignable binding, not a one-time
+  // const snapshot, or getVideoAtPosition would never find any marker).
+  let markerMeshes: THREE.Mesh[] = [];
+
+  // Populate markers/labels from the shared, deduplicated videos.json fetch. The
+  // layer object below is returned synchronously; this callback fills the groups
+  // in place once the network resolves (issue #6).
+  void getVideosData().then((videos) => {
+    // Group videos by location to handle co-located videos.
+    // Pass body positions so moving objects can be matched to their planets.
+    const videoGroups = groupVideosByLocation(videos, bodyPositions);
+
+    // Static (non-moving) ring/arc geometries have their world transform baked in
+    // and are merged into a single mesh after the loop, collapsing ~80 static rings
+    // into one draw call. Moving markers keep individual meshes (see below).
+    const staticRingGeometries: THREE.BufferGeometry[] = [];
+    const bakeObject = new THREE.Object3D();
+    const bakeTransform = (geometry: THREE.BufferGeometry, pos: THREE.Vector3): void => {
+      // Reproduce mesh.position.copy(pos); mesh.lookAt(0,0,0) as a baked vertex transform.
+      bakeObject.position.copy(pos);
+      bakeObject.lookAt(0, 0, 0);
+      bakeObject.updateMatrix();
+      geometry.applyMatrix4(bakeObject.matrix);
+    };
+
+    // Process each video group
+    for (const videoGroup of videoGroups) {
+      const totalInGroup = videoGroup.videos.length;
+      const position = videoGroup.position;
+
+      for (let sliceIndex = 0; sliceIndex < totalInGroup; sliceIndex++) {
+        const video = videoGroup.videos[sliceIndex];
+
+        // Create geometry based on whether this is a single video or grouped
+        let ringGeometry: THREE.BufferGeometry;
+        let hitGeometry: THREE.BufferGeometry;
+
+        if (totalInGroup === 1) {
+          // Single video: use full ring (existing behavior)
+          ringGeometry = createRingGeometry(0.475, 0.625, 24);
+          hitGeometry = new THREE.CircleGeometry(1.2, 24);
+        } else {
+          // Multiple videos: use arc slices (pie chart style)
+          ringGeometry = createArcGeometry(0.475, 0.625, sliceIndex, totalInGroup, 24);
+          hitGeometry = createArcHitGeometry(1.2, sliceIndex, totalInGroup, 24);
+        }
+
+        // Create the larger clickable hit-area mesh. It shares a single material
+        // (no per-marker clone) and is hidden: Raycaster.intersectObjects tests the
+        // mesh array directly and does not consult visibility, so hit-testing is
+        // unchanged while the hidden mesh costs zero draw calls / fill.
+        const marker = new THREE.Mesh(hitGeometry, hitAreaMaterial);
+        marker.position.copy(position);
+        marker.lookAt(0, 0, 0);
+        marker.visible = false;
+        marker.userData = { videoId: video.id };
+        markers.set(video.id, marker);
+        videoDataMap.set(video.id, video);
+        group.add(marker);
+
+        // Create the visible ring/arc.
+        // - Moving markers (planets/moons/comets) update their position each frame,
+        //   so they keep an individual mesh sharing the single marker material.
+        // - Static markers have their transform baked into the geometry and are
+        //   merged into one mesh after the loop (single draw call).
+        const movingBodyName = video.moving ? matchVideoToBody(video.object) : null;
+        if (movingBodyName) {
+          const ringMesh = new THREE.Mesh(ringGeometry, markerMaterial);
+          ringMesh.position.copy(position);
+          ringMesh.lookAt(0, 0, 0);
+          group.add(ringMesh);
+
+          if (!movingVideoMeshes.has(movingBodyName)) {
+            movingVideoMeshes.set(movingBodyName, []);
+          }
+          movingVideoMeshes.get(movingBodyName)!.push({ videoId: video.id, ringMesh, hitMesh: marker });
+        } else {
+          bakeTransform(ringGeometry, position);
+          staticRingGeometries.push(ringGeometry);
+        }
+
+        // Store marker position for repulsion constraint
+        markerPositions.set(video.id, position.clone());
+
+        // Create label sprite
+        const labelText = video.object || video.title;
+        const labelSprite = createTextSprite(labelText);
+
+        // Calculate label position based on whether this is grouped or single
+        let labelPosition: THREE.Vector3;
+
+        if (totalInGroup === 1) {
+          // Single video: use "down" direction (existing behavior)
+          const radial = position.clone().normalize();
+          const worldUp = new THREE.Vector3(0, 1, 0);
+          const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
+          const down = new THREE.Vector3().crossVectors(radial, east).normalize();
+          const labelOffset = 1.5;
+          labelPosition = position.clone().add(down.multiplyScalar(labelOffset));
+        } else {
+          // Grouped videos: radial positioning based on arc slice
+          labelPosition = calculateGroupedLabelPosition(position, sliceIndex, totalInGroup, 2.0);
+        }
+
+        // Store initial label position for repulsion
+        labelPositions.set(video.id, labelPosition.clone());
+
+        labels.set(video.id, labelSprite);
+        labelsGroup.add(labelSprite);
+      }
+    }
+
+    // Merge all static ring/arc geometries into a single mesh -> one draw call.
+    if (staticRingGeometries.length > 0) {
+      const mergedRingGeometry = mergeGeometries(staticRingGeometries, false);
+      if (mergedRingGeometry) {
+        group.add(new THREE.Mesh(mergedRingGeometry, markerMaterial));
+        // The vertex data was copied into the merged buffer; free the sources.
+        for (const geometry of staticRingGeometries) geometry.dispose();
+      } else {
+        // Defensive fallback (uniform RingGeometry should always merge): render the
+        // individual geometries, whose transforms are already baked in.
+        for (const geometry of staticRingGeometries) {
+          group.add(new THREE.Mesh(geometry, markerMaterial));
+        }
+      }
+    }
+
+    // Apply repulsion to spread out overlapping labels
+    applyLabelRepulsion(labelPositions, markerPositions);
+
+    // Update sprite positions with repelled positions
+    for (const [id, sprite] of labels) {
+      const newPosition = labelPositions.get(id);
+      if (newPosition) {
+        sprite.position.copy(newPosition);
+      }
+    }
+
+    // Create flag lines connecting markers to labels
+    const flagLinePositions: number[] = [];
+    for (const video of videos) {
+      const markerPos = markerPositions.get(video.id);
+      const labelPos = labelPositions.get(video.id);
+      if (markerPos && labelPos) {
+        // Line from marker to label
+        flagLinePositions.push(markerPos.x, markerPos.y, markerPos.z);
+        flagLinePositions.push(labelPos.x, labelPos.y, labelPos.z);
+      }
+    }
+
+    flagLinesGeometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(flagLinePositions), 3)
+    );
+
+    // Build video ID -> flag line index map (used by updateMovingPositions).
+    for (let i = 0; i < videos.length; i++) {
+      videoFlagLineIndex.set(videos[i].id, i);
+    }
+
+    // Refresh the raycast hit-mesh snapshot now that markers exist (issue #6).
+    markerMeshes = Array.from(markers.values());
+
+    // Markers were added to an already-live, render-on-demand scene (PR #31), so
+    // request a render to make them appear without waiting for user interaction.
+    onReady?.();
+  });
+
+  // Click handling. The hit-mesh set is fixed after population (moving markers
+  // reuse the same mesh objects and only mutate their transforms), so it is
+  // snapshotted once at the end of population above instead of rebuilt on every
+  // pointer move / click.
   function getVideoAtPosition(raycaster: THREE.Raycaster): VideoPlacement | null {
     const intersects = raycaster.intersectObjects(markerMeshes);
 
@@ -643,13 +704,6 @@ export async function createVideoMarkersLayer(
     return null;
   }
 
-  // Build video ID to flag line index map
-  const videoFlagLineIndex = new Map<string, number>();
-  for (let i = 0; i < videos.length; i++) {
-    videoFlagLineIndex.set(videos[i].id, i);
-  }
-
-  // Update positions of moving video markers when body positions change
   function updateMovingPositions(newBodyPositions: BodyPositions): void {
     const flagPosAttr = flagLinesGeometry.getAttribute("position") as THREE.BufferAttribute;
 

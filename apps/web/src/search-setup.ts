@@ -71,7 +71,11 @@ export function setupSearch(deps: SearchSetupDependencies): SearchSetupResult {
 
   let searchIndex: SearchItem[] = [];
 
-  // Helper to build search index (called initially and after satellites load)
+  // Helper to build the base search index. Satellites are intentionally excluded
+  // here: they are a static list whose ephemerides load asynchronously, so they
+  // are appended separately once satellitesLoadedPromise resolves (see below).
+  // Appending avoids a second full buildSearchIndex(), which would re-fetch
+  // videos.json — issue #6 keeps the session to a single /videos.json request.
   const buildIndex = () =>
     buildSearchIndex({
       bodyNames: BODY_NAMES,
@@ -84,20 +88,24 @@ export function setupSearch(deps: SearchSetupDependencies): SearchSetupResult {
       deepFieldData: DEEP_FIELD_DATA,
       getBodyPositions,
       positionToRaDec,
-      satellites: SATELLITES.map((s) => ({ index: s.index, name: s.name, fullName: s.fullName })),
-      getSatellitePosition: (index: number) => {
-        if (!engine.has_satellite_ephemeris(index) || !engine.satellite_in_range(index))
-          return null;
-        const pos = getSatellitePosition(engine, index);
-        if (pos.x === 0 && pos.y === 0 && pos.z === 0) return null;
-        return { x: pos.x, y: pos.y, z: pos.z };
-      },
       // Earth is searchable in JWST mode (where it appears as a distant planet)
       getEarthPosition: getEarthPositionJWST,
       // Planetary moons (Galilean moons of Jupiter + Titan)
       planetaryMoons: PLANETARY_MOONS,
       getPlanetaryMoonPosition: (index: number) => getPlanetaryMoonPosition(engine, index),
     });
+
+  // Build the satellite-only search entries. Satellite names/labels are static
+  // (positions are looked up dynamically when navigating), so this is a cheap
+  // synchronous transform with no network access.
+  const buildSatelliteItems = (): SearchItem[] =>
+    SATELLITES.map((s): SearchItem => ({
+      name: s.name,
+      type: "satellite",
+      ra: 0, // Position looked up dynamically when navigating
+      dec: 0,
+      subtitle: s.fullName,
+    }));
 
   // Create search UI
   const searchUI = createSearchUI({
@@ -152,23 +160,34 @@ export function setupSearch(deps: SearchSetupDependencies): SearchSetupResult {
     indexReady = true;
     console.log(`Search index built: ${index.length} items`);
 
-    // Handle pending URL object navigation
+    // Handle pending URL object navigation. If the object is not found yet it may
+    // be a satellite that has not been appended; leave it queued for the retry in
+    // the satellitesLoadedPromise handler below rather than clearing it here.
     if (pendingUrlObject) {
       const found = searchUI.navigateToObject(pendingUrlObject);
       if (found) {
         console.log(`Navigated to object from URL: ${pendingUrlObject}`);
-      } else {
-        console.warn(`Object not found in search index: ${pendingUrlObject}`);
+        pendingUrlObject = null;
       }
-      pendingUrlObject = null;
     }
 
-    // Rebuild index after satellites finish loading to include them in search
+    // Append satellites once their ephemerides finish loading. Appending (instead
+    // of a full buildIndex() rebuild) keeps the session to a single videos.json
+    // request — issue #6.
     satellitesLoadedPromise.then(() => {
-      buildIndex().then((updatedIndex) => {
-        searchIndex = updatedIndex;
-        console.log(`Search index rebuilt with satellites: ${updatedIndex.length} items`);
-      });
+      searchIndex = [...searchIndex, ...buildSatelliteItems()];
+      console.log(`Search index appended satellites: ${searchIndex.length} items`);
+
+      // Retry a queued URL deep-link (e.g. ?object=ISS) now that satellites exist.
+      if (pendingUrlObject) {
+        const found = searchUI.navigateToObject(pendingUrlObject);
+        if (found) {
+          console.log(`Navigated to object from URL: ${pendingUrlObject}`);
+        } else {
+          console.warn(`Object not found in search index: ${pendingUrlObject}`);
+        }
+        pendingUrlObject = null;
+      }
     });
   });
 
