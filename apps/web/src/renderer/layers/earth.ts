@@ -4,10 +4,21 @@
  * Renders Earth as a sphere for Hubble view mode,
  * positioned in the nadir direction (below the satellite observer).
  * Features day/night terminator with city lights on the dark side.
+ *
+ * Also renders Hubble's orbital-mechanics constraint overlays (issue #51):
+ * - Sun avoidance zone: the ~50° exclusion cone around the Sun that HST cannot
+ *   point toward (bright-object / solar avoidance).
+ * - South Atlantic Anomaly (SAA): the region of trapped radiation over the
+ *   South Atlantic that HST passes through in low Earth orbit, highlighted on
+ *   the Earth's surface (it rotates with the Earth).
+ * - Orbital path: a schematic ring showing HST's ~28.5°-inclination low Earth
+ *   orbit around the Earth.
  */
 
 import * as THREE from "three";
+import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { computeGMST } from "../../geometry/time";
+import { SKY_RADIUS } from "../constants";
 import {
   earthVertexShader,
   earthFragmentShader,
@@ -21,6 +32,86 @@ const EARTH_DISTANCE = 35;        // Distance from camera toward nadir
 const CLOUD_ALTITUDE = 1.008;     // Cloud layer at 0.8% above surface
 const CLOUD_DRIFT_RATE = 0.02;    // Clouds drift at 2% of Earth's rotation (eastward)
 
+// --- Hubble orbital-constraint overlay configuration (issue #51) ---
+
+// HST solar avoidance: the telescope cannot point within ~50° of the Sun.
+const HUBBLE_SUN_AVOIDANCE_DEG = 50;
+const HUBBLE_SUN_AVOIDANCE_RAD = (HUBBLE_SUN_AVOIDANCE_DEG * Math.PI) / 180;
+
+// South Atlantic Anomaly: centered roughly over the South Atlantic, off the
+// coast of Brazil. Represented as a highlighted cap on the Earth's surface.
+const SAA_CENTER_LAT_DEG = -25;
+const SAA_CENTER_LON_DEG = -45;
+const SAA_ANGULAR_RADIUS_DEG = 22;
+
+// HST low Earth orbit: ~540 km altitude, 28.5° inclination. The orbit radius is
+// scaled relative to the visual Earth radius so the ring hugs the sphere the way
+// a real LEO orbit hugs the Earth.
+const EARTH_MEAN_RADIUS_KM = 6371;
+const HUBBLE_ORBIT_ALTITUDE_KM = 540;
+const HUBBLE_ORBIT_INCLINATION_DEG = 28.5;
+const HUBBLE_ORBIT_RADIUS =
+  (EARTH_RADIUS * (EARTH_MEAN_RADIUS_KM + HUBBLE_ORBIT_ALTITUDE_KM)) /
+  EARTH_MEAN_RADIUS_KM;
+
+// Sun avoidance zone shader: renders a translucent warning cone on the sky
+// sphere within HUBBLE_SUN_AVOIDANCE_RAD of the Sun direction (mirrors the JWST
+// field-of-regard overlay). The camera sits at the origin, so the Sun's apparent
+// sky direction is just normalize(sunPosition).
+const sunAvoidanceVertexShader = `
+varying vec3 vPosition;
+
+void main() {
+  vPosition = position;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const sunAvoidanceFragmentShader = `
+uniform vec3 uSunDirection;
+uniform float uHalfAngle;
+
+varying vec3 vPosition;
+
+void main() {
+  vec3 viewDir = normalize(vPosition);
+  float cosAngle = dot(viewDir, uSunDirection);
+  float angle = acos(clamp(cosAngle, -1.0, 1.0));
+
+  // Only show within the avoidance zone
+  if (angle > uHalfAngle) {
+    discard;
+  }
+
+  // Quadratic falloff, brightest at the Sun, fading to the cone edge
+  float t = angle / uHalfAngle;
+  float alpha = (1.0 - t * t) * 0.22;
+  vec3 color = mix(vec3(1.0, 0.3, 0.1), vec3(1.0, 0.6, 0.2), t);
+
+  gl_FragColor = vec4(color, alpha);
+}
+`;
+
+/**
+ * Convert a geographic latitude/longitude to a unit direction in the Earth
+ * mesh's local frame (the frame the day/night texture is mapped in, before the
+ * GMST rotation is applied). Derived from the Three.js SphereGeometry UV mapping:
+ * longitude 0 (prime meridian) maps to +X, and longitude increases eastward
+ * toward -Z. Latitude maps to +Y at the north pole.
+ *
+ * Exported for testing.
+ */
+export function geoToLocalDirection(latDeg: number, lonDeg: number): THREE.Vector3 {
+  const latRad = (latDeg * Math.PI) / 180;
+  const lonRad = (lonDeg * Math.PI) / 180;
+  const cosLat = Math.cos(latRad);
+  return new THREE.Vector3(
+    cosLat * Math.cos(lonRad),
+    Math.sin(latRad),
+    -cosLat * Math.sin(lonRad)
+  ).normalize();
+}
+
 // Module-level scratch vectors/quaternion reused every frame to avoid per-call
 // heap allocations in the hot Hubble render path.
 const _tempDir = new THREE.Vector3();      // updatePosition: nadir direction
@@ -28,6 +119,10 @@ const _rayDir = new THREE.Vector3();       // isOccluded: ray direction (per lab
 const _sunDir = new THREE.Vector3();       // updateSunDirection: Earth->Sun
 const _up = new THREE.Vector3(0, 0, 1);    // updateSunDirection: terminator normal basis
 const _quat = new THREE.Quaternion();      // updateSunDirection: terminator orientation
+const _sunSkyDir = new THREE.Vector3();    // updateSunDirection: Sun sky direction from origin
+const _saaWorld = new THREE.Vector3();     // updateSunDirection: SAA label world position
+const _saaNormal = new THREE.Vector3();    // updateSunDirection: SAA outward surface normal
+const _toCamera = new THREE.Vector3();     // updateSunDirection: SAA -> camera direction
 
 export interface EarthLayer {
   /** The group containing all Earth elements */
@@ -173,6 +268,97 @@ export function createEarthLayer(
   terminatorLine.computeLineDistances(); // Required for dashed lines
   group.add(terminatorLine);
 
+  // --- Hubble orbital-constraint overlays (issue #51) ---
+  // NOTE: The existing updateRotation()/updateSunDirection() read the first four
+  // group children by index (earthMesh, atmosphere, cloud, terminator). All new
+  // overlay objects below are either children of earthMesh (SAA) or appended
+  // after index 3 (orbit ring) or added to the scene (sun avoidance), so those
+  // index lookups remain valid.
+
+  // Sun avoidance zone: a translucent cone on the sky sphere around the Sun that
+  // HST cannot point toward. Centered on the camera (origin), so it is added to
+  // the scene rather than the nadir-translated Earth group.
+  const sunAvoidanceGeometry = new THREE.SphereGeometry(SKY_RADIUS - 2, 64, 32);
+  const sunAvoidanceMaterial = new THREE.ShaderMaterial({
+    vertexShader: sunAvoidanceVertexShader,
+    fragmentShader: sunAvoidanceFragmentShader,
+    uniforms: {
+      uSunDirection: { value: new THREE.Vector3(1, 0, 0) },
+      uHalfAngle: { value: HUBBLE_SUN_AVOIDANCE_RAD },
+    },
+    transparent: true,
+    side: THREE.BackSide, // Render the inside of the sphere (camera is inside)
+    depthTest: false,
+    depthWrite: false,
+  });
+  const sunAvoidanceZone = new THREE.Mesh(sunAvoidanceGeometry, sunAvoidanceMaterial);
+  sunAvoidanceZone.renderOrder = -1; // Behind everything, occluded by opaque Earth
+  sunAvoidanceZone.visible = false;
+  scene.add(sunAvoidanceZone);
+
+  // Orbital path: a schematic ring around the Earth in HST's ~28.5°-inclination
+  // low Earth orbit. Added to the Earth group (not earthMesh) so it follows the
+  // Earth's position and celestial-north alignment but does NOT spin with the
+  // surface (an orbit is fixed in inertial space, not Earth-fixed). The line of
+  // nodes is drawn along the group's local X axis; RAAN precession is not
+  // modeled, so the ring shows the orbit's inclination rather than its exact
+  // instantaneous orientation.
+  const orbitRingGeometry = new THREE.TorusGeometry(
+    HUBBLE_ORBIT_RADIUS,
+    0.12, // tube radius (thin ring)
+    8,
+    128
+  );
+  const orbitRingMaterial = new THREE.MeshBasicMaterial({
+    color: 0x66ccff,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+  });
+  const orbitRing = new THREE.Mesh(orbitRingGeometry, orbitRingMaterial);
+  // Torus lies in its local XY plane (normal +Z); rotate it into the equatorial
+  // XZ plane (normal +Y) so it circles the poles correctly.
+  orbitRing.rotation.x = Math.PI / 2;
+  const orbitPlane = new THREE.Group();
+  orbitPlane.add(orbitRing);
+  // Tilt the whole plane by the orbital inclination about the local X (nodes) axis.
+  orbitPlane.rotation.x = (HUBBLE_ORBIT_INCLINATION_DEG * Math.PI) / 180;
+  group.add(orbitPlane);
+
+  // South Atlantic Anomaly: a highlighted cap on the Earth's surface. Added as a
+  // child of earthMesh so it rotates with the surface (GMST) and sits at the
+  // correct geographic location. The disc is depth-tested against the opaque
+  // Earth, so it is automatically hidden when it rotates to the far side.
+  const saaDir = geoToLocalDirection(SAA_CENTER_LAT_DEG, SAA_CENTER_LON_DEG);
+  const saaCapRadius = EARTH_RADIUS * Math.sin((SAA_ANGULAR_RADIUS_DEG * Math.PI) / 180);
+  const saaGeometry = new THREE.CircleGeometry(saaCapRadius, 48);
+  const saaMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff3344,
+    transparent: true,
+    opacity: 0.28,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const saaPatch = new THREE.Mesh(saaGeometry, saaMaterial);
+  // Lift slightly above the surface to avoid z-fighting, and orient the disc so
+  // its +Z normal points outward along the SAA direction.
+  saaPatch.position.copy(saaDir).multiplyScalar(EARTH_RADIUS * 1.003);
+  saaPatch.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), saaDir);
+  earthMesh.add(saaPatch);
+
+  // SAA label (CSS2D). CSS labels ignore depth, so its visibility is culled
+  // manually each frame based on whether the SAA faces the camera.
+  const saaLabelDiv = document.createElement("div");
+  saaLabelDiv.className = "body-label saa-label";
+  saaLabelDiv.textContent = "SAA";
+  saaLabelDiv.style.color = "#ff8080";
+  saaLabelDiv.style.fontSize = "10px";
+  saaLabelDiv.style.pointerEvents = "none";
+  const saaLabel = new CSS2DObject(saaLabelDiv);
+  saaLabel.layers.set(0);
+  saaLabel.position.copy(saaDir).multiplyScalar(EARTH_RADIUS * 1.02);
+  earthMesh.add(saaLabel);
+
   // Track current positioning state
   let hasBeenPositioned = false;
 
@@ -238,6 +424,10 @@ export function createEarthLayer(
 
   function setVisible(visible: boolean): void {
     group.visible = visible;
+
+    // The sun avoidance zone lives on the scene (centered at the camera), so its
+    // visibility is not inherited from the Earth group and must be set directly.
+    sunAvoidanceZone.visible = visible;
 
     // Load the Earth textures on the first activation (issue #5).
     if (visible) {
@@ -324,6 +514,22 @@ export function createEarthLayer(
     // Create a quaternion that rotates from +Z (initial normal) to sunDir
     const quaternion = _quat.setFromUnitVectors(_up, sunDir);
     terminatorLine.quaternion.copy(quaternion);
+
+    // Update the Sun avoidance zone (issue #51). From the telescope at the origin
+    // the Sun's apparent sky direction is normalize(sunPosition) (the incoming
+    // sunPosition is already scaled onto the sky sphere from the origin).
+    _sunSkyDir.copy(sunPosition).normalize();
+    sunAvoidanceMaterial.uniforms.uSunDirection.value.copy(_sunSkyDir);
+
+    // Cull the SAA label (CSS2D ignores depth): show it only when the SAA faces
+    // the camera. earthMesh carries the current GMST rotation, so use its world
+    // matrix to find the label's world position and surface normal.
+    saaLabel.updateWorldMatrix(true, false);
+    _saaWorld.setFromMatrixPosition(saaLabel.matrixWorld);
+    _saaNormal.copy(_saaWorld).sub(group.position).normalize(); // outward normal
+    _toCamera.copy(_saaWorld).multiplyScalar(-1).normalize();   // SAA -> origin (camera)
+    const saaFacesCamera = _toCamera.dot(_saaNormal) > 0.05;
+    saaLabelDiv.style.opacity = saaFacesCamera ? "1" : "0";
   }
 
   function isOccluded(position: THREE.Vector3): boolean {
