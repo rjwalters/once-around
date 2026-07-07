@@ -2270,6 +2270,158 @@ export const PALE_BLUE_DOT_TOUR: TourDefinition = {
 };
 
 /**
+ * Space Mission Moments Tour
+ *
+ * Two moments when a spacecraft turned its camera back toward home and changed
+ * how humanity sees itself:
+ *
+ *   Act 1 - 24 December 1968, "Earthrise" (Apollo 8).
+ *     The first crewed mission to leave Earth's gravity and orbit the Moon.
+ *     On the fourth of ten lunar orbits, as the command module came around from
+ *     the far side, the crew watched Earth climb above the lunar horizon. Bill
+ *     Anders photographed it (frame AS8-14-2383) at ~16:40 UTC - the "Earthrise"
+ *     image widely credited with launching the modern environmental movement.
+ *     That evening the crew read from Genesis in a live Christmas Eve broadcast.
+ *
+ *   Act 2 - 14 February 1990, "Pale Blue Dot" (Voyager 1).
+ *     From ~40 AU (6 billion km), Voyager 1 turned back for a family portrait of
+ *     the solar system. Earth is a single pixel caught in a scattered sunbeam -
+ *     the image that inspired Carl Sagan's meditation on our place in the cosmos.
+ *
+ * VIEWPOINT / HONEST-SCOPING DESIGN (see also HISTORICAL_ECLIPSES_TOUR):
+ *
+ *   Both are fundamentally *viewpoint* moments - one from lunar orbit, one from
+ *   deep space - and this simulator's honest capabilities differ between them:
+ *
+ *   - Apollo 8 is scoped to EARTH-BASED framing. The engine has no lunar-surface
+ *     horizon and no Apollo 8 ephemeris, so it cannot place the camera in lunar
+ *     orbit to reproduce the astronauts' view of Earth rising over the Moon's
+ *     limb. What it CAN do faithfully is point at the Moon from Earth at the
+ *     exact instants of the mission (the Moon's 1968 position is well within the
+ *     engine's accurate range). Act 1 therefore shows where the Moon rode in our
+ *     sky that Christmas Eve - the world Apollo 8 was circling - and a caption
+ *     states plainly that the astronauts' lunar-orbit viewpoint is beyond what an
+ *     Earth-based simulator can render. No faked Earthrise is displayed.
+ *
+ *   - Pale Blue Dot IS reproduced from the remote viewpoint, because the data
+ *     exists: Voyager 1's heliocentric position on 1990-02-14 and the matching
+ *     body positions are tabulated (spacecraftPositions.ts), and the remote-view
+ *     layer renders the actual photograph with accurate body dots. Act 2 reuses
+ *     that proven mechanism (viewpoint type 'spacecraft', voyager1).
+ *
+ *   The whole tour runs in geocentric view: Act 1 points at the Moon geocentric-
+ *   ally, and Act 2's remote viewpoint requires geocentric to render correctly.
+ */
+export const SPACE_MISSION_MOMENTS_TOUR: TourDefinition = {
+  id: 'space-mission-moments',
+  name: 'Space Mission Moments',
+  description: 'Two cameras turned toward home: Apollo 8 Earthrise (1968) and Voyager 1 Pale Blue Dot (1990)',
+  viewMode: 'geocentric',  // Act 1 points at the Moon; Act 2's remote viewpoint needs geocentric
+  keyframes: [
+    // ---- Act 1: 24 December 1968 - Apollo 8 "Earthrise" ----
+    {
+      // Point at the Moon from Earth. Apollo 8 is in orbit around this Moon,
+      // having become the first crewed craft to leave Earth's gravity well.
+      // (Engine computes the Moon's 1968 position; no lunar-orbit viewpoint.)
+      target: 'moon',
+      fov: 45,
+      datetime: '1968-12-24T12:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      caption: 'Christmas Eve, 1968. Three astronauts - Borman, Lovell and Anders - are the first humans ever to orbit the Moon. This is the Moon they are circling, seen from the world they left behind.',
+    },
+    {
+      target: 'moon',
+      fov: 22,
+      datetime: '1968-12-24T16:40:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'On their fourth orbit, coming around from the far side, the crew watch Earth climb above the lunar horizon. Bill Anders grabs a camera: "Oh my God! Look at that picture over there!"',
+    },
+    {
+      target: 'moon',
+      fov: 12,
+      datetime: '1968-12-24T16:40:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2500,
+      timeMode: 'instant',
+      caption: 'His photograph - "Earthrise" - shows our whole world rising over a dead grey plain, and helps launch the modern environmental movement. From Earth we can point at the Moon, but the astronauts\' view from lunar orbit is beyond what this simulator can render.',
+    },
+    {
+      target: 'moon',
+      fov: 35,
+      datetime: '1968-12-25T03:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'That evening, orbiting the Moon, the crew read from the Book of Genesis in a live broadcast to the largest television audience in history - and wished everyone "on the good Earth" a merry Christmas.',
+    },
+    // ---- Act 2: 14 February 1990 - Voyager 1 "Pale Blue Dot" ----
+    {
+      // Jump 21 years forward. Voyager 1, launched months before Apollo's
+      // successors ended, is now far beyond the planets. Wide outer-system
+      // context before turning the camera around.
+      target: 'saturn',
+      fov: 30,
+      datetime: '1990-02-14T02:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      caption: '14 February 1990. Twenty-one years later, Voyager 1 has crossed the outer solar system - now some 6 billion kilometres from home, beyond the orbit of Neptune.',
+    },
+    {
+      // Turn the camera back toward the inner solar system from Voyager 1.
+      // From Voyager's position (-26.67, 28.57, 12.31) AU the Sun lies at
+      // ~RA 321°, Dec -33°. Remote viewpoint renders the real photograph.
+      ra: 321,
+      dec: -33,
+      fov: 60,
+      datetime: '1990-02-14T04:48:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      viewpoint: { type: 'spacecraft', spacecraft: 'voyager1' },
+      caption: 'Carl Sagan persuades NASA to turn Voyager\'s camera backward for one last portrait of home. The Sun shrinks to a brilliant star; the planets are scattered points of light.',
+    },
+    {
+      ra: 321,
+      dec: -33,
+      fov: 12,
+      datetime: '1990-02-14T04:48:00Z',
+      holdDuration: 6000,
+      transitionDuration: 3000,
+      timeMode: 'instant',
+      viewpoint: { type: 'spacecraft', spacecraft: 'voyager1' },
+      caption: 'Earth is a single pale blue point, caught by chance in a scattered ray of sunlight. "Look again at that dot. That\'s here. That\'s home. That\'s us."',
+    },
+    {
+      ra: 321,
+      dec: -33,
+      fov: 5,
+      datetime: '1990-02-14T04:48:00Z',
+      holdDuration: 7000,
+      transitionDuration: 2500,
+      timeMode: 'instant',
+      viewpoint: { type: 'spacecraft', spacecraft: 'voyager1' },
+      caption: '"Everyone you love, everyone you know, everyone you ever heard of... lived there on a mote of dust suspended in a sunbeam."',
+    },
+    {
+      // Return to Earth's sky (geocentric) to close.
+      target: 'sun',
+      fov: 30,
+      datetime: '1990-02-14T06:00:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      // No viewpoint = back to geocentric
+      caption: 'From lunar orbit and from the edge of the planets, both cameras found the same subject: a small blue world, and everyone who has ever lived, alone in the dark.',
+    },
+  ],
+};
+
+/**
  * All predefined tours.
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
@@ -2295,6 +2447,7 @@ export const PREDEFINED_TOURS: TourDefinition[] = [
   NEPTUNE_DISCOVERY_TOUR,
   PLUTO_DISCOVERY_TOUR,
   PALE_BLUE_DOT_TOUR,
+  SPACE_MISSION_MOMENTS_TOUR,
 ];
 
 /**
