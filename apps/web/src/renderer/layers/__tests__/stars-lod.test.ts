@@ -9,6 +9,7 @@ import {
   LOD_MAX_STARS_WIDE_FOV,
   LOD_MAX_STARS_MEDIUM_FOV,
   LOD_MAX_STARS_NARROW_FOV,
+  STARS_CATALOG_CAPACITY,
 } from "../../constants";
 
 describe("computeFovLodBucket", () => {
@@ -70,6 +71,40 @@ describe("computeTargetStars", () => {
     const wideCount = computeTargetStars(90, wide, medium, narrow);
     expect(narrowCount).toBeGreaterThanOrEqual(mediumCount);
     expect(mediumCount).toBeGreaterThanOrEqual(wideCount);
+  });
+
+  // INVARIANT: bucket-1 (medium FOV, 40 < fov <= 70) rebuild-skip losslessness.
+  //
+  // The FOV-bucket skip key (computeFovLodBucket) reuses the last rebuild's
+  // geometry for any time/zoom-only change that stays within the same bucket.
+  // For that reuse to be visually lossless, the *rendered* star set must be
+  // constant across the entire bucket. In bucket 1, computeTargetStars
+  // interpolates the target count from LOD_MAX_STARS_MEDIUM_FOV (at fov=70,
+  // t=1 — the MINIMUM of the range) up to LOD_MAX_STARS_NARROW_FOV (near
+  // fov=40). Losslessness holds only because this minimum target still exceeds
+  // the visible catalog, so faintProbability saturates to 1.0 everywhere in the
+  // bucket → all visible stars always render → the set is genuinely constant.
+  //
+  // fov=70 is the critical point: it yields the smallest target in bucket 1
+  // (exactly LOD_MAX_STARS_MEDIUM_FOV). If that value ever drops below
+  // STARS_CATALOG_CAPACITY (or the catalog grows past it), faintProbability
+  // stops saturating, bucket 1 develops real within-bucket count variation, and
+  // the skip logic would render a stale star set during smooth medium-FOV zoom
+  // (stars appearing/disappearing late) — exactly the staleness bug the skip
+  // mechanism exists to avoid.
+  //
+  // REMEDIATION if this guard ever fails: either raise LOD_MAX_STARS_MEDIUM_FOV
+  // back above STARS_CATALOG_CAPACITY, OR add a coarse target-star-count band to
+  // StarRebuildKey so bucket-1 interpolation crossings force a rebuild.
+  it("keeps bucket-1 skips lossless: min medium-FOV target (fov=70) >= catalog capacity", () => {
+    expect(
+      computeTargetStars(
+        70,
+        LOD_MAX_STARS_WIDE_FOV,
+        LOD_MAX_STARS_MEDIUM_FOV,
+        LOD_MAX_STARS_NARROW_FOV
+      )
+    ).toBeGreaterThanOrEqual(STARS_CATALOG_CAPACITY);
   });
 });
 
