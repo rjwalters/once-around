@@ -588,6 +588,10 @@ export function createCelestialControls(
     };
   }
 
+  function getFov(): number {
+    return camera.fov;
+  }
+
   function setCameraState(state: CameraState): void {
     viewQuaternion.set(
       state.quaternion.x,
@@ -803,6 +807,7 @@ export function createCelestialControls(
     lookAtRaDec,
     animateToRaDec,
     getCameraState,
+    getFov,
     setCameraState,
     getRaDec,
     setQuaternion,

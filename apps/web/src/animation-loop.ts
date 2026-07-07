@@ -7,7 +7,7 @@ import { getHeliocentricPositions } from "./spacecraftPositions";
 export interface AnimationLoopDependencies {
   controls: {
     update: () => void;
-    getCameraState: () => { fov: number; quaternion: { x: number; y: number; z: number; w: number } };
+    getFov: () => number;
   };
   tourEngine: {
     update: () => void;
@@ -125,7 +125,7 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     }
 
     // Update deep fields visibility based on current FOV
-    const currentFov = controls.getCameraState().fov;
+    const currentFov = controls.getFov();
     renderer.updateDeepFields(currentFov);
 
     // Update remote view (for tour viewpoints like Pale Blue Dot)

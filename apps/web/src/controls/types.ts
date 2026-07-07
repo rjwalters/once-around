@@ -36,6 +36,8 @@ export interface CelestialControls {
   lookAtRaDec(ra: number, dec: number): void;
   animateToRaDec(ra: number, dec: number, durationMs?: number): void;
   getCameraState(): CameraState;
+  /** Get the current field of view in degrees (avoids building a CameraState object). */
+  getFov(): number;
   setCameraState(state: CameraState): void;
   getRaDec(): { ra: number; dec: number };
   setQuaternion(quaternion: THREE.Quaternion): void;
