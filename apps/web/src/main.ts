@@ -149,6 +149,7 @@ async function main(): Promise<void> {
   // from the view-mode change callback (which is defined before creation).
   let guideStarLockRef: {
     onViewModeChange: (mode: 'geocentric' | 'topocentric' | 'hubble' | 'jwst') => void;
+    release: () => void;
   } | null = null;
 
   // Track current date (set later after initialization)
@@ -170,6 +171,11 @@ async function main(): Promise<void> {
       const magInput = document.getElementById("magnitude") as HTMLInputElement | null;
       return magInput ? parseFloat(magInput.value) : 6.5;
     },
+    // Release any FGS guide-star lock when a tour starts: most tours carry no
+    // viewMode, so the view-mode-change release path never fires, and a lingering
+    // lock would keep snapping the camera back onto the guide star during the
+    // tour's keyframe dwells.
+    onTourStart: () => guideStarLockRef?.release(),
   });
 
   // Add listeners for user interactions that should pause tour
