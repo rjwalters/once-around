@@ -14,7 +14,7 @@ import { moonVertexShader, moonFragmentShader, texturedPlanetVertexShader, textu
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { calculateLabelOffsetInPlace } from "../utils/labels";
 import { smoothstep } from "../utils/math";
-import { createGlowSpriteMaterial, createTexturedPlanetMaterial, loadTextureWithColorSpace } from "../utils/materials";
+import { createGlowSpriteMaterial, createTexturedPlanetMaterial } from "../utils/materials";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -67,12 +67,36 @@ export interface BodiesLayer {
 }
 
 /**
+ * A tiny 1×1 gray texture used as a placeholder for the dwarf-planet materials
+ * until their real (multi-MB) surface textures are lazy-loaded on first LOD
+ * crossover into disk range (issue #5). Sampling it is harmless: the LOD shader
+ * only blends the texture in above ~10 px, well past the point the real texture
+ * has loaded.
+ */
+function createPlaceholderTexture(): THREE.Texture {
+  const tex = new THREE.DataTexture(
+    new Uint8Array([128, 128, 128, 255]),
+    1,
+    1,
+    THREE.RGBAFormat
+  );
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * Create the celestial bodies layer.
  * @param scene - The Three.js scene to add meshes to
  * @param labelsGroup - The group to add body labels to
+ * @param onTextureLoad - Called when a lazily-loaded dwarf-planet texture arrives,
+ *   so a render-on-demand scene repaints on an otherwise static frame (PR #31).
  * @returns BodiesLayer interface
  */
-export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group): BodiesLayer {
+export function createBodiesLayer(
+  scene: THREE.Scene,
+  labelsGroup: THREE.Group,
+  onTextureLoad?: () => void
+): BodiesLayer {
   // ---------------------------------------------------------------------------
   // Sun sphere (simple emissive material)
   // ---------------------------------------------------------------------------
@@ -269,12 +293,18 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
 
   // ---------------------------------------------------------------------------
   // Textured meshes for minor bodies with spacecraft imagery (for extreme zoom)
+  //
+  // The Pluto/Ceres/Vesta surface textures (~4.7 MB on disk) are NOT loaded at
+  // construction. The dwarf planets render as sub-pixel points at default FOV,
+  // so the textures only matter after the user zooms in far enough for the disk
+  // to resolve. They are lazy-loaded on the first LOD crossover into disk range
+  // (issue #5). Until then the materials sample a 1×1 gray placeholder.
   // ---------------------------------------------------------------------------
+  const dwarfPlaceholderTexture = createPlaceholderTexture();
 
   // Pluto (index 0) - New Horizons mission
-  const plutoTexture = loadTextureWithColorSpace(textureLoader, "/pluto.jpg");
   const plutoMaterial = createTexturedPlanetMaterial(
-    plutoTexture,
+    dwarfPlaceholderTexture,
     100,
     new THREE.Vector3(0.85, 0.80, 0.75)
   );
@@ -282,9 +312,8 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   scene.add(plutoMesh);
 
   // Ceres (index 1) - Dawn mission
-  const ceresTexture = loadTextureWithColorSpace(textureLoader, "/ceres.jpg");
   const ceresMaterial = createTexturedPlanetMaterial(
-    ceresTexture,
+    dwarfPlaceholderTexture,
     101,
     new THREE.Vector3(0.75, 0.75, 0.70)
   );
@@ -292,9 +321,8 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
   scene.add(ceresMesh);
 
   // Vesta (index 10) - Dawn mission
-  const vestaTexture = loadTextureWithColorSpace(textureLoader, "/vesta.jpg");
   const vestaMaterial = createTexturedPlanetMaterial(
-    vestaTexture,
+    dwarfPlaceholderTexture,
     110,
     new THREE.Vector3(0.80, 0.80, 0.75)
   );
@@ -303,6 +331,34 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
 
   // Collect all minor body materials for scintillation updates
   const minorBodyMaterials = [plutoMaterial, ceresMaterial, vestaMaterial];
+
+  // Lazy-load guard + loader for the dwarf-planet surface textures. Runs once, on
+  // the first LOD crossover into disk range (issue #5).
+  let dwarfTexturesLoaded = false;
+  function ensureDwarfTexturesLoaded(): void {
+    if (dwarfTexturesLoaded) return;
+    dwarfTexturesLoaded = true;
+
+    const loadInto = (url: string, material: THREE.ShaderMaterial): void => {
+      textureLoader.load(
+        url,
+        (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          material.uniforms.planetTexture.value = texture;
+          // Repaint so the newly-arrived texture shows on a static frame (PR #31).
+          onTextureLoad?.();
+        },
+        undefined,
+        () => {
+          console.warn(`Dwarf-planet texture not found: ${url}`);
+        }
+      );
+    };
+
+    loadInto("/pluto.jpg", plutoMaterial);
+    loadInto("/ceres.jpg", ceresMaterial);
+    loadInto("/vesta.jpg", vestaMaterial);
+  }
 
   // ---------------------------------------------------------------------------
   // State
@@ -545,6 +601,15 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
 
       // Textured sphere rendering for minor bodies with spacecraft imagery
       // Pluto (index 0), Ceres (index 1), Vesta (index 10)
+      // Lazy-load their surface textures the first time any of them crosses into
+      // disk range (issue #5) — until then the materials use a gray placeholder.
+      if (
+        (i === 0 || i === 1 || i === 10) &&
+        pixelSize >= LOD_POINT_SOURCE_MAX_PX &&
+        aboveHorizon
+      ) {
+        ensureDwarfTexturesLoaded();
+      }
       if (i === 0) {
         // Pluto - New Horizons
         plutoMesh.position.copy(minorPos);
