@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { geoToLocalDirection } from "./earth";
+import * as THREE from "three";
+import { geoToLocalDirection, eclipseTrackLocalPositions } from "./earth";
+import { ECLIPSE_PATHS, getEclipsePath } from "../../eclipsePaths";
 
 /**
  * geoToLocalDirection maps a geographic lat/lon to a unit direction in the Earth
@@ -57,5 +59,87 @@ describe("geoToLocalDirection", () => {
     expect(saa.y).toBeLessThan(0);
     expect(saa.z).toBeGreaterThan(0);
     expect(saa.x).toBeGreaterThan(0); // still on the near/prime-meridian-facing side
+  });
+});
+
+/**
+ * eclipseTrackLocalPositions turns a catalog eclipse center line into a
+ * surface-hugging polyline in the Earth mesh's local frame. The tracks are
+ * parented to the Earth mesh (issue #67), so these local-frame invariants are
+ * what make the drawn track land over the right part of the globe and stay on
+ * the sphere for correct far-side occlusion.
+ */
+describe("eclipseTrackLocalPositions", () => {
+  const RADIUS = 20;
+  const SPAIN_2026 = "2026-08-12T17:46:06Z";
+  const AUSTRALIA_2028 = "2028-07-22T02:55:36Z";
+
+  function toVectors(positions: Float32Array): THREE.Vector3[] {
+    const out: THREE.Vector3[] = [];
+    for (let i = 0; i < positions.length; i += 3) {
+      out.push(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
+    }
+    return out;
+  }
+
+  it("returns an empty array for an empty center line", () => {
+    expect(eclipseTrackLocalPositions([], RADIUS)).toHaveLength(0);
+  });
+
+  it("keeps every emitted point on the sphere of the requested radius", () => {
+    for (const path of ECLIPSE_PATHS) {
+      const pts = toVectors(eclipseTrackLocalPositions(path.centerLine, RADIUS));
+      expect(pts.length).toBeGreaterThanOrEqual(path.centerLine.length);
+      for (const p of pts) {
+        expect(Math.abs(p.length() - RADIUS)).toBeLessThan(1e-3);
+      }
+    }
+  });
+
+  it("densifies so consecutive points stay within the max angular step", () => {
+    const maxStepDeg = 2;
+    const pts = toVectors(
+      eclipseTrackLocalPositions(getEclipsePath(SPAIN_2026)!.centerLine, RADIUS, maxStepDeg)
+    );
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i].clone().normalize();
+      const b = pts[i + 1].clone().normalize();
+      const gapDeg = (Math.acos(Math.max(-1, Math.min(1, a.dot(b)))) * 180) / Math.PI;
+      // Small epsilon over the target to absorb rounding at segment joins.
+      expect(gapDeg).toBeLessThanOrEqual(maxStepDeg + 1e-6);
+    }
+  });
+
+  it("emits each original center-line vertex exactly", () => {
+    const path = getEclipsePath(SPAIN_2026)!;
+    const pts = toVectors(eclipseTrackLocalPositions(path.centerLine, RADIUS));
+    for (const vertex of path.centerLine) {
+      const expected = geoToLocalDirection(vertex.lat, vertex.lon).multiplyScalar(RADIUS);
+      const hit = pts.some((p) => p.distanceTo(expected) < 1e-3);
+      expect(hit, `vertex ${vertex.lat},${vertex.lon}`).toBe(true);
+    }
+  });
+
+  it("places the 2026 Spain landfall over northern Spain in the local frame", () => {
+    // 43.4N, 6.5W (Asturias coast) — the acceptance landmark. It must sit in the
+    // northern hemisphere (y > 0) and west of the prime meridian (z > 0),
+    // consistent with the mini-map's northern-Spain landfall.
+    const landfall = geoToLocalDirection(43.4, -6.5).multiplyScalar(RADIUS);
+    expect(landfall.y).toBeGreaterThan(0);
+    expect(landfall.z).toBeGreaterThan(0);
+
+    const pts = toVectors(eclipseTrackLocalPositions(getEclipsePath(SPAIN_2026)!.centerLine, RADIUS));
+    expect(pts.some((p) => p.distanceTo(landfall) < 1e-3)).toBe(true);
+  });
+
+  it("puts the 2026 track in the north and the 2028 Australia track in the south", () => {
+    const spain = toVectors(eclipseTrackLocalPositions(getEclipsePath(SPAIN_2026)!.centerLine, RADIUS));
+    const australia = toVectors(
+      eclipseTrackLocalPositions(getEclipsePath(AUSTRALIA_2028)!.centerLine, RADIUS)
+    );
+    // The Spain/Arctic track lives entirely in the northern hemisphere; the
+    // Australia/New Zealand track lives entirely in the southern hemisphere.
+    expect(spain.every((p) => p.y > 0)).toBe(true);
+    expect(australia.every((p) => p.y < 0)).toBe(true);
   });
 });
