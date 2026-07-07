@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { execSync } from "child_process";
 import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
@@ -27,5 +27,12 @@ export default defineConfig({
         },
       },
     },
+  },
+  test: {
+    // Geometry modules are pure math; the node environment runs them cleanly
+    // (no DOM, no WASM). Three.js is only used for vector/quaternion math,
+    // which works under node.
+    environment: "node",
+    include: ["src/**/*.test.ts"],
   },
 });
