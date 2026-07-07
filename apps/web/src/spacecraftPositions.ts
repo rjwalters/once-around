@@ -46,6 +46,12 @@ export const HELIOCENTRIC_POSITIONS: Record<string, Record<string, HeliocentricP
   },
 };
 
+// Cache of built Maps keyed by ISO date (YYYY-MM-DD). The source data is
+// static, so the same date always yields the same Map. This avoids rebuilding
+// a Map (and Object.entries array) on every animation frame while a remote
+// viewpoint is active. Consumers treat the returned Map as read-only.
+const heliocentricMapCache = new Map<string, Map<string, HeliocentricPosition>>();
+
 /**
  * Get heliocentric positions for all bodies on a specific date.
  * @param date - Date to look up
@@ -55,13 +61,20 @@ export function getHeliocentricPositions(
   date: Date
 ): Map<string, HeliocentricPosition> | null {
   const dateKey = date.toISOString().split('T')[0];
-  const positions = HELIOCENTRIC_POSITIONS[dateKey];
 
+  const cached = heliocentricMapCache.get(dateKey);
+  if (cached) {
+    return cached;
+  }
+
+  const positions = HELIOCENTRIC_POSITIONS[dateKey];
   if (!positions) {
     return null;
   }
 
-  return new Map(Object.entries(positions));
+  const map = new Map(Object.entries(positions));
+  heliocentricMapCache.set(dateKey, map);
+  return map;
 }
 
 /**
