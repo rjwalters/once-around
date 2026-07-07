@@ -24,7 +24,7 @@ import {
 } from "../constants";
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
 import { bvToColor, angularSizeToPixels, starIdHash } from "../utils/colors";
-import { calculateLabelOffset } from "../utils/labels";
+import { calculateLabelOffsetInPlace } from "../utils/labels";
 import { createGlowSpriteMaterial } from "../utils/materials";
 import type { LabelManager } from "../label-manager";
 
@@ -505,8 +505,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
       const pos = starPositionMap.get(hr);
       if (pos) {
-        const labelPos = calculateLabelOffset(pos, LABEL_OFFSET);
-        label.position.copy(labelPos);
+        calculateLabelOffsetInPlace(pos, LABEL_OFFSET, label.position);
         label.visible = labelsVisible;
 
         // Register star label with label manager
@@ -517,7 +516,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
           currentLabelManager.registerLabel({
             id: `star-${hr}`,
             objectPos: pos,
-            labelPos: labelPos,
+            labelPos: label.position,
             priority: priority,
             label: label,
             color: starFlagLineColor,

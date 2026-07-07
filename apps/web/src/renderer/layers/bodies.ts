@@ -12,7 +12,7 @@ import { getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getMinorBodie
 import { SKY_RADIUS, BODY_COLORS, BODY_NAMES, LABEL_OFFSET, POINT_SOURCE_MIN_SIZE_PX, MINOR_BODY_NAMES, MINOR_BODY_COLORS, MINOR_BODY_COUNT } from "../constants";
 import { moonVertexShader, moonFragmentShader, texturedPlanetVertexShader, texturedPlanetFragmentShader } from "../shaders";
 import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
-import { calculateLabelOffset } from "../utils/labels";
+import { calculateLabelOffsetInPlace } from "../utils/labels";
 import { smoothstep } from "../utils/math";
 import { createGlowSpriteMaterial, createTexturedPlanetMaterial, loadTextureWithColorSpace } from "../utils/materials";
 import type { LabelManager } from "../label-manager";
@@ -356,8 +356,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const sunAngDiam = angularDiameters[0];
     const sunDisplayScale = angularDiameterToScale(sunAngDiam);
     sunMesh.scale.setScalar(sunDisplayScale);
-    const sunLabelPos = calculateLabelOffset(sunPos, LABEL_OFFSET);
-    bodyLabels[0].position.copy(sunLabelPos);
+    calculateLabelOffsetInPlace(sunPos, LABEL_OFFSET, bodyLabels[0].position);
     // Hide sun if below horizon in topocentric mode
     const sunAboveHorizon = isAboveHorizon(sunPos);
     sunMesh.visible = sunAboveHorizon;
@@ -368,7 +367,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       labelManager.registerLabel({
         id: 'body-sun',
         objectPos: sunPos,
-        labelPos: sunLabelPos,
+        labelPos: bodyLabels[0].position,
         priority: LABEL_PRIORITY.SUN,
         label: bodyLabels[0],
         color: BODY_COLORS[0],
@@ -398,8 +397,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
     const dotProduct = sunDir.dot(moonDir);
     currentSunMoonSeparationDeg = Math.acos(Math.max(-1, Math.min(1, dotProduct))) * (180 / Math.PI);
 
-    const moonLabelPos = calculateLabelOffset(moonPos, LABEL_OFFSET);
-    bodyLabels[1].position.copy(moonLabelPos);
+    calculateLabelOffsetInPlace(moonPos, LABEL_OFFSET, bodyLabels[1].position);
     // Hide moon if below horizon in topocentric mode
     const moonAboveHorizon = isAboveHorizon(moonPos);
     moonMesh.visible = moonAboveHorizon;
@@ -410,7 +408,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       labelManager.registerLabel({
         id: 'body-moon',
         objectPos: moonPos,
-        labelPos: moonLabelPos,
+        labelPos: bodyLabels[1].position,
         priority: LABEL_PRIORITY.MOON,
         label: bodyLabels[1],
         color: BODY_COLORS[1],
@@ -482,8 +480,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       }
 
       // Labels
-      const labelPos = calculateLabelOffset(planetPos, LABEL_OFFSET);
-      bodyLabels[bodyIdx].position.copy(labelPos);
+      calculateLabelOffsetInPlace(planetPos, LABEL_OFFSET, bodyLabels[bodyIdx].position);
       bodyLabels[bodyIdx].visible = planetAboveHorizon;
 
       // Register planet label with label manager
@@ -491,7 +488,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         labelManager.registerLabel({
           id: `body-planet-${bodyIdx}`,
           objectPos: planetPos,
-          labelPos: labelPos,
+          labelPos: bodyLabels[bodyIdx].position,
           priority: LABEL_PRIORITY.PLANET,
           label: bodyLabels[bodyIdx],
           color: BODY_COLORS[bodyIdx],
@@ -596,8 +593,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
       }
 
       // Update label
-      const labelPos = calculateLabelOffset(minorPos, LABEL_OFFSET);
-      minorBodyLabels[i].position.copy(labelPos);
+      calculateLabelOffsetInPlace(minorPos, LABEL_OFFSET, minorBodyLabels[i].position);
       minorBodyLabels[i].visible = aboveHorizon;
 
       // Register minor body label with label manager
@@ -607,7 +603,7 @@ export function createBodiesLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         labelManager.registerLabel({
           id: `body-minor-${i}`,
           objectPos: minorPos,
-          labelPos: labelPos,
+          labelPos: minorBodyLabels[i].position,
           priority: priority,
           label: minorBodyLabels[i],
           color: MINOR_BODY_COLORS[i],

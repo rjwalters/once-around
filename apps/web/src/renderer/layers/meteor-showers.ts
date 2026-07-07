@@ -17,7 +17,7 @@ import {
 } from "../../meteorShowerData";
 import { SKY_RADIUS, LABEL_OFFSET } from "../constants";
 import { raDecToPosition } from "../utils/coordinates";
-import { calculateLabelOffset } from "../utils/labels";
+import { calculateLabelOffsetInPlace } from "../utils/labels";
 import type { LabelManager } from "../label-manager";
 import { LABEL_PRIORITY } from "../label-manager";
 
@@ -169,8 +169,7 @@ export function createMeteorShowerLayer(
         // Update label
         const label = labels.get(shower.id);
         if (label) {
-          const labelPos = calculateLabelOffset(pos, LABEL_OFFSET * 0.6);
-          label.position.copy(labelPos);
+          calculateLabelOffsetInPlace(pos, LABEL_OFFSET * 0.6, label.position);
 
           // Show ZHR and peak indicator in label
           const div = label.element as HTMLDivElement;
@@ -192,7 +191,7 @@ export function createMeteorShowerLayer(
             labelManager.registerLabel({
               id: `meteor-shower-${shower.id}`,
               objectPos: pos,
-              labelPos: labelPos,
+              labelPos: label.position,
               priority: LABEL_PRIORITY.METEOR_SHOWER,
               label: label,
               color: color,

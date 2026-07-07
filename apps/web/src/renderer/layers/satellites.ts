@@ -17,7 +17,7 @@ import type { SkyEngine } from "../../wasm/sky_engine";
 import { getSatellitePosition, SATELLITES, type SatelliteInfo } from "../../engine";
 import { SKY_RADIUS, LABEL_OFFSET } from "../constants";
 import { rustToThreeJS } from "../utils/coordinates";
-import { calculateLabelOffset } from "../utils/labels";
+import { calculateLabelOffsetInPlace } from "../utils/labels";
 import { smoothstep } from "../utils/math";
 import { createGlowSpriteMaterial } from "../utils/materials";
 import type { LabelManager } from "../label-manager";
@@ -373,8 +373,7 @@ function updateSatellite(
 
   // Update label
   if (labelsVisible) {
-    const labelPos = calculateLabelOffset(satPos, LABEL_OFFSET);
-    label.position.copy(labelPos);
+    calculateLabelOffsetInPlace(satPos, LABEL_OFFSET, label.position);
     label.visible = true;
 
     // Register satellite label with label manager
@@ -382,7 +381,7 @@ function updateSatellite(
       labelManager.registerLabel({
         id: `satellite-${info.index}`,
         objectPos: satPos,
-        labelPos: labelPos,
+        labelPos: label.position,
         priority: LABEL_PRIORITY.SATELLITE,
         label: label,
         color: color,
