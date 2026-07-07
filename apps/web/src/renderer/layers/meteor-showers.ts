@@ -191,9 +191,11 @@ export function createMeteorShowerLayer(
           if (visible && labelsVisible && labelManager) {
             labelManager.registerLabel({
               id: `meteor-shower-${shower.id}`,
-              worldPos: labelPos,
+              objectPos: pos,
+              labelPos: labelPos,
               priority: LABEL_PRIORITY.METEOR_SHOWER,
               label: label,
+              color: color,
             });
           }
         }

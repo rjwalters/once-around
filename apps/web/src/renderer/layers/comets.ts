@@ -94,9 +94,11 @@ export function createCometsLayer(scene: THREE.Scene, labelsGroup: THREE.Group):
         if (labelManager) {
           labelManager.registerLabel({
             id: `comet-${i}`,
-            worldPos: labelPos,
+            objectPos: cometPos,
+            labelPos: labelPos,
             priority: LABEL_PRIORITY.COMET,
             label: labels[i],
+            color: new THREE.Color(COMET_COLOR),
           });
         }
 
