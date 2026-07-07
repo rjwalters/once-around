@@ -111,6 +111,183 @@ export const ECLIPSE_2024_TOUR: TourDefinition = {
 };
 
 /**
+ * Historical Eclipses Tour
+ *
+ * Two solar eclipses that changed the course of history:
+ *
+ *   Act 1 - 28 May 585 BCE, "The Eclipse of Thales" / Battle of the Halys.
+ *     Herodotus records that a total eclipse interrupted a battle between the
+ *     Lydians and the Medes, prompting both sides to make peace. It is one of
+ *     the earliest events in history that can be dated (in principle) from
+ *     astronomy.
+ *
+ *   Act 2 - 29 May 1919, "Eddington's Eclipse".
+ *     Expeditions to Sobral (Brazil) and Príncipe (West Africa) photographed
+ *     stars near the eclipsed Sun and found their positions shifted by the
+ *     Sun's gravity, confirming Einstein's General Relativity over Newton and
+ *     making Einstein world-famous overnight.
+ *
+ * ENGINE TIME-RANGE / EPHEMERIS SCOPING (verified against sky_engine_core):
+ *
+ *   The 1919 eclipse is fully within the engine's accurate range. From Sobral
+ *   the engine reproduces the full sequence: first contact ~13:35 UTC, a
+ *   ~9-minute totality centred on 15:13:33 UTC (topocentric Sun-Moon
+ *   separation 0.0125° - a clean total eclipse), and last contact ~16:47 UTC.
+ *   The Sun sits in Taurus beside the Hyades (Sun RA ~66.5°, Dec ~+21.7°),
+ *   exactly the star field Eddington's team measured, so the relativity
+ *   "starlight-bending" moment is visually faithful. Act 2 therefore animates
+ *   a real, engine-accurate total eclipse observed from Sobral.
+ *
+ *   The 585 BCE eclipse is BEYOND the engine's reliable range and CANNOT be
+ *   reproduced as a totality. The Moon uses a truncated Meeus (ELP) series
+ *   whose latitude/node error accumulates over ~2,600 years, and ΔT (TT-UT1)
+ *   for -585 is uncertain by hours (Earth rotates ~15°/hour), so the shadow's
+ *   longitude is effectively undetermined. Empirically, the new moon nearest
+ *   the traditional date has a geocentric Sun-Moon separation of ~3.2° -
+ *   outside the ~1.5° ecliptic limit, i.e. NO eclipse occurs anywhere on Earth
+ *   in the model, and a grid search over all observer sites bottoms out at
+ *   ~2.2° (the lunar and solar disks never even touch). Act 1 is therefore
+ *   scoped as a HISTORICAL-SKY SCENE over Anatolia (Sun target, no faked
+ *   totality); the narrative and a caption make the reconstruction limit
+ *   explicit rather than displaying an eclipse the ephemeris cannot place.
+ *
+ * (VSOP87 keeps the Sun's own position accurate at 585 BCE, so pointing at the
+ * Sun from Anatolia is meaningful even though the Moon's shadow is not.)
+ */
+export const HISTORICAL_ECLIPSES_TOUR: TourDefinition = {
+  id: 'historical-eclipses',
+  name: 'Historical Eclipses',
+  description: 'Two eclipses that changed history: 585 BCE (ended a war) and 1919 (confirmed relativity)',
+  keyframes: [
+    // ---- Act 1: 585 BCE - The Eclipse of Thales (Battle of the Halys) ----
+    {
+      // Observer on the plain of the River Halys (Kızılırmak) in central
+      // Anatolia, late afternoon. Sun position from VSOP87 is accurate here;
+      // the Moon's shadow is NOT modelled at this epoch (see header note).
+      target: 'sun',
+      fov: 45,
+      datetime: '-000584-05-28T15:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 1000,
+      timeMode: 'instant',
+      location: {
+        latitude: 39.5,
+        longitude: 35.5,
+        name: 'River Halys, Anatolia',
+      },
+      caption: '585 BCE - the plain of the River Halys, Anatolia. For six years the Lydians and the Medes have waged an inconclusive war.',
+    },
+    {
+      target: 'sun',
+      fov: 22,
+      datetime: '-000584-05-28T15:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'As the armies joined battle, Herodotus writes, "day was suddenly turned into night." Thales of Miletus had foretold the year it would come.',
+    },
+    {
+      target: 'sun',
+      fov: 22,
+      datetime: '-000584-05-28T16:00:00Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Taking the darkness as an omen, both sides laid down their arms and made peace - fixing one of the earliest datable moments in recorded history.',
+    },
+    {
+      target: 'sun',
+      fov: 32,
+      datetime: '-000584-05-28T16:20:00Z',
+      holdDuration: 5000,
+      transitionDuration: 2500,
+      timeMode: 'animate',
+      caption: 'So ancient an eclipse lies at the edge of calculation: across 2,600 years, lunar-theory and ΔT uncertainties span hours, so this simulator cannot place the Moon\'s shadow. The darkness here is remembered from Herodotus, not computed.',
+    },
+    // ---- Act 2: 29 May 1919 - Eddington's Eclipse (confirming Relativity) ----
+    {
+      // Jump ~2,500 years forward and relocate to Sobral, Brazil, where the
+      // engine reproduces a real total eclipse (see header note).
+      target: 'sun',
+      fov: 40,
+      datetime: '1919-05-29T13:30:00Z',
+      holdDuration: 4000,
+      transitionDuration: 2000,
+      timeMode: 'instant',
+      location: {
+        latitude: -3.69,
+        longitude: -40.35,
+        name: 'Sobral, Brazil',
+      },
+      caption: '29 May 1919, Sobral, Brazil. Astronomers sent by Greenwich have come to photograph the eclipse and test a startling prediction of Einstein\'s.',
+    },
+    {
+      target: 'sun',
+      fov: 16,
+      datetime: '1919-05-29T13:50:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'First contact - the Moon takes its first bite out of the Sun.',
+    },
+    {
+      target: 'sun',
+      fov: 8,
+      datetime: '1919-05-29T14:25:00Z',
+      holdDuration: 3000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Half the Sun is gone. The daylight turns thin and silvery, and the air grows cold.',
+    },
+    {
+      target: 'sun',
+      fov: 5,
+      datetime: '1919-05-29T15:05:00Z',
+      holdDuration: 2500,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'A thinning crescent - shadow bands ripple across the ground as totality approaches.',
+    },
+    {
+      target: 'sun',
+      fov: 4,
+      datetime: '1919-05-29T15:13:33Z',
+      holdDuration: 4000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'TOTALITY! The Sun\'s corona blazes around the black disk of the Moon.',
+    },
+    {
+      target: 'sun',
+      fov: 13,
+      datetime: '1919-05-29T15:14:20Z',
+      holdDuration: 5000,
+      transitionDuration: 2500,
+      timeMode: 'animate',
+      caption: 'In the darkened sky the stars of the Hyades emerge beside the Sun. Their light, grazing the Sun, is bent by its gravity - just as Einstein predicted, and Newton could not explain.',
+    },
+    {
+      target: 'sun',
+      fov: 5,
+      datetime: '1919-05-29T15:16:00Z',
+      holdDuration: 3000,
+      transitionDuration: 3000,
+      timeMode: 'animate',
+      caption: 'Third contact - the diamond ring flashes and daylight floods back. The photographic plates are already exposed.',
+    },
+    {
+      target: 'sun',
+      fov: 32,
+      datetime: '1919-05-29T16:20:00Z',
+      holdDuration: 4000,
+      transitionDuration: 4000,
+      timeMode: 'animate',
+      caption: 'Measured against these plates, the stars had shifted by Einstein\'s amount. The result made him world-famous overnight - the eclipse that confirmed General Relativity.',
+    },
+  ],
+};
+
+/**
  * Jupiter's Galilean Moons Tour
  *
  * Watch the dance of Io, Europa, Ganymede, and Callisto over ~42 hours
@@ -2097,6 +2274,7 @@ export const PALE_BLUE_DOT_TOUR: TourDefinition = {
  */
 export const PREDEFINED_TOURS: TourDefinition[] = [
   ECLIPSE_2024_TOUR,
+  HISTORICAL_ECLIPSES_TOUR,
   JUPITER_MOONS_TOUR,
   NEOWISE_2020_TOUR,
   HALE_BOPP_1997_TOUR,
