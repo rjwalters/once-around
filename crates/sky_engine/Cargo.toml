@@ -13,3 +13,9 @@ wasm-bindgen = "0.2"
 [dependencies.web-sys]
 version = "0.3"
 features = ["console"]
+
+# wasm-pack runs wasm-opt on the release binary. Default is plain "-O"; "-O3"
+# is the highest speed-focused level and also shrinks the module further via
+# aggressive DCE/inlining. See issue #14 for before/after size numbers.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3"]
