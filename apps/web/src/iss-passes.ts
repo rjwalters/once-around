@@ -9,7 +9,7 @@
  */
 
 import type { SkyEngine } from "./wasm/sky_engine";
-import { SATELLITE_ISS } from "./engine";
+import { SATELLITE_ISS } from "./satellites-config";
 
 /** Direction abbreviations for azimuth */
 const DIRECTIONS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
