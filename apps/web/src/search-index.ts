@@ -3,7 +3,7 @@
  */
 
 import type { SearchItem } from "./search";
-import type { VideoPlacement } from "./videos";
+import { getVideosData } from "./videos";
 import { METEOR_SHOWER_DATA } from "./meteorShowerData";
 
 export interface StarDataEntry {
@@ -280,10 +280,10 @@ export async function buildSearchIndex(options: SearchIndexOptions): Promise<Sea
     });
   }
 
-  // Add videos
+  // Add videos. Reuse the shared, memoized loader so the entire session issues
+  // exactly one /videos.json request regardless of call order (issue #6).
   try {
-    const response = await fetch("/videos.json");
-    const videos: VideoPlacement[] = await response.json();
+    const videos = await getVideosData();
     for (const video of videos) {
       items.push({
         name: video.object,

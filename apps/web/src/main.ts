@@ -430,12 +430,20 @@ async function main(): Promise<void> {
   // Get current body positions for matching moving object videos to planets
   const bodyPositions = getBodyPositionsFromEngine(engine);
 
-  const videoMarkers = await createVideoMarkersLayer(
+  // Synchronous: returns an empty, hidden marker layer immediately and populates
+  // it from the shared /videos.json fetch in the background (issue #6). Nothing
+  // downstream needs resolved markers at init, so the render loop and loading
+  // overlay no longer wait on this network request.
+  const videoMarkers = createVideoMarkersLayer(
     renderer.scene,
     (video: VideoPlacement) => {
       videoPopup.show(video);
     },
-    bodyPositions
+    bodyPositions,
+    // Markers are added to an already-live, render-on-demand scene (PR #31), so
+    // request a render once they populate to make them appear without a user
+    // interaction.
+    requestRender
   );
 
   // Set reference for time change updates
