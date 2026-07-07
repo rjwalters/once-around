@@ -289,6 +289,11 @@ async function main(): Promise<void> {
     updateEclipseRendering: (sep) => renderer.updateEclipse(sep),
     updateVideoMarkers: (bodyPos) => videoMarkersRef?.updateMovingPositions(bodyPos),
     animateToRaDec: (ra, dec, dur) => controls.animateToRaDec(ra, dec, dur),
+    getObserverLocation: () => ({
+      latitude: settings.observerLatitude,
+      longitude: settings.observerLongitude,
+    }),
+    setObserverLocation: (location) => locationManagerRef?.setLocation(location),
   });
 
   // Update display after restoring settings (pass saved FOV for consistent LOD)

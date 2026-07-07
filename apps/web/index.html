@@ -642,17 +642,29 @@
     <div id="ar-mode-status" class="ar-mode-status"></div>
 
     <div id="eclipse-banner" class="eclipse-banner hidden">
-      <div class="eclipse-banner-icon">☀</div>
-      <div class="eclipse-banner-content">
-        <div class="eclipse-banner-title">Total Solar Eclipse</div>
-        <div class="eclipse-banner-details">
-          <span id="eclipse-banner-date"></span> &bull;
-          <span id="eclipse-banner-path"></span> &bull;
-          Duration: <span id="eclipse-banner-duration"></span>s
+      <div class="eclipse-banner-main">
+        <div class="eclipse-banner-icon">☀</div>
+        <div class="eclipse-banner-content">
+          <div class="eclipse-banner-title">Total Solar Eclipse</div>
+          <div class="eclipse-banner-details">
+            <span id="eclipse-banner-date"></span> &bull;
+            <span id="eclipse-banner-path"></span> &bull;
+            Duration: <span id="eclipse-banner-duration"></span>s
+          </div>
+        </div>
+        <div class="eclipse-banner-separation">
+          Sun-Moon: <span id="eclipse-banner-sep">--</span>°
         </div>
       </div>
-      <div class="eclipse-banner-separation">
-        Sun-Moon: <span id="eclipse-banner-sep">--</span>°
+      <div id="eclipse-path-section" class="eclipse-path-section hidden">
+        <div id="eclipse-path-map" class="eclipse-path-map"></div>
+        <div class="eclipse-path-info">
+          <div id="eclipse-banner-distance" class="eclipse-path-distance"></div>
+          <div id="eclipse-banner-circumstances" class="eclipse-path-circumstances"></div>
+          <button id="eclipse-navigate-btn" class="eclipse-navigate-btn" type="button">
+            Navigate to path
+          </button>
+        </div>
       </div>
     </div>
 
