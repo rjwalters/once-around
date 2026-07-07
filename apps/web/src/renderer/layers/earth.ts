@@ -21,6 +21,14 @@ const EARTH_DISTANCE = 35;        // Distance from camera toward nadir
 const CLOUD_ALTITUDE = 1.008;     // Cloud layer at 0.8% above surface
 const CLOUD_DRIFT_RATE = 0.02;    // Clouds drift at 2% of Earth's rotation (eastward)
 
+// Module-level scratch vectors/quaternion reused every frame to avoid per-call
+// heap allocations in the hot Hubble render path.
+const _tempDir = new THREE.Vector3();      // updatePosition: nadir direction
+const _rayDir = new THREE.Vector3();       // isOccluded: ray direction (per label)
+const _sunDir = new THREE.Vector3();       // updateSunDirection: Earth->Sun
+const _up = new THREE.Vector3(0, 0, 1);    // updateSunDirection: terminator normal basis
+const _quat = new THREE.Quaternion();      // updateSunDirection: terminator orientation
+
 export interface EarthLayer {
   /** The group containing all Earth elements */
   group: THREE.Group;
@@ -140,6 +148,11 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
   // Track current positioning state
   let hasBeenPositioned = false;
 
+  // Cache the last date the rotation was computed for. computeGMST() and the
+  // mesh rotation writes only change when the date changes (playback / manual
+  // time input), so a static Hubble frame can skip them entirely.
+  let lastRotationDateMs = Number.NaN;
+
   function setVisible(visible: boolean): void {
     group.visible = visible;
 
@@ -153,7 +166,7 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
 
   function updatePosition(nadirDirection: THREE.Vector3): void {
     // Position Earth in the nadir direction (toward Earth's center)
-    const direction = nadirDirection.clone().normalize();
+    const direction = _tempDir.copy(nadirDirection).normalize();
     group.position.copy(direction.multiplyScalar(EARTH_DISTANCE));
 
     // Don't use lookAt - we want the Earth's Y-axis to remain aligned with
@@ -165,6 +178,12 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
 
   function updateRotation(date: Date, _longitudeDeg: number): void {
     if (!group.visible) return;
+
+    // Skip the GMST computation and rotation writes when the date is unchanged
+    // (static Hubble frame). The rotation depends solely on the date.
+    const dateMs = date.getTime();
+    if (dateMs === lastRotationDateMs) return;
+    lastRotationDateMs = dateMs;
 
     // Compute Greenwich Mean Sidereal Time - this tells us Earth's rotation angle
     const gmst = computeGMST(date);
@@ -202,7 +221,7 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
     // Calculate Sun direction from Earth's position
     // sunDirection should point FROM Earth TO Sun (normalized)
     const earthPos = group.position;
-    const sunDir = new THREE.Vector3()
+    const sunDir = _sunDir
       .subVectors(sunPosition, earthPos)
       .normalize();
 
@@ -215,8 +234,7 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
     const terminatorLine = group.children[3] as THREE.LineLoop;
 
     // Create a quaternion that rotates from +Z (initial normal) to sunDir
-    const up = new THREE.Vector3(0, 0, 1);
-    const quaternion = new THREE.Quaternion().setFromUnitVectors(up, sunDir);
+    const quaternion = _quat.setFromUnitVectors(_up, sunDir);
     terminatorLine.quaternion.copy(quaternion);
   }
 
@@ -225,7 +243,7 @@ export function createEarthLayer(scene: THREE.Scene): EarthLayer {
 
     // Camera is at origin, Earth center is at group.position
     // Ray from camera (origin) toward the target position
-    const rayDir = position.clone().normalize();
+    const rayDir = _rayDir.copy(position).normalize();
     const earthCenter = group.position;
 
     // Ray-sphere intersection test

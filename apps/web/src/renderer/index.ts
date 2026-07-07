@@ -79,6 +79,10 @@ export interface SkyRenderer {
   getEarthPositionJWST(): { x: number; y: number; z: number } | null;
   getSunPosition(): THREE.Vector3;
   getMoonPosition(): THREE.Vector3;
+  /** Copy the current Sun position into `out` (allocation-free hot-path read). */
+  copySunPositionInto(out: THREE.Vector3): void;
+  /** Copy the current Moon position into `out` (allocation-free hot-path read). */
+  copyMoonPositionInto(out: THREE.Vector3): void;
   // Remote viewpoint methods (for tour-specific views like Pale Blue Dot)
   setRemoteViewpoint(x: number, y: number, z: number, distanceAU: number): void;
   clearRemoteViewpoint(): void;
@@ -94,6 +98,14 @@ export interface SkyRenderer {
   /** Whether any managed label is mid-fade (needs continuous frames until settled). */
   hasFadesInProgress(): boolean;
 }
+
+// Reused across updateLabelOcclusion() calls to avoid allocating a Vector3 per
+// frame while traversing the label group.
+const _occlusionWorldPos = new THREE.Vector3();
+
+// Per-label occlusion state tracked on the object so that style / visibility
+// writes only happen on transitions (see updateLabelOcclusion).
+interface OcclusionState { __lastOccluded?: boolean }
 
 export function createRenderer(container: HTMLElement): SkyRenderer {
   const ctx = createRendererContext(container);
@@ -343,6 +355,9 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
         if (obj instanceof THREE.LineSegments) {
           obj.visible = true;
         }
+        // Clear cached occlusion state so the next Hubble session writes fresh
+        // style/visibility on the first frame instead of skipping on a stale value.
+        (obj.userData as OcclusionState).__lastOccluded = undefined;
       });
     }
     // Enable depth testing on orbits in Hubble mode so they're hidden behind Earth
@@ -385,21 +400,28 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
   function updateLabelOcclusion(): void {
     if (!hubbleModeEnabled) return;
 
-    // Reusable vector for world position
-    const worldPos = new THREE.Vector3();
-
     // Iterate through all labels in the labelsGroup and hide occluded ones
     labelsGroup.traverse((obj) => {
       // Skip the labelsGroup itself
       if (obj === labelsGroup) return;
 
-      // Get world position (not local position)
-      obj.getWorldPosition(worldPos);
+      // Labels sit at fixed positions in the identity-transform labelsGroup, so
+      // the local position equals the world position. Copying obj.position
+      // avoids the parent-chain updateWorldMatrix walk that getWorldPosition
+      // forces on every traversed object every frame.
+      _occlusionWorldPos.copy(obj.position);
 
       // Skip objects at origin (invalid position)
-      if (worldPos.lengthSq() < 0.01) return;
+      if (_occlusionWorldPos.lengthSq() < 0.01) return;
 
-      const isOccluded = earthLayer.isOccluded(worldPos);
+      const isOccluded = earthLayer.isOccluded(_occlusionWorldPos);
+
+      // Only touch the DOM / Three.js object when the occlusion state changed.
+      // Unconditional per-frame writes re-dirty the object and thrash CSS2D
+      // style properties even for a static camera.
+      const state = obj.userData as OcclusionState;
+      if (state.__lastOccluded === isOccluded) return;
+      state.__lastOccluded = isOccluded;
 
       // CSS2DObject has element property
       const css2dObj = obj as THREE.Object3D & { element?: HTMLElement };
@@ -445,6 +467,14 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
 
   function getMoonPosition(): THREE.Vector3 {
     return bodiesLayer.getMoonPosition();
+  }
+
+  function copySunPositionInto(out: THREE.Vector3): void {
+    bodiesLayer.copySunPositionInto(out);
+  }
+
+  function copyMoonPositionInto(out: THREE.Vector3): void {
+    bodiesLayer.copyMoonPositionInto(out);
   }
 
   // Remote viewpoint methods
@@ -538,6 +568,8 @@ export function createRenderer(container: HTMLElement): SkyRenderer {
     getEarthPositionJWST,
     getSunPosition,
     getMoonPosition,
+    copySunPositionInto,
+    copyMoonPositionInto,
     setRemoteViewpoint,
     clearRemoteViewpoint,
     isRemoteViewpointActive,

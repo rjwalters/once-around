@@ -711,9 +711,14 @@ export async function createVideoMarkersLayer(
     getVideoAtPosition,
     updateMovingPositions,
     updateOcclusion(isOccluded: (position: THREE.Vector3) => boolean) {
-      // Hide labels that are occluded
+      // Hide labels that are occluded. Only write sprite.visible on a state
+      // change so a static camera doesn't re-dirty every sprite each frame.
       for (const [_id, sprite] of labels) {
-        sprite.visible = !isOccluded(sprite.position);
+        const occluded = isOccluded(sprite.position);
+        if (sprite.userData.wasOccluded !== occluded) {
+          sprite.userData.wasOccluded = occluded;
+          sprite.visible = !occluded;
+        }
       }
       // Marker hit meshes are intentionally kept hidden (they carry opacity 0 and
       // exist only for raycasting), so occlusion no longer toggles their
@@ -732,9 +737,12 @@ export async function createVideoMarkersLayer(
       }
     },
     resetOcclusion() {
-      // Reset all labels to visible
+      // Reset all labels to visible and clear cached occlusion state so the next
+      // updateOcclusion() writes fresh visibility instead of skipping on a stale
+      // value.
       for (const [_id, sprite] of labels) {
         sprite.visible = true;
+        sprite.userData.wasOccluded = undefined;
       }
       // Marker hit meshes stay hidden by design (raycast-only); see updateOcclusion.
     },

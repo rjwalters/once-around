@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { computeGMST } from "./geometry/time";
-import type { BodyPositions } from "./body-positions";
+import { SKY_RADIUS, type BodyPositions } from "./body-positions";
 import type { SkyEngine } from "./wasm/sky_engine";
 import { getHeliocentricPositions } from "./spacecraftPositions";
 import { isAlwaysRenderMode, type RenderScheduler } from "./render-scheduler";
@@ -41,6 +41,8 @@ export interface AnimationLoopDependencies {
     isOccludedByEarth: (position: THREE.Vector3) => boolean;
     getSunPosition: () => THREE.Vector3;
     getMoonPosition: () => THREE.Vector3;
+    copySunPositionInto: (out: THREE.Vector3) => void;
+    copyMoonPositionInto: (out: THREE.Vector3) => void;
     updateRemoteView: (
       fov: number,
       heliocentricBodies?: Map<string, { x: number; y: number; z: number }>
@@ -70,7 +72,6 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
     getViewMode,
     getCurrentDate,
     getObserverLocation,
-    getBodyPositions,
     engine,
     renderScheduler,
     isARModeEnabled,
@@ -80,6 +81,11 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
   // updateHorizonZenith copies the value, so reusing this instance is safe.
   const zenith = new THREE.Vector3();
   const hubbleNadir = new THREE.Vector3();
+  // Hubble/JWST body-position reads, filled in-place from the renderer's cached
+  // positions to avoid the full body-map (Map + ~31 Vector3) rebuild per frame.
+  const sunPosHubble = new THREE.Vector3();
+  const sunPosJwst = new THREE.Vector3();
+  const moonPosJwst = new THREE.Vector3();
 
   function animate(): void {
     requestAnimationFrame(animate);
@@ -146,11 +152,14 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
       }
       renderer.updateEarthRotation(currentDate, location.longitude);
 
-      // Update Sun direction for day/night terminator
-      const bodyPos = getBodyPositions();
-      const sunPos = bodyPos.get("Sun");
-      if (sunPos) {
-        renderer.updateEarthSunDirection(sunPos);
+      // Update Sun direction for day/night terminator. Read the Sun from the
+      // renderer's cached position and rescale to the body-map sky radius
+      // (SKY_RADIUS - 0.5) so the value is identical to the previous
+      // getBodyPositions().get("Sun") read, without the Map/Vector3 rebuild.
+      renderer.copySunPositionInto(sunPosHubble);
+      if (sunPosHubble.lengthSq() > 0) {
+        sunPosHubble.setLength(SKY_RADIUS - 0.5);
+        renderer.updateEarthSunDirection(sunPosHubble);
       }
 
       // Hide labels occluded by Earth
@@ -175,9 +184,9 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
 
     // Update JWST layer (Earth and Moon as distant objects)
     if (viewMode === "jwst") {
-      const sunPos = renderer.getSunPosition();
-      const moonPos = renderer.getMoonPosition();
-      renderer.updateJWST(currentFov, sunPos, moonPos, currentDate);
+      renderer.copySunPositionInto(sunPosJwst);
+      renderer.copyMoonPositionInto(moonPosJwst);
+      renderer.updateJWST(currentFov, sunPosJwst, moonPosJwst, currentDate);
     }
 
     renderer.render();
