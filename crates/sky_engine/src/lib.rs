@@ -11,6 +11,10 @@ use sky_engine_core::{
 use std::f64::consts::PI;
 use wasm_bindgen::prelude::*;
 
+/// Number of `f64` values per pass record returned by [`SkyEngine::find_passes`].
+/// Layout: `[rise_jd, rise_az_deg, max_jd, max_alt_deg, max_az_deg, set_jd, set_az_deg]`.
+pub const PASS_RECORD_LEN: usize = 7;
+
 /// The main sky engine exposed to JavaScript.
 /// Computes star and planet positions, maintaining buffers for efficient WebGL rendering.
 #[wasm_bindgen]
@@ -693,12 +697,20 @@ impl SkyEngine {
     /// Negative = below horizon. Used to determine if sky is dark enough for satellite viewing.
     /// Returns the altitude of the Sun above/below the horizon.
     pub fn sun_altitude(&self) -> f64 {
+        self.sun_altitude_at(&self.time)
+    }
+
+    /// Sun altitude in degrees for the observer at an arbitrary time.
+    ///
+    /// Identical math to [`Self::sun_altitude`], but parameterized on `time` so that
+    /// pass-finding can evaluate many instants without mutating the shared engine time.
+    fn sun_altitude_at(&self, time: &SkyTime) -> f64 {
         // Get Sun's geocentric position
-        let sun_dir = compute_sun_position(&self.time);
+        let sun_dir = compute_sun_position(time);
         let (ra, dec) = cartesian_to_ra_dec(&sun_dir);
 
         // Compute GMST and LST
-        let jd_ut1 = self.time.julian_date_utc();
+        let jd_ut1 = time.julian_date_utc();
         let gmst = compute_gmst(jd_ut1);
         let lst = compute_lst(gmst, self.observer_lon_rad);
 
@@ -722,6 +734,235 @@ impl SkyEngine {
             .and_then(|opt| opt.as_ref())
             .and_then(|e| e.time_range())
             .map(|(start, end)| vec![start, end])
+    }
+
+    // --- Satellite pass prediction ---
+
+    /// Find upcoming visible passes for a satellite without mutating engine state.
+    ///
+    /// This subsumes the entire ISS-pass scan that previously lived in JavaScript
+    /// (`iss-passes.ts`): a coarse visibility scan, binary-search refinement of the rise/set
+    /// transitions, and max-altitude sampling. The old JS path called `set_time_utc` +
+    /// `recompute()` (a full stars + 9 bodies + 18 moons + minor bodies + comets + satellites
+    /// evaluation) ~1000+ times on the main thread just to read one satellite's visibility
+    /// flags. Here each sample constructs a local [`SkyTime`] via [`SkyTime::from_jd`] and
+    /// evaluates only `compute_satellite_position` (interpolation + GMST + ECI-to-topocentric
+    /// + Earth-shadow) plus the Sun altitude — orders of magnitude cheaper, and the shared
+    /// engine time is never touched.
+    ///
+    /// # Arguments
+    /// * `sat_index` - Satellite index (`SatelliteId` ordering; ISS = 0).
+    /// * `start_jd` - Julian Date (UTC scale, same as [`Self::satellite_ephemeris_range`]) to
+    ///   begin scanning from.
+    /// * `end_jd` - Julian Date (UTC scale) to stop scanning at.
+    /// * `step_days` - Coarse scan step in days (e.g. 10 minutes = `10.0 / 1440.0`).
+    /// * `min_alt_deg` - Minimum peak altitude (degrees) for a pass to be included.
+    /// * `sun_alt_limit_deg` - Sky is "dark" when the Sun is below this altitude (e.g. -6°).
+    /// * `max_passes` - Stop after collecting this many passes.
+    ///
+    /// Returns a flat `Vec<f64>` (surfaced to JS as a `Float64Array`) of
+    /// `PASS_RECORD_LEN` values per pass:
+    /// `[rise_jd, rise_az_deg, max_jd, max_alt_deg, max_az_deg, set_jd, set_az_deg]`.
+    /// All JDs are in the UTC scale, so JS can convert with the same Unix-epoch offset it uses
+    /// for `satellite_ephemeris_range`. Returns an empty vec when no ephemeris is loaded for
+    /// `sat_index`, when the window is empty, or when `step_days <= 0`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn find_passes(
+        &self,
+        sat_index: usize,
+        start_jd: f64,
+        end_jd: f64,
+        step_days: f64,
+        min_alt_deg: f64,
+        sun_alt_limit_deg: f64,
+        max_passes: usize,
+    ) -> Vec<f64> {
+        let mut out: Vec<f64> = Vec::new();
+
+        let ephemeris = match self
+            .satellite_ephemerides
+            .get(sat_index)
+            .and_then(|opt| opt.as_ref())
+        {
+            Some(e) => e,
+            None => return out,
+        };
+
+        if step_days <= 0.0 || !(end_jd > start_jd) || max_passes == 0 {
+            return out;
+        }
+
+        // Refinement precision matches the previous JS scan: 30-second binary search and
+        // 30-second max-altitude sampling.
+        let refine_threshold = 30.0 / 86400.0;
+        let sample_step = 30.0 / 86400.0;
+
+        let mut current = start_jd;
+        let mut was_visible = false;
+        let mut pass_start: Option<f64> = None;
+
+        while current < end_jd && out.len() / PASS_RECORD_LEN < max_passes {
+            let now_visible = self.satellite_visible_at(ephemeris, current, sun_alt_limit_deg);
+
+            if !was_visible && now_visible {
+                // Pass started: refine the rise time between the previous and current step.
+                pass_start = Some(self.refine_transition(
+                    ephemeris,
+                    current - step_days,
+                    current,
+                    sun_alt_limit_deg,
+                    true,
+                    refine_threshold,
+                ));
+            } else if was_visible && !now_visible {
+                if let Some(rise_jd) = pass_start {
+                    // Pass ended: refine the set time.
+                    let set_jd = self.refine_transition(
+                        ephemeris,
+                        current - step_days,
+                        current,
+                        sun_alt_limit_deg,
+                        false,
+                        refine_threshold,
+                    );
+
+                    let (max_jd, max_alt, max_az) =
+                        self.max_altitude(ephemeris, rise_jd, set_jd, sun_alt_limit_deg, sample_step);
+
+                    if max_alt >= min_alt_deg {
+                        let (_, _, rise_az) = self
+                            .satellite_sample(ephemeris, rise_jd)
+                            .unwrap_or((false, -10.0, 0.0));
+                        let (_, _, set_az) = self
+                            .satellite_sample(ephemeris, set_jd)
+                            .unwrap_or((false, -10.0, 0.0));
+
+                        out.push(rise_jd);
+                        out.push(rise_az);
+                        out.push(max_jd);
+                        out.push(max_alt);
+                        out.push(max_az);
+                        out.push(set_jd);
+                        out.push(set_az);
+                    }
+
+                    pass_start = None;
+                }
+            }
+
+            was_visible = now_visible;
+            current += step_days;
+        }
+
+        out
+    }
+
+    /// Sample the satellite at `jd`, returning `(visible, altitude_deg, azimuth_deg)`.
+    ///
+    /// `altitude_deg` reproduces the previous JS distance-based estimate exactly (so pass
+    /// filtering and reported peak altitudes are unchanged): `-10` below the horizon,
+    /// otherwise a linear map of slant distance onto `0..90°`. `azimuth_deg` is the true
+    /// topocentric azimuth from `compute_satellite_position` (the old JS path used a `0`
+    /// placeholder here). Returns `None` when the time is outside the ephemeris range.
+    fn satellite_sample(
+        &self,
+        ephemeris: &SatelliteEphemeris,
+        jd: f64,
+    ) -> Option<(bool, f64, f64)> {
+        let time = SkyTime::from_jd(jd);
+        let pos = compute_satellite_position(
+            ephemeris,
+            &time,
+            self.observer_lat_rad,
+            self.observer_lon_rad,
+            0.0, // observer height (km), assume sea level (matches recompute_satellites)
+        )?;
+
+        // Distance-based altitude estimate, identical to the previous JS computeAltAz:
+        // ISS ~400 km at zenith, ~2300 km at the horizon.
+        const MIN_DIST: f64 = 400.0;
+        const MAX_DIST: f64 = 2300.0;
+        let alt_fraction = ((MAX_DIST - pos.distance_km) / (MAX_DIST - MIN_DIST)).clamp(0.0, 1.0);
+        let altitude = if pos.above_horizon { alt_fraction * 90.0 } else { -10.0 };
+
+        Some((pos.above_horizon, altitude, pos.azimuth_deg))
+    }
+
+    /// Whether the satellite is visible at `jd`: above the horizon, sunlit, and the observer's
+    /// sky is dark (Sun below `sun_alt_limit_deg`). Mirrors the old JS `isVisible` predicate.
+    fn satellite_visible_at(
+        &self,
+        ephemeris: &SatelliteEphemeris,
+        jd: f64,
+        sun_alt_limit_deg: f64,
+    ) -> bool {
+        let time = SkyTime::from_jd(jd);
+        let pos = match compute_satellite_position(
+            ephemeris,
+            &time,
+            self.observer_lat_rad,
+            self.observer_lon_rad,
+            0.0,
+        ) {
+            Some(p) => p,
+            None => return false,
+        };
+        let sun_below = self.sun_altitude_at(&time) < sun_alt_limit_deg;
+        pos.above_horizon && pos.illuminated && sun_below
+    }
+
+    /// Binary-search the visibility transition between `lo_jd` and `hi_jd`, refining until the
+    /// bracket is narrower than `threshold_days`. `find_rise = true` locates a not-visible →
+    /// visible edge (returning the upper bound); `false` locates visible → not-visible
+    /// (returning the lower bound). Matches the old JS `binarySearchTransition`.
+    fn refine_transition(
+        &self,
+        ephemeris: &SatelliteEphemeris,
+        lo_jd: f64,
+        hi_jd: f64,
+        sun_alt_limit_deg: f64,
+        find_rise: bool,
+        threshold_days: f64,
+    ) -> f64 {
+        let mut lo = lo_jd;
+        let mut hi = hi_jd;
+        while hi - lo > threshold_days {
+            let mid = (lo + hi) / 2.0;
+            let visible = self.satellite_visible_at(ephemeris, mid, sun_alt_limit_deg);
+            if find_rise == visible {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        if find_rise { hi } else { lo }
+    }
+
+    /// Sample the pass window `[start_jd, end_jd]` every `step_days` and return the
+    /// `(jd, altitude_deg, azimuth_deg)` of peak altitude. Matches the old JS `findMaxAltitude`.
+    fn max_altitude(
+        &self,
+        ephemeris: &SatelliteEphemeris,
+        start_jd: f64,
+        end_jd: f64,
+        _sun_alt_limit_deg: f64,
+        step_days: f64,
+    ) -> (f64, f64, f64) {
+        let mut max_alt = -90.0;
+        let mut max_jd = start_jd;
+        let mut max_az = 0.0;
+        let mut t = start_jd;
+        while t <= end_jd {
+            if let Some((_, alt, az)) = self.satellite_sample(ephemeris, t) {
+                if alt > max_alt {
+                    max_alt = alt;
+                    max_jd = t;
+                    max_az = az;
+                }
+            }
+            t += step_days;
+        }
+        (max_jd, max_alt, max_az)
     }
 
     // --- All stars buffer accessors (for constellation drawing, not magnitude-filtered) ---
@@ -850,5 +1091,232 @@ mod tests {
             assert_eq!(track.len(), 15);
             assert!(track.iter().all(|&v| v == 0.0), "index {bad} should be zero");
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // ISS pass-prediction equivalence (issue #9)
+    //
+    // These tests prove the new immutable `find_passes` (which samples via
+    // `SkyTime::from_jd` + `compute_satellite_position`, never touching the shared
+    // engine time) reproduces the passes that the previous JS scan produced by
+    // repeatedly mutating engine time (`set_time_utc`) and calling the full
+    // `recompute()` before reading the satellite/sun buffers. The reference below is
+    // a faithful transcription of that old mutate-and-recompute path.
+    // ------------------------------------------------------------------------
+
+    // The committed ISS ephemeris used by the web app (covers 2026-01-17 .. 2026-02-15).
+    const ISS_EPHEMERIS_PATH: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/web/public/data/iss_ephemeris.bin");
+
+    fn engine_with_iss() -> SkyEngine {
+        let bytes = std::fs::read(ISS_EPHEMERIS_PATH).expect("read committed ISS ephemeris");
+        let mut engine = SkyEngine::new(&[]).expect("engine");
+        engine
+            .load_satellite_ephemeris(0, &bytes)
+            .expect("load ISS ephemeris");
+        engine
+    }
+
+    /// Reference visibility via the OLD mutate-engine + full-recompute path.
+    fn ref_visible(engine: &mut SkyEngine, jd: f64, sun_limit: f64) -> bool {
+        engine.time = SkyTime::from_jd(jd);
+        engine.recompute();
+        engine.satellite_above_horizon(0)
+            && engine.satellite_illuminated(0)
+            && engine.sun_altitude() < sun_limit
+    }
+
+    /// Reference distance-based altitude estimate, reading the f32 satellite buffer
+    /// exactly as the old JS `computeAltAz` did.
+    fn ref_altitude(engine: &mut SkyEngine, jd: f64) -> f64 {
+        engine.time = SkyTime::from_jd(jd);
+        engine.recompute();
+        if !engine.satellite_above_horizon(0) {
+            return -10.0;
+        }
+        let d = engine.satellite_distance_km(0) as f64;
+        let frac = ((2300.0 - d) / 1900.0).clamp(0.0, 1.0);
+        frac * 90.0
+    }
+
+    fn ref_binary(
+        engine: &mut SkyEngine,
+        lo_jd: f64,
+        hi_jd: f64,
+        sun_limit: f64,
+        find_rise: bool,
+    ) -> f64 {
+        let threshold = 30.0 / 86400.0;
+        let mut lo = lo_jd;
+        let mut hi = hi_jd;
+        while hi - lo > threshold {
+            let mid = (lo + hi) / 2.0;
+            let vis = ref_visible(engine, mid, sun_limit);
+            if find_rise == vis {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        if find_rise { hi } else { lo }
+    }
+
+    fn ref_max(engine: &mut SkyEngine, start_jd: f64, end_jd: f64) -> (f64, f64) {
+        let step = 30.0 / 86400.0;
+        let mut max_alt = -90.0;
+        let mut max_jd = start_jd;
+        let mut t = start_jd;
+        while t <= end_jd {
+            let alt = ref_altitude(engine, t);
+            if alt > max_alt {
+                max_alt = alt;
+                max_jd = t;
+            }
+            t += step;
+        }
+        (max_jd, max_alt)
+    }
+
+    /// Full transcription of the old JS `findISSPasses` coarse scan.
+    /// Returns `(rise_jd, max_jd, max_alt, set_jd)` per pass.
+    fn ref_scan(
+        engine: &mut SkyEngine,
+        start_jd: f64,
+        end_jd: f64,
+        step: f64,
+        min_alt: f64,
+        sun_limit: f64,
+        max_passes: usize,
+    ) -> Vec<(f64, f64, f64, f64)> {
+        let mut passes = Vec::new();
+        let mut cur = start_jd;
+        let mut was = false;
+        let mut pstart: Option<f64> = None;
+        while cur < end_jd && passes.len() < max_passes {
+            let vis = ref_visible(engine, cur, sun_limit);
+            if !was && vis {
+                pstart = Some(ref_binary(engine, cur - step, cur, sun_limit, true));
+            } else if was && !vis {
+                if let Some(rise) = pstart {
+                    let set = ref_binary(engine, cur - step, cur, sun_limit, false);
+                    let (mj, ma) = ref_max(engine, rise, set);
+                    if ma >= min_alt {
+                        passes.push((rise, mj, ma, set));
+                    }
+                    pstart = None;
+                }
+            }
+            was = vis;
+            cur += step;
+        }
+        passes
+    }
+
+    #[test]
+    fn find_passes_matches_legacy_scan() {
+        let step = 10.0 / 1440.0; // 10-minute coarse scan
+        let min_alt = 10.0;
+        let sun_limit = -6.0;
+        let max_passes = 5;
+
+        let mut engine = engine_with_iss();
+        let range = engine
+            .satellite_ephemeris_range(0)
+            .expect("ephemeris range");
+        let start_jd = range[0];
+        // Bounded window keeps the ~thousand-recompute reference scan fast while still
+        // covering several real passes.
+        let end_jd = start_jd + 2.0;
+
+        // Reference passes via the mutate-and-recompute path.
+        let reference = ref_scan(
+            &mut engine, start_jd, end_jd, step, min_alt, sun_limit, max_passes,
+        );
+
+        // New immutable path.
+        let jd_before = engine.julian_date_tdb();
+        let buf = engine.find_passes(0, start_jd, end_jd, step, min_alt, sun_limit, max_passes);
+        let jd_after = engine.julian_date_tdb();
+
+        // Shared engine time must NOT be mutated by find_passes.
+        assert_eq!(
+            jd_before, jd_after,
+            "find_passes must not mutate the shared engine time"
+        );
+
+        assert_eq!(buf.len() % PASS_RECORD_LEN, 0, "buffer must be whole records");
+        let found = buf.len() / PASS_RECORD_LEN;
+
+        // Sanity: the reference window must actually contain passes, otherwise the test
+        // proves nothing.
+        assert!(
+            !reference.is_empty(),
+            "expected the 2-day reference window to contain visible ISS passes"
+        );
+        assert_eq!(
+            found,
+            reference.len(),
+            "pass count mismatch: find_passes={found}, reference={}",
+            reference.len()
+        );
+
+        let step_tol = step; // rise/set within one coarse step
+        for (i, r) in reference.iter().enumerate() {
+            let base = i * PASS_RECORD_LEN;
+            let rise = buf[base];
+            let max_jd = buf[base + 2];
+            let max_alt = buf[base + 3];
+            let set = buf[base + 5];
+
+            let (ref_rise, ref_max_jd, ref_max_alt, ref_set) = *r;
+
+            assert!(
+                (rise - ref_rise).abs() <= step_tol,
+                "pass {i} rise mismatch: {rise} vs {ref_rise}"
+            );
+            assert!(
+                (set - ref_set).abs() <= step_tol,
+                "pass {i} set mismatch: {set} vs {ref_set}"
+            );
+            assert!(
+                (max_jd - ref_max_jd).abs() <= step_tol,
+                "pass {i} max-time mismatch: {max_jd} vs {ref_max_jd}"
+            );
+            assert!(
+                (max_alt - ref_max_alt).abs() <= 5.0,
+                "pass {i} max-altitude mismatch: {max_alt} vs {ref_max_alt}"
+            );
+        }
+    }
+
+    #[test]
+    fn find_passes_no_ephemeris_returns_empty() {
+        // No satellite ephemeris loaded -> empty, not an error/panic.
+        let engine = SkyEngine::new(&[]).expect("engine");
+        let out = engine.find_passes(0, 2461057.5, 2461059.5, 10.0 / 1440.0, 10.0, -6.0, 10);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn find_passes_degenerate_windows_return_empty() {
+        let engine = engine_with_iss();
+        let s = engine.satellite_ephemeris_range(0).unwrap()[0];
+        // Empty window (end <= start), non-positive step, and zero max_passes.
+        assert!(engine.find_passes(0, s, s, 10.0 / 1440.0, 10.0, -6.0, 10).is_empty());
+        assert!(engine.find_passes(0, s + 1.0, s, 10.0 / 1440.0, 10.0, -6.0, 10).is_empty());
+        assert!(engine.find_passes(0, s, s + 1.0, 0.0, 10.0, -6.0, 10).is_empty());
+        assert!(engine.find_passes(0, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 0).is_empty());
+        // Out-of-range satellite index.
+        assert!(engine.find_passes(99, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 10).is_empty());
+    }
+
+    #[test]
+    fn find_passes_at_pole_does_not_panic() {
+        // Observer at the north pole (lat = +90) must not panic and returns a valid buffer.
+        let mut engine = engine_with_iss();
+        engine.set_observer_location(90.0, 0.0);
+        let s = engine.satellite_ephemeris_range(0).unwrap()[0];
+        let out = engine.find_passes(0, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 10);
+        assert_eq!(out.len() % PASS_RECORD_LEN, 0);
     }
 }

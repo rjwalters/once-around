@@ -67,169 +67,85 @@ function jdToDate(jd: number): Date {
 }
 
 /**
- * Set engine time from a JavaScript Date
+ * Number of f64 values per pass record returned by `SkyEngine.find_passes`.
+ * Layout: [rise_jd, rise_az, max_jd, max_alt, max_az, set_jd, set_az].
+ * Must match `PASS_RECORD_LEN` in crates/sky_engine/src/lib.rs.
  */
-function setEngineTime(engine: SkyEngine, date: Date): void {
-  engine.set_time_utc(
-    date.getUTCFullYear(),
-    date.getUTCMonth() + 1,
-    date.getUTCDate(),
-    date.getUTCHours(),
-    date.getUTCMinutes(),
-    date.getUTCSeconds() + date.getUTCMilliseconds() / 1000
-  );
-}
+export const PASS_RECORD_LEN = 7;
 
-interface VisibilityState {
-  aboveHorizon: boolean;
-  illuminated: boolean;
-  sunBelowLimit: boolean;
-  altitude: number;
-  azimuth: number;
-  distanceKm: number;
-}
+/** Coarse scan step used by the pass finder: 10 minutes, in days. */
+export const SCAN_STEP_DAYS = 10 / 1440;
 
 /**
- * Get the current visibility state for the satellite.
- * Assumes engine time and observer location are already set.
+ * Determine the [searchStartJD, endJD] window for a pass scan from an engine's
+ * loaded ephemeris. Starts at the current time or the ephemeris start (whichever
+ * is later). Returns null when no ephemeris is loaded or the window is empty.
  */
-function getVisibilityState(engine: SkyEngine, index: number, sunAltLimit: number): VisibilityState {
-  engine.recompute();
-
-  const aboveHorizon = engine.satellite_above_horizon(index);
-  const illuminated = engine.satellite_illuminated(index);
-  const sunAlt = engine.sun_altitude();
-  const sunBelowLimit = sunAlt < sunAltLimit;
-  const distanceKm = engine.satellite_distance_km(index);
-
-  // Estimate altitude from distance (ISS: ~400km at zenith, ~2300km at horizon)
-  const minDist = 400;
-  const maxDist = 2300;
-  const altFraction = Math.max(0, Math.min(1, (maxDist - distanceKm) / (maxDist - minDist)));
-  const altitude = aboveHorizon ? altFraction * 90 : -10;
-
-  return {
-    aboveHorizon,
-    illuminated,
-    sunBelowLimit,
-    altitude,
-    azimuth: 0, // Azimuth computed separately when needed
-    distanceKm
-  };
-}
-
-/**
- * Check if satellite is currently visible (all conditions met).
- */
-function isVisible(state: VisibilityState): boolean {
-  return state.aboveHorizon && state.illuminated && state.sunBelowLimit;
-}
-
-/**
- * Compute altitude and azimuth at a given time.
- * Returns { altitude, azimuth } in degrees.
- */
-function computeAltAz(engine: SkyEngine, date: Date, index: number): { altitude: number; azimuth: number } {
-  setEngineTime(engine, date);
-  engine.recompute();
-
-  const aboveHorizon = engine.satellite_above_horizon(index);
-
-  if (!aboveHorizon) {
-    return { altitude: -10, azimuth: 0 }; // Below horizon
-  }
-
-  // Estimate altitude based on distance
-  // ISS at zenith is ~400km, at horizon is ~2300km
-  const distanceKm = engine.satellite_distance_km(index);
-  // Rough altitude estimate: closer distance = higher altitude
-  // This is a simplification; the actual calculation is more complex
-  const minDist = 400; // km (zenith)
-  const maxDist = 2300; // km (horizon)
-  const altFraction = Math.max(0, Math.min(1, (maxDist - distanceKm) / (maxDist - minDist)));
-  const altitude = altFraction * 90; // degrees
-
-  // Azimuth is harder to estimate without the full calculation
-  // We'll return a placeholder and refine during the actual pass tracking
-  const azimuth = 0; // Placeholder
-
-  return { altitude, azimuth };
-}
-
-/**
- * Binary search to find the exact time when visibility changes.
- * Returns the time when the condition changes (within ~30 seconds precision).
- */
-function binarySearchTransition(
+export function passScanWindow(
   engine: SkyEngine,
-  startDate: Date,
-  endDate: Date,
-  index: number,
-  sunAltLimit: number,
-  findRise: boolean // true = find rise (not visible -> visible), false = find set
-): Date {
-  let lo = startDate.getTime();
-  let hi = endDate.getTime();
-
-  // Binary search to ~30 second precision
-  while (hi - lo > 30000) {
-    const mid = (lo + hi) / 2;
-    const midDate = new Date(mid);
-    setEngineTime(engine, midDate);
-    const state = getVisibilityState(engine, index, sunAltLimit);
-    const visible = isVisible(state);
-
-    if (findRise) {
-      // Looking for transition from not visible to visible
-      if (visible) {
-        hi = mid;
-      } else {
-        lo = mid;
-      }
-    } else {
-      // Looking for transition from visible to not visible
-      if (visible) {
-        lo = mid;
-      } else {
-        hi = mid;
-      }
-    }
+  satelliteIndex: number,
+  nowMs: number = Date.now()
+): { searchStartJD: number; endJD: number } | null {
+  const range = engine.satellite_ephemeris_range(satelliteIndex);
+  if (!range || range.length < 2) {
+    return null;
   }
-
-  return new Date(findRise ? hi : lo);
+  const [startJD, endJD] = range;
+  const nowJD = nowMs / MS_PER_DAY + JD_UNIX_EPOCH;
+  const searchStartJD = Math.max(nowJD, startJD);
+  if (searchStartJD >= endJD) {
+    return null;
+  }
+  return { searchStartJD, endJD };
 }
 
 /**
- * Find the time and altitude of maximum elevation during a pass.
+ * Convert the flat `find_passes` buffer into `ISSPass[]`.
+ * Shared by the synchronous path and the Web Worker path.
  */
-function findMaxAltitude(
-  engine: SkyEngine,
-  startDate: Date,
-  endDate: Date,
-  index: number
-): { time: Date; altitude: number; azimuth: number } {
-  let maxAlt = -90;
-  let maxTime = startDate;
-  let maxAz = 0;
+export function parsePassBuffer(buf: Float64Array | number[]): ISSPass[] {
+  const passes: ISSPass[] = [];
+  for (let i = 0; i + PASS_RECORD_LEN <= buf.length; i += PASS_RECORD_LEN) {
+    const riseJD = buf[i];
+    const riseAz = buf[i + 1];
+    const maxJD = buf[i + 2];
+    const maxAlt = buf[i + 3];
+    const maxAz = buf[i + 4];
+    const setJD = buf[i + 5];
+    const setAz = buf[i + 6];
 
-  // Sample every 30 seconds to find maximum
-  const stepMs = 30000;
-  for (let t = startDate.getTime(); t <= endDate.getTime(); t += stepMs) {
-    const date = new Date(t);
-    const { altitude, azimuth } = computeAltAz(engine, date, index);
+    const riseTime = jdToDate(riseJD);
+    const setTime = jdToDate(setJD);
 
-    if (altitude > maxAlt) {
-      maxAlt = altitude;
-      maxTime = date;
-      maxAz = azimuth;
-    }
+    passes.push({
+      riseTime,
+      riseAzimuth: riseAz,
+      riseDirection: azimuthToDirection(riseAz),
+      maxTime: jdToDate(maxJD),
+      maxAltitude: maxAlt,
+      maxAzimuth: maxAz,
+      setTime,
+      setAzimuth: setAz,
+      setDirection: azimuthToDirection(setAz),
+      duration: (setTime.getTime() - riseTime.getTime()) / 1000,
+      brightness: estimateBrightness(maxAlt)
+    });
   }
-
-  return { time: maxTime, altitude: maxAlt, azimuth: maxAz };
+  return passes;
 }
 
 /**
  * Find upcoming visible ISS passes for the observer's current location.
+ *
+ * The heavy lifting runs entirely inside the WASM engine via `find_passes`, which
+ * scans the ephemeris span using a targeted per-sample evaluation (satellite
+ * interpolation + Sun geometry) instead of ~1000+ full `engine.recompute()` calls
+ * on the main thread. It constructs its own time per sample and never mutates the
+ * shared engine's time, so no save/restore dance is required here.
+ *
+ * This synchronous entry point is used as a fallback when a Web Worker is not
+ * available; the UI normally runs the same scan off the main thread
+ * (see `iss-passes-worker.ts`).
  *
  * @param engine - The SkyEngine instance with observer location set
  * @param options - Configuration options for pass finding
@@ -246,101 +162,24 @@ export function findISSPasses(
     satelliteIndex = SATELLITE_ISS
   } = options;
 
-  // Get ephemeris time range
-  const range = engine.satellite_ephemeris_range(satelliteIndex);
-  if (!range || range.length < 2) {
-    console.warn("No satellite ephemeris loaded");
+  const window = passScanWindow(engine, satelliteIndex);
+  if (!window) {
     return [];
   }
 
-  const [startJD, endJD] = range;
-  const startDate = jdToDate(startJD);
-  const endDate = jdToDate(endJD);
+  // Single fast WASM call: coarse scan + binary-search refinement + max-altitude
+  // sampling all happen inside Rust, returning a flat buffer of pass records.
+  const buf = engine.find_passes(
+    satelliteIndex,
+    window.searchStartJD,
+    window.endJD,
+    SCAN_STEP_DAYS,
+    minAltitude,
+    sunAltitudeLimit,
+    maxPasses
+  );
 
-  // Start from current time or ephemeris start, whichever is later
-  const now = new Date();
-  const searchStart = now > startDate ? now : startDate;
-
-  // Save current engine state
-  const savedJD = engine.julian_date_tdb();
-
-  const passes: ISSPass[] = [];
-  const scanStepMinutes = 10;
-  const scanStepMs = scanStepMinutes * 60 * 1000;
-
-  let currentTime = searchStart.getTime();
-  let wasVisible = false;
-  let passStartTime: Date | null = null;
-
-  // Coarse scan at 10-minute intervals
-  while (currentTime < endDate.getTime() && passes.length < maxPasses) {
-    const date = new Date(currentTime);
-    setEngineTime(engine, date);
-    const state = getVisibilityState(engine, satelliteIndex, sunAltitudeLimit);
-    const nowVisible = isVisible(state);
-
-    if (!wasVisible && nowVisible) {
-      // Pass started - refine the rise time
-      const searchStartDate = new Date(currentTime - scanStepMs);
-      passStartTime = binarySearchTransition(
-        engine,
-        searchStartDate,
-        date,
-        satelliteIndex,
-        sunAltitudeLimit,
-        true // find rise
-      );
-    } else if (wasVisible && !nowVisible && passStartTime) {
-      // Pass ended - refine the set time
-      const searchEndDate = date;
-      const passEndTime = binarySearchTransition(
-        engine,
-        new Date(currentTime - scanStepMs),
-        searchEndDate,
-        satelliteIndex,
-        sunAltitudeLimit,
-        false // find set
-      );
-
-      // Find maximum altitude during pass
-      const maxInfo = findMaxAltitude(engine, passStartTime, passEndTime, satelliteIndex);
-
-      // Only include passes above minimum altitude
-      if (maxInfo.altitude >= minAltitude) {
-        // Get rise/set azimuth
-        const riseAltAz = computeAltAz(engine, passStartTime, satelliteIndex);
-        const setAltAz = computeAltAz(engine, passEndTime, satelliteIndex);
-
-        const pass: ISSPass = {
-          riseTime: passStartTime,
-          riseAzimuth: riseAltAz.azimuth,
-          riseDirection: azimuthToDirection(riseAltAz.azimuth),
-          maxTime: maxInfo.time,
-          maxAltitude: maxInfo.altitude,
-          maxAzimuth: maxInfo.azimuth,
-          setTime: passEndTime,
-          setAzimuth: setAltAz.azimuth,
-          setDirection: azimuthToDirection(setAltAz.azimuth),
-          duration: (passEndTime.getTime() - passStartTime.getTime()) / 1000,
-          brightness: estimateBrightness(maxInfo.altitude)
-        };
-
-        passes.push(pass);
-      }
-
-      passStartTime = null;
-    }
-
-    wasVisible = nowVisible;
-    currentTime += scanStepMs;
-  }
-
-  // Restore engine time
-  const restoredDate = jdToDate(savedJD);
-  setEngineTime(engine, restoredDate);
-  engine.recompute();
-
-  return passes;
+  return parsePassBuffer(buf);
 }
 
 /**
