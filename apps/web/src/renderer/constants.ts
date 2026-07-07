@@ -140,6 +140,12 @@ export const LOD_MAX_STARS_WIDE_FOV = 8000;   // FOV > 70°
 export const LOD_MAX_STARS_MEDIUM_FOV = 15000; // FOV 40-70°
 export const LOD_MAX_STARS_NARROW_FOV = 40000; // FOV < 40°
 
+// Initial capacity for the pre-allocated star geometry buffers. Sized to cover
+// the full BSC5 catalog (~9,100 stars) with headroom for override/synthetic
+// stars and future catalog growth. The stars layer grows these buffers on the
+// rare occasion the rendered count exceeds this capacity.
+export const STARS_CATALOG_CAPACITY = 9500;
+
 // Point source angular size in arcseconds - simulates telescope resolving power
 // A typical backyard telescope (6-8") has ~1 arcsec resolving power
 export const POINT_SOURCE_ANGULAR_SIZE_ARCSEC = 1.0;

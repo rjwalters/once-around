@@ -21,11 +21,18 @@ import {
   LOD_MAX_STARS_MEDIUM_FOV,
   LOD_MAX_STARS_NARROW_FOV,
   POINT_SOURCE_ANGULAR_SIZE_ARCSEC,
+  STARS_CATALOG_CAPACITY,
 } from "../constants";
-import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
-import { bvToColor, angularSizeToPixels, starIdHash } from "../utils/colors";
+import { readPositionFromBuffer, readPositionInPlace, raDecToPosition } from "../utils/coordinates";
+import { bvToColorInPlace, angularSizeToPixels, starIdHash } from "../utils/colors";
 import { calculateLabelOffsetInPlace } from "../utils/labels";
 import { createGlowSpriteMaterial } from "../utils/materials";
+import {
+  computeFovLodBucket,
+  computeTargetStars,
+  rebuildKeyEquals,
+  type StarRebuildKey,
+} from "./stars-lod";
 import type { LabelManager } from "../label-manager";
 
 // -----------------------------------------------------------------------------
@@ -155,8 +162,6 @@ export interface StarsLayer {
   overrideStarsGroup: THREE.Group;
   /** Star labels (HR number -> label) */
   labels: Map<number, CSS2DObject>;
-  /** Star position map (HR number -> position), built during update */
-  getStarPositionMap(): Map<number, THREE.Vector3>;
   /** Constellation star position map (all stars, for drawing constellation lines) */
   getConstellationStarPositionMap(): Map<number, THREE.Vector3>;
   /** Build the constellation star map (called once at init) */
@@ -188,6 +193,67 @@ export interface StarsLayer {
 export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): StarsLayer {
   // Main stars geometry with custom shader for scintillation
   const starsGeometry = new THREE.BufferGeometry();
+
+  // -----------------------------------------------------------------------------
+  // Persistent geometry buffers
+  //
+  // Star positions are J2000-fixed (time-invariant), so instead of allocating
+  // fresh Float32Arrays + BufferAttributes on every update() (which forces
+  // Three.js to dispose and re-upload VBOs), we pre-allocate capacity-sized
+  // typed arrays once, write into them in place, flag `needsUpdate`, and use
+  // setDrawRange() to control how many stars render. This mirrors the pattern
+  // used by the constellations and label-manager layers.
+  // -----------------------------------------------------------------------------
+  let starsCapacity = STARS_CATALOG_CAPACITY;
+  let positionBuffer = new Float32Array(starsCapacity * 3);
+  let colorBuffer = new Float32Array(starsCapacity * 3);
+  let starIdBuffer = new Float32Array(starsCapacity);
+  let magnitudeBuffer = new Float32Array(starsCapacity);
+
+  let positionAttr = new THREE.BufferAttribute(positionBuffer, 3);
+  let colorAttr = new THREE.BufferAttribute(colorBuffer, 3);
+  let starIdAttr = new THREE.BufferAttribute(starIdBuffer, 1);
+  let magnitudeAttr = new THREE.BufferAttribute(magnitudeBuffer, 1);
+  for (const attr of [positionAttr, colorAttr, starIdAttr, magnitudeAttr]) {
+    attr.setUsage(THREE.DynamicDrawUsage);
+  }
+  starsGeometry.setAttribute("position", positionAttr);
+  starsGeometry.setAttribute("color", colorAttr);
+  starsGeometry.setAttribute("starId", starIdAttr);
+  starsGeometry.setAttribute("magnitude", magnitudeAttr);
+  starsGeometry.setDrawRange(0, 0);
+
+  // All stars lie on the sky sphere (radius SKY_RADIUS centered at the origin),
+  // and unused/zero-filled buffer slots sit at the origin (inside it). Fix the
+  // bounding sphere once so frustum culling is correct and Three.js never
+  // recomputes it from the full-capacity buffer on every frame.
+  starsGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), SKY_RADIUS * 1.5);
+
+  /**
+   * Grow the persistent buffers if the required rendered-star count exceeds the
+   * current capacity (rare: only when the catalog grows past the initial size).
+   * Allocates new BufferAttributes only on growth, never in the steady state.
+   */
+  function ensureStarCapacity(needed: number): void {
+    if (needed <= starsCapacity) return;
+    starsCapacity = needed + 512; // grow with headroom to avoid frequent reallocation
+    positionBuffer = new Float32Array(starsCapacity * 3);
+    colorBuffer = new Float32Array(starsCapacity * 3);
+    starIdBuffer = new Float32Array(starsCapacity);
+    magnitudeBuffer = new Float32Array(starsCapacity);
+
+    positionAttr = new THREE.BufferAttribute(positionBuffer, 3);
+    colorAttr = new THREE.BufferAttribute(colorBuffer, 3);
+    starIdAttr = new THREE.BufferAttribute(starIdBuffer, 1);
+    magnitudeAttr = new THREE.BufferAttribute(magnitudeBuffer, 1);
+    for (const attr of [positionAttr, colorAttr, starIdAttr, magnitudeAttr]) {
+      attr.setUsage(THREE.DynamicDrawUsage);
+    }
+    starsGeometry.setAttribute("position", positionAttr);
+    starsGeometry.setAttribute("color", colorAttr);
+    starsGeometry.setAttribute("starId", starIdAttr);
+    starsGeometry.setAttribute("magnitude", magnitudeAttr);
+  }
 
   // Uniforms for scintillation shader
   const scintillationUniforms = {
@@ -237,7 +303,6 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   const starFlagLineColor = new THREE.Color(0.6, 0.6, 0.7);
 
   // State
-  let starPositionMap: Map<number, THREE.Vector3> = new Map();
   let constellationStarPositionMap: Map<number, THREE.Vector3> = new Map();
   let renderedStarCount = 0;
   let starOverrideMap: Map<number, StarOverrideData> = new Map();
@@ -245,6 +310,36 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
   let lastFov: number = 60;
   let lastCanvasHeight: number = 800;
   let currentLabelManager: LabelManager | undefined = undefined;
+
+  // Major-star position pool. updateLabels() only ever reads positions for the
+  // fixed MAJOR_STARS list (~60 entries), so we keep one reusable Vector3 per
+  // major star and populate `starPositionMap` (the currently-visible subset)
+  // by reference during a rebuild. This avoids allocating one Vector3 per star
+  // for the full ~9,100-star catalog on every update.
+  const majorStarIds = new Set<number>(MAJOR_STARS.map(([hr]) => hr));
+  const majorStarPositionPool = new Map<number, THREE.Vector3>();
+  for (const [hr] of MAJOR_STARS) {
+    majorStarPositionPool.set(hr, new THREE.Vector3());
+  }
+  // HR number -> position for major stars currently present in the render set.
+  const starPositionMap: Map<number, THREE.Vector3> = new Map();
+
+  // Scratch objects reused across the per-star loop (no per-star allocation).
+  const scratchPos = new THREE.Vector3();
+  const scratchColor = new THREE.Color();
+
+  // Rebuild skip state. Because star positions are time-invariant, the geometry
+  // only needs rebuilding when one of these inputs changes. Time-only advances
+  // (playback, tour transitions with fixed FOV bucket) reuse the last geometry.
+  let lastRebuildKey: StarRebuildKey | null = null;
+  let overrideVersion = 0;
+
+  // Cached override sprite inputs from the last rebuild. Reused on skipped
+  // frames so override glow sprites can still track FOV changes within a bucket
+  // (their world size depends on FOV) without a full star-geometry rebuild.
+  let cachedOverridePositions: number[] = [];
+  let cachedOverrideColors: number[] = [];
+  let cachedOverrideScales: number[] = [];
 
   function buildConstellationStarMap(engine: SkyEngine): void {
     const positions = getAllStarsPositionBuffer(engine);
@@ -320,40 +415,81 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     activeSpriteCount = starCount;
   }
 
+  /**
+   * Write one rendered star into the persistent buffers at slot `count`.
+   * Uses `scratchColor` for the B-V -> RGB conversion (no per-star allocation).
+   * Returns the next write cursor.
+   */
+  function writeStar(count: number, x: number, y: number, z: number, bv: number, id: number, vmag: number): number {
+    const p = count * 3;
+    positionBuffer[p] = x;
+    positionBuffer[p + 1] = y;
+    positionBuffer[p + 2] = z;
+    bvToColorInPlace(bv, scratchColor);
+    colorBuffer[p] = scratchColor.r;
+    colorBuffer[p + 1] = scratchColor.g;
+    colorBuffer[p + 2] = scratchColor.b;
+    starIdBuffer[count] = id;
+    magnitudeBuffer[count] = vmag;
+    return count + 1;
+  }
+
   function update(engine: SkyEngine, fov: number, canvasHeight: number, labelManager?: LabelManager): void {
     lastEngine = engine;
     lastFov = fov;
     lastCanvasHeight = canvasHeight;
     currentLabelManager = labelManager;
 
-    // Update point size uniform based on FOV
+    // Point size depends on FOV/canvas and must update every frame, even when
+    // the star geometry itself is reused.
     scintillationUniforms.pointSize.value = angularSizeToPixels(POINT_SOURCE_ANGULAR_SIZE_ARCSEC, fov, canvasHeight);
+
+    // Star positions are J2000-fixed, so the visible set + LOD sampling only
+    // change when one of these inputs changes. On a time-only advance the key
+    // is unchanged and we can skip the entire rebuild.
+    const rebuildKey: StarRebuildKey = {
+      magLimit: engine.mag_limit(),
+      visibleCount: engine.visible_stars(),
+      totalStars: engine.total_stars(),
+      fovBucket: computeFovLodBucket(fov),
+      overrideVersion,
+    };
+
+    if (lastRebuildKey && rebuildKeyEquals(lastRebuildKey, rebuildKey)) {
+      // Geometry reused. Override glow sprites still need their world size
+      // refreshed if the FOV changed within the same LOD bucket.
+      if (cachedOverridePositions.length > 0) {
+        updateOverrideStars(cachedOverridePositions, cachedOverrideColors, cachedOverrideScales, fov, canvasHeight);
+      }
+      return;
+    }
+    lastRebuildKey = rebuildKey;
 
     const positions = getStarsPositionBuffer(engine);
     const meta = getStarsMetaBuffer(engine);
-    const totalStars = engine.visible_stars();
+    const totalStars = rebuildKey.visibleCount;
 
-    starPositionMap = new Map();
+    // Reset the currently-visible major-star subset; repopulated by reference.
+    starPositionMap.clear();
 
     if (totalStars === 0 && starOverrideMap.size === 0) {
-      starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
-      starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(0), 3));
-      starsGeometry.setAttribute("starId", new THREE.BufferAttribute(new Float32Array(0), 1));
-      starsGeometry.setAttribute("magnitude", new THREE.BufferAttribute(new Float32Array(0), 1));
+      starsGeometry.setDrawRange(0, 0);
+      positionAttr.needsUpdate = true;
       renderedStarCount = 0;
+      cachedOverridePositions = [];
+      cachedOverrideColors = [];
+      cachedOverrideScales = [];
+      updateOverrideStars(cachedOverridePositions, cachedOverrideColors, cachedOverrideScales, fov, canvasHeight);
       return;
     }
 
     // Calculate target star count based on FOV
-    let targetStars: number;
-    if (fov > 70) {
-      targetStars = LOD_MAX_STARS_WIDE_FOV;
-    } else if (fov > 40) {
-      const t = (fov - 40) / 30;
-      targetStars = Math.floor(LOD_MAX_STARS_NARROW_FOV + t * (LOD_MAX_STARS_MEDIUM_FOV - LOD_MAX_STARS_NARROW_FOV));
-    } else {
-      targetStars = LOD_MAX_STARS_NARROW_FOV;
-    }
+    const targetStars = computeTargetStars(
+      fov,
+      LOD_MAX_STARS_WIDE_FOV,
+      LOD_MAX_STARS_MEDIUM_FOV,
+      LOD_MAX_STARS_NARROW_FOV
+    );
 
     // First pass: count bright and faint stars
     let brightCount = 0;
@@ -371,19 +507,20 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     const faintTarget = Math.max(0, targetStars - brightCount);
     const faintProbability = faintCount > 0 ? Math.min(1.0, faintTarget / faintCount) : 1.0;
 
+    // Ensure the persistent buffers can hold the worst case: every visible star
+    // rendered plus one extra slot for each override (non-visible / synthetic).
+    ensureStarCapacity(totalStars + starOverrideMap.size);
+
     // Track which override stars we've found
     const foundOverrideStars = new Set<number>();
 
-    // Second pass: build arrays with LOD sampling
-    const scaledPositions: number[] = [];
-    const colors: number[] = [];
-    const starIds: number[] = [];
-    const magnitudes: number[] = [];
-
+    // Override glow sprite inputs (small; only populated when overrides exist).
     const overridePositions: number[] = [];
     const overrideColors: number[] = [];
     const overrideScales: number[] = [];
 
+    // Second pass: write directly into the persistent buffers with LOD sampling.
+    let count = 0;
     for (let i = 0; i < totalStars; i++) {
       let vmag = meta[i * 4];
       let bv = meta[i * 4 + 1];
@@ -401,19 +538,21 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
       const isBright = vmag < LOD_BRIGHT_MAG_THRESHOLD;
       const includeInRender = hasOverride || isBright || (starIdHash(id) < faintProbability);
 
-      const pos = readPositionFromBuffer(positions, i, SKY_RADIUS);
-      starPositionMap.set(id, pos);
+      readPositionInPlace(positions, i, SKY_RADIUS, scratchPos);
+
+      // Only major stars need a persistent position for label placement.
+      if (majorStarIds.has(id)) {
+        const v = majorStarPositionPool.get(id)!;
+        v.copy(scratchPos);
+        starPositionMap.set(id, v);
+      }
 
       if (includeInRender) {
-        scaledPositions.push(pos.x, pos.y, pos.z);
-        const color = bvToColor(bv);
-        colors.push(color.r, color.g, color.b);
-        starIds.push(id);
-        magnitudes.push(vmag);
+        count = writeStar(count, scratchPos.x, scratchPos.y, scratchPos.z, bv, id, vmag);
 
         if (hasOverride) {
-          overridePositions.push(pos.x, pos.y, pos.z);
-          overrideColors.push(color.r, color.g, color.b);
+          overridePositions.push(scratchPos.x, scratchPos.y, scratchPos.z);
+          overrideColors.push(scratchColor.r, scratchColor.g, scratchColor.b);
           overrideScales.push(override.scale ?? 1);
         }
       }
@@ -445,17 +584,17 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
         if (override.magnitude !== undefined) vmag = override.magnitude;
         if (override.bvColor !== undefined) bv = override.bvColor;
 
-        const pos = readPositionFromBuffer(allPositions, i, SKY_RADIUS);
-        starPositionMap.set(id, pos);
+        readPositionInPlace(allPositions, i, SKY_RADIUS, scratchPos);
+        if (majorStarIds.has(id)) {
+          const v = majorStarPositionPool.get(id)!;
+          v.copy(scratchPos);
+          starPositionMap.set(id, v);
+        }
 
-        scaledPositions.push(pos.x, pos.y, pos.z);
-        const color = bvToColor(bv);
-        colors.push(color.r, color.g, color.b);
-        starIds.push(id);
-        magnitudes.push(vmag);
+        count = writeStar(count, scratchPos.x, scratchPos.y, scratchPos.z, bv, id, vmag);
 
-        overridePositions.push(pos.x, pos.y, pos.z);
-        overrideColors.push(color.r, color.g, color.b);
+        overridePositions.push(scratchPos.x, scratchPos.y, scratchPos.z);
+        overrideColors.push(scratchColor.r, scratchColor.g, scratchColor.b);
         overrideScales.push(override.scale ?? 1);
 
         // Stop early if we found all override stars
@@ -471,30 +610,36 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
         const bv = override.bvColor ?? 0;
 
         const pos = raDecToPosition(override.ra, override.dec, SKY_RADIUS);
-        starPositionMap.set(id, pos);
+        if (majorStarIds.has(id)) {
+          const v = majorStarPositionPool.get(id)!;
+          v.copy(pos);
+          starPositionMap.set(id, v);
+        }
 
-        // Add to main star arrays so it renders with other stars
-        scaledPositions.push(pos.x, pos.y, pos.z);
-        const color = bvToColor(bv);
-        colors.push(color.r, color.g, color.b);
-        starIds.push(id);
-        magnitudes.push(vmag);
+        // Add to main star buffers so it renders with other stars
+        count = writeStar(count, pos.x, pos.y, pos.z, bv, id, vmag);
 
         // Also add to override arrays for the glow sprite rendering
         overridePositions.push(pos.x, pos.y, pos.z);
-        overrideColors.push(color.r, color.g, color.b);
+        overrideColors.push(scratchColor.r, scratchColor.g, scratchColor.b);
         overrideScales.push(override.scale ?? 1);
       }
     }
 
+    // Cache override sprite inputs so skipped frames can still refresh sprite
+    // sizes, then update the sprites for this frame.
+    cachedOverridePositions = overridePositions;
+    cachedOverrideColors = overrideColors;
+    cachedOverrideScales = overrideScales;
     updateOverrideStars(overridePositions, overrideColors, overrideScales, fov, canvasHeight);
 
-    starsGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(scaledPositions), 3));
-    starsGeometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(colors), 3));
-    starsGeometry.setAttribute("starId", new THREE.BufferAttribute(new Float32Array(starIds), 1));
-    starsGeometry.setAttribute("magnitude", new THREE.BufferAttribute(new Float32Array(magnitudes), 1));
+    positionAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
+    starIdAttr.needsUpdate = true;
+    magnitudeAttr.needsUpdate = true;
+    starsGeometry.setDrawRange(0, count);
 
-    renderedStarCount = scaledPositions.length / 3;
+    renderedStarCount = count;
   }
 
   function updateLabels(labelsVisible: boolean): void {
@@ -539,6 +684,9 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
         dec: override.dec,
       });
     }
+    // Bump the override version so the next update() forces a rebuild (tour
+    // effects must always take effect, bypassing the time-only skip).
+    overrideVersion++;
     if (lastEngine) {
       update(lastEngine, lastFov, lastCanvasHeight);
     }
@@ -546,6 +694,7 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
 
   function clearOverrides(): void {
     starOverrideMap.clear();
+    overrideVersion++;
     if (lastEngine) {
       update(lastEngine, lastFov, lastCanvasHeight);
     }
@@ -595,7 +744,6 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
     points: starsPoints,
     overrideStarsGroup,
     labels: starLabels,
-    getStarPositionMap: () => starPositionMap,
     getConstellationStarPositionMap: () => constellationStarPositionMap,
     buildConstellationStarMap,
     update,
