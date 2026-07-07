@@ -19,6 +19,7 @@ import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { computeGMST } from "../../geometry/time";
 import { SKY_RADIUS } from "../constants";
+import { ECLIPSE_PATHS, type EclipsePathPoint } from "../../eclipsePaths";
 import {
   earthVertexShader,
   earthFragmentShader,
@@ -53,6 +54,23 @@ const HUBBLE_ORBIT_INCLINATION_DEG = 28.5;
 const HUBBLE_ORBIT_RADIUS =
   (EARTH_RADIUS * (EARTH_MEAN_RADIUS_KM + HUBBLE_ORBIT_ALTITUDE_KM)) /
   EARTH_MEAN_RADIUS_KM;
+
+// --- Eclipse ground-track overlay configuration (issue #67) ---
+//
+// The catalog center lines (apps/web/src/eclipsePaths.ts) are drawn as
+// polylines hugging the Earth's surface. Like the SAA cap they are parented to
+// the Earth mesh, so they inherit the GMST rotation and sit at the correct
+// geographic location, and they are always shown while the Earth mesh renders
+// (Hubble mode). This "always-on" choice mirrors the SAA precedent and keeps
+// the tracks decoupled from which eclipse the banner currently highlights.
+//
+// Center-line vertices are sparse (segments span up to ~50°). Each segment is
+// densified by spherical interpolation so the polyline follows the great circle
+// on the sphere rather than cutting a chord through it — this keeps far-side
+// portions correctly occluded by the opaque Earth via depth testing.
+const ECLIPSE_TRACK_LIFT = 1.004;        // Radius factor above the surface
+const ECLIPSE_TRACK_MAX_STEP_DEG = 2;    // Max angular spacing of densified points
+const ECLIPSE_TRACK_COLOR = 0xffcc44;    // Amber, evoking the eclipsed Sun's corona
 
 // Sun avoidance zone shader: renders a translucent warning cone on the sky
 // sphere within HUBBLE_SUN_AVOIDANCE_RAD of the Sun direction (mirrors the JWST
@@ -110,6 +128,66 @@ export function geoToLocalDirection(latDeg: number, lonDeg: number): THREE.Vecto
     Math.sin(latRad),
     -cosLat * Math.sin(lonRad)
   ).normalize();
+}
+
+/**
+ * Convert an eclipse center-line polyline into a flat Float32Array of vertex
+ * positions in the Earth mesh's local frame, ready for a THREE.Line geometry.
+ *
+ * Each input vertex is mapped to a surface direction via {@link geoToLocalDirection}
+ * and scaled to `radius`. Consecutive vertices are joined by spherical
+ * interpolation (slerp) subdivided so no two emitted points are more than
+ * `maxStepDeg` apart on the sphere; this makes the polyline hug the surface
+ * along the great circle between vertices instead of chording through the
+ * globe, so the opaque Earth occludes the far-side portion correctly.
+ *
+ * Pure and allocation-light (used once at construction — the paths are static).
+ * Exported for testing.
+ */
+export function eclipseTrackLocalPositions(
+  centerLine: EclipsePathPoint[],
+  radius: number,
+  maxStepDeg = ECLIPSE_TRACK_MAX_STEP_DEG
+): Float32Array {
+  if (centerLine.length === 0) return new Float32Array(0);
+
+  const dirs = centerLine.map((p) => geoToLocalDirection(p.lat, p.lon));
+  if (dirs.length === 1) {
+    const d = dirs[0].multiplyScalar(radius);
+    return new Float32Array([d.x, d.y, d.z]);
+  }
+
+  const out: number[] = [];
+  const push = (d: THREE.Vector3) => {
+    out.push(d.x * radius, d.y * radius, d.z * radius);
+  };
+
+  const maxStepRad = (maxStepDeg * Math.PI) / 180;
+  push(dirs[0]);
+  const tmp = new THREE.Vector3();
+  for (let i = 0; i < dirs.length - 1; i++) {
+    const a = dirs[i];
+    const b = dirs[i + 1];
+    const omega = Math.acos(Math.max(-1, Math.min(1, a.dot(b))));
+    // Number of sub-segments so each spans <= maxStepRad. Always >= 1 so the
+    // segment endpoint (the next vertex) is emitted exactly.
+    const steps = Math.max(1, Math.ceil(omega / maxStepRad));
+    const sinOmega = Math.sin(omega);
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      if (sinOmega < 1e-9) {
+        // Coincident/antipodal-safe fallback: linear blend, renormalized.
+        tmp.copy(a).multiplyScalar(1 - t).addScaledVector(b, t).normalize();
+      } else {
+        // Spherical linear interpolation between the two unit directions.
+        const wa = Math.sin((1 - t) * omega) / sinOmega;
+        const wb = Math.sin(t * omega) / sinOmega;
+        tmp.copy(a).multiplyScalar(wa).addScaledVector(b, wb).normalize();
+      }
+      push(tmp);
+    }
+  }
+  return new Float32Array(out);
 }
 
 // Module-level scratch vectors/quaternion reused every frame to avoid per-call
@@ -358,6 +436,33 @@ export function createEarthLayer(
   saaLabel.layers.set(0);
   saaLabel.position.copy(saaDir).multiplyScalar(EARTH_RADIUS * 1.02);
   earthMesh.add(saaLabel);
+
+  // --- Eclipse center-line ground tracks (issue #67) ---
+  // Each catalog center line is drawn as a polyline hugging the surface and
+  // parented to earthMesh, so the tracks rotate with the GMST rotation and sit
+  // at the correct geographic longitude/latitude (the 2026 Spain landfall lands
+  // over northern Spain, matching the SVG mini-map data). Geometry is built once
+  // from the static catalog — no per-frame work. depthTest keeps the far-side
+  // portion of each loop occluded by the opaque Earth; depthWrite is off so the
+  // thin lines never occlude the surface or one another.
+  const eclipseTrackMaterial = new THREE.LineBasicMaterial({
+    color: ECLIPSE_TRACK_COLOR,
+    transparent: true,
+    opacity: 0.85,
+    depthWrite: false,
+  });
+  for (const path of ECLIPSE_PATHS) {
+    const positions = eclipseTrackLocalPositions(
+      path.centerLine,
+      EARTH_RADIUS * ECLIPSE_TRACK_LIFT
+    );
+    if (positions.length < 6) continue; // need >= 2 points to draw a segment
+    const trackGeometry = new THREE.BufferGeometry();
+    trackGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const track = new THREE.Line(trackGeometry, eclipseTrackMaterial);
+    track.name = `eclipse-track:${path.eclipseDatetime}`;
+    earthMesh.add(track);
+  }
 
   // Track current positioning state
   let hasBeenPositioned = false;
