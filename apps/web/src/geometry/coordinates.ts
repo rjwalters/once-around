@@ -3,52 +3,35 @@
  *
  * Pure functions for converting between celestial coordinate systems:
  * - Equatorial (RA/Dec) ↔ Horizontal (Alt/Az)
- * - Equatorial (RA/Dec) ↔ Three.js direction vectors and positions
  * - Ecliptic ↔ Equatorial
  * - 3D position → RA/Dec
- * - RA/Dec → camera orientation quaternion
- */
-
-import * as THREE from "three";
-
-// ---------------------------------------------------------------------------
-// Direction vectors & positions
-// ---------------------------------------------------------------------------
-
-/**
- * Convert RA/Dec (degrees) to a unit direction vector in Three.js coordinates.
+ * - Great-circle angular separation
  *
- * Coordinate convention:
- *   -X → RA=0°, Dec=0°  |  Y → North celestial pole  |  +Z → RA=90°, Dec=0°
+ * This module is intentionally free of any `three` import so that
+ * dependency-light entry points (e.g. the standalone /test AR diagnostics page)
+ * can import these pure conversions without pulling in the Three.js bundle. The
+ * Three.js-returning helpers (raDecToDirection / raDecToPosition /
+ * raDecToQuaternion) live in `coordinates-three.ts` and are re-exported below so
+ * existing import sites keep working unchanged.
  */
-export function raDecToDirection(raDeg: number, decDeg: number): THREE.Vector3 {
-  const raRad = (raDeg * Math.PI) / 180;
-  const decRad = (decDeg * Math.PI) / 180;
-  const cosDec = Math.cos(decRad);
-  return new THREE.Vector3(
-    -cosDec * Math.cos(raRad),
-    Math.sin(decRad),
-    cosDec * Math.sin(raRad)
-  );
-}
 
-/**
- * Convert RA/Dec (degrees) to a 3D position on a sky sphere of the given radius.
- * Same coordinate convention as raDecToDirection.
- */
-export function raDecToPosition(ra: number, dec: number, radius: number): THREE.Vector3 {
-  const raRad = (ra * Math.PI) / 180;
-  const decRad = (dec * Math.PI) / 180;
-  return new THREE.Vector3(
-    -radius * Math.cos(decRad) * Math.cos(raRad),
-    radius * Math.sin(decRad),
-    radius * Math.cos(decRad) * Math.sin(raRad)
-  );
-}
+// Re-export the Three.js-dependent helpers for backward compatibility. Because
+// these are re-exports (not local definitions), importers that only use the
+// pure functions above tree-shake `coordinates-three.ts` — and Three.js — out
+// of their bundle entirely.
+export {
+  raDecToDirection,
+  raDecToPosition,
+  raDecToQuaternion,
+} from "./coordinates-three";
+
+// ---------------------------------------------------------------------------
+// Position → RA/Dec
+// ---------------------------------------------------------------------------
 
 /**
  * Convert a 3D position (Three.js coordinates) to RA/Dec in degrees.
- * Accepts either THREE.Vector3 or a plain { x, y, z } object.
+ * Accepts either a THREE.Vector3 or a plain { x, y, z } object.
  */
 export function positionToRaDec(pos: { x: number; y: number; z: number }): {
   ra: number;
@@ -64,52 +47,6 @@ export function positionToRaDec(pos: { x: number; y: number; z: number }): {
   if (ra < 0) ra += 360;
 
   return { ra, dec };
-}
-
-// ---------------------------------------------------------------------------
-// Camera orientation
-// ---------------------------------------------------------------------------
-
-/**
- * Create a quaternion that orients the camera to look at the given RA/Dec,
- * with "up" aligned toward the celestial north pole.
- * Prevents roll accumulation during navigation.
- */
-export function raDecToQuaternion(ra: number, dec: number): THREE.Quaternion {
-  const raRad = (ra * Math.PI) / 180;
-  const decRad = (dec * Math.PI) / 180;
-
-  const cosDec = Math.cos(decRad);
-  const viewDir = new THREE.Vector3(
-    -cosDec * Math.cos(raRad),
-    Math.sin(decRad),
-    cosDec * Math.sin(raRad)
-  );
-
-  const northPole = new THREE.Vector3(0, 1, 0);
-  const up = northPole
-    .clone()
-    .sub(viewDir.clone().multiplyScalar(northPole.dot(viewDir)))
-    .normalize();
-
-  // At poles, use RA=0 direction as reference for "up"
-  if (up.lengthSq() < 0.001) {
-    const ra0Dir = new THREE.Vector3(-1, 0, 0);
-    up.copy(
-      ra0Dir.sub(viewDir.clone().multiplyScalar(ra0Dir.dot(viewDir))).normalize()
-    );
-  }
-
-  const right = new THREE.Vector3().crossVectors(viewDir, up).normalize();
-
-  // Camera looks along -Z in its local space:
-  //   right = local +X, up = local +Y, -viewDir = local +Z
-  const m = new THREE.Matrix4();
-  m.makeBasis(right, up, viewDir.clone().negate());
-
-  const quat = new THREE.Quaternion();
-  quat.setFromRotationMatrix(m);
-  return quat;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +128,38 @@ export function horizontalToEquatorial(
   if (ra >= 360) ra -= 360;
 
   return { ra, dec: (dec * 180) / Math.PI };
+}
+
+/**
+ * Great-circle angular separation between two points on the celestial sphere,
+ * each given as horizontal coordinates (altitude, azimuth) in degrees.
+ *
+ * Uses the spherical law of cosines:
+ *   cos(sep) = sin(alt1)·sin(alt2) + cos(alt1)·cos(alt2)·cos(az2 − az1)
+ *
+ * Because azimuth appears only through the cosine of its difference, the result
+ * is independent of the azimuth reference direction and sign convention, as long
+ * as both points use the same one. The result is a true great-circle angle, not
+ * a naive Euclidean delta of the two coordinate pairs.
+ *
+ * @returns Separation in degrees, in the range [0, 180].
+ */
+export function angularSeparation(
+  alt1Deg: number,
+  az1Deg: number,
+  alt2Deg: number,
+  az2Deg: number
+): number {
+  const deg = Math.PI / 180;
+  const alt1 = alt1Deg * deg;
+  const alt2 = alt2Deg * deg;
+  const dAz = (az2Deg - az1Deg) * deg;
+
+  const cosSep =
+    Math.sin(alt1) * Math.sin(alt2) +
+    Math.cos(alt1) * Math.cos(alt2) * Math.cos(dAz);
+
+  return (Math.acos(Math.max(-1, Math.min(1, cosSep))) * 180) / Math.PI;
 }
 
 // ---------------------------------------------------------------------------

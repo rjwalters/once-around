@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0a0a1a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>AR Calibration Diagnostics</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      body {
+        background: #05060f;
+        color: #e6e8f0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 16px;
+        line-height: 1.4;
+        overscroll-behavior: none;
+      }
+      #app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Crosshairs overlay: fixed to the geometric center of the viewport so it
+         is centered in both portrait and landscape orientations. */
+      #crosshairs {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 120px;
+        height: 120px;
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.85;
+      }
+      #crosshairs::before,
+      #crosshairs::after {
+        content: "";
+        position: absolute;
+        background: #6ad1ff;
+        box-shadow: 0 0 6px rgba(106, 209, 255, 0.6);
+      }
+      #crosshairs::before {
+        left: 50%;
+        top: 0;
+        width: 2px;
+        height: 100%;
+        transform: translateX(-50%);
+      }
+      #crosshairs::after {
+        top: 50%;
+        left: 0;
+        height: 2px;
+        width: 100%;
+        transform: translateY(-50%);
+      }
+      #crosshairs .dot {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 14px;
+        height: 14px;
+        border: 2px solid #6ad1ff;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      header {
+        padding: 16px 16px 8px;
+        z-index: 2;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      header p {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: #9aa0b4;
+      }
+
+      main {
+        position: relative;
+        z-index: 2;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 16px;
+        gap: 16px;
+      }
+
+      #status {
+        font-size: 14px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      #status.error {
+        background: rgba(255, 80, 80, 0.12);
+        border-color: rgba(255, 80, 80, 0.4);
+        color: #ffb4b4;
+      }
+      #status.ok {
+        background: rgba(80, 220, 140, 0.1);
+        border-color: rgba(80, 220, 140, 0.35);
+      }
+
+      .selector {
+        display: flex;
+        gap: 10px;
+      }
+      .selector button {
+        flex: 1;
+      }
+
+      button {
+        font: inherit;
+        color: #e6e8f0;
+        background: #1b2140;
+        border: 1px solid #2c355f;
+        border-radius: 12px;
+        padding: 16px;
+        min-height: 56px;
+        font-weight: 600;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      button:active {
+        background: #262e57;
+      }
+      button.primary {
+        background: #2a56d6;
+        border-color: #3a68ea;
+      }
+      button.primary:active {
+        background: #3a68ea;
+      }
+      button[aria-pressed="true"] {
+        background: #2a56d6;
+        border-color: #6ad1ff;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      #capture {
+        font-size: 18px;
+      }
+
+      #snapshot {
+        display: none;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 12px 14px;
+      }
+      #snapshot.visible {
+        display: block;
+      }
+      #snapshot .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 3px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      #snapshot .row:last-child {
+        border-bottom: none;
+      }
+      #snapshot .label {
+        color: #9aa0b4;
+        white-space: nowrap;
+      }
+      #snapshot .value {
+        text-align: right;
+        word-break: break-all;
+      }
+      #snapshot .error-big {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      #snapshot .good {
+        color: #7ff0a8;
+      }
+      #snapshot .warn {
+        color: #ffd27f;
+      }
+      #snapshot .bad {
+        color: #ff9a9a;
+      }
+      .hint {
+        font-size: 12px;
+        color: #6f7590;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="crosshairs" aria-hidden="true"><span class="dot"></span></div>
+      <header>
+        <h1>AR Calibration Diagnostics</h1>
+        <p>
+          Aim the back of your phone (camera) at the selected body so it sits on
+          the crosshairs, then tap capture.
+        </p>
+      </header>
+      <main>
+        <div id="snapshot" aria-live="polite"></div>
+        <div id="status">Initializing…</div>
+        <button id="enable" class="primary" type="button" hidden>
+          Enable AR sensors
+        </button>
+        <div class="selector" role="group" aria-label="Target body">
+          <button id="target-sun" type="button" aria-pressed="true">☀︎ Sun</button>
+          <button id="target-moon" type="button" aria-pressed="false">☾ Moon</button>
+        </div>
+        <button id="capture" class="primary" type="button" disabled>
+          On crosshairs
+        </button>
+        <p class="hint">
+          Angular error is the great-circle gap between where the phone reports
+          it is pointing and where the body actually is. A small error (&lt; ~5°)
+          means the pipeline is well calibrated.
+        </p>
+      </main>
+    </div>
+    <script type="module" src="/src/test-page.ts"></script>
+  </body>
+</html>
