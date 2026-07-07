@@ -480,17 +480,39 @@ void main() {
 // Milky Way procedural shader
 // -----------------------------------------------------------------------------
 
-export const milkyWayVertexShader = `
-varying vec3 vPosition;
+// The Milky Way is a static feature for a given limiting magnitude, so rather
+// than evaluating the expensive procedural FBM (72 hash evals/pixel) every
+// frame we bake it once into an equirectangular texture and display that on a
+// textured sphere. These bake shaders render a fullscreen NDC quad; the
+// fragment shader reconstructs the same view direction the display
+// SphereGeometry has at each UV and runs the identical FBM/coloring/alpha
+// logic. Re-baking only happens when uLimitingMag changes.
+//
+// Color-space note: like every other celestial shader in this file, both the
+// bake and display shaders write raw values to gl_FragColor and deliberately
+// omit `#include <colorspace_fragment>`. The original Milky Way was a custom
+// ShaderMaterial that wrote its raw RGB straight to the sRGB canvas (zero
+// encodes). The bake shader stores that same raw RGBA into an RGBA8
+// (NoColorSpace) render target with NoBlending, and the custom display shader
+// below samples it and writes it straight to the canvas — again with no
+// colorspace_fragment, so no sRGB OETF is applied. This reproduces the old
+// direct-render appearance byte-for-byte. (A built-in material such as
+// MeshBasicMaterial would append linearToOutputTexel and add an sRGB encode the
+// original never had, brightening/tint-shifting the result.)
+
+// Passthrough vertex shader for the fullscreen NDC quad (PlaneGeometry(2, 2)).
+// position.xy already spans clip space (-1..1), so no camera transform is used.
+export const milkyWayBakeVertexShader = `
+varying vec2 vUv;
 
 void main() {
-  vPosition = position;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vUv = uv;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
 }
 `;
 
-export const milkyWayFragmentShader = `
-varying vec3 vPosition;
+export const milkyWayBakeFragmentShader = `
+varying vec2 vUv;
 uniform float uLimitingMag; // Limiting magnitude of the sky
 
 // Transformation matrix from equatorial to galactic coordinates (column-major for GLSL)
@@ -553,8 +575,24 @@ void main() {
     return;
   }
 
-  // Normalize position to get direction on unit sphere (Three.js Y-up coords)
-  vec3 dir = normalize(vPosition);
+  // Reconstruct the view direction the display SphereGeometry has at this UV.
+  // Three.js SphereGeometry (phiStart=0, phiLength=2PI, thetaStart=0,
+  // thetaLength=PI) stores uv = (u, 1 - v) where:
+  //   x = -cos(phi) * sin(theta), y = cos(theta), z = sin(phi) * sin(theta)
+  //   phi = u * 2PI, theta = v * PI
+  // so from the stored uv: phi = vUv.x * 2PI, theta = (1 - vUv.y) * PI.
+  // Reconstructing dir here (instead of sampling vPosition) means the baked
+  // texel at each UV matches exactly what the sphere samples — no seam, since
+  // phi = 0 and phi = 2PI map to the identical direction.
+  const float PI = 3.14159265358979;
+  float phi = vUv.x * 2.0 * PI;
+  float theta = (1.0 - vUv.y) * PI;
+  float sinTheta = sin(theta);
+  vec3 dir = normalize(vec3(
+    -cos(phi) * sinTheta,
+    cos(theta),
+    sin(phi) * sinTheta
+  ));
 
   // Convert from Three.js (Y-up) to equatorial (Z-up) before galactic transform
   // Three.js: X=RA0, Y=north pole, Z=RA90
@@ -611,6 +649,33 @@ void main() {
   // Final output - subtle glow, not overpowering the stars
   float alpha = brightness * 0.4 * visibility;
   gl_FragColor = vec4(color * brightness * 0.5 * visibility, alpha);
+}
+`;
+
+// Display shaders for the baked equirect texture. Standard sphere projection in
+// the vertex shader; the fragment shader samples the baked texture and writes it
+// straight to gl_FragColor. Crucially it omits `#include <colorspace_fragment>`,
+// so no sRGB OETF encode is applied — reproducing the old custom ShaderMaterial's
+// raw passthrough exactly. Using a built-in MeshBasicMaterial here would add that
+// encode (via linearToOutputTexel) and shift the appearance.
+export const milkyWayDisplayVertexShader = `
+varying vec2 vUv;
+
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+export const milkyWayDisplayFragmentShader = `
+varying vec2 vUv;
+uniform sampler2D uBakedTexture;
+
+void main() {
+  // Raw passthrough of the baked straight-alpha RGBA. No colorspace_fragment,
+  // so the value written to the canvas is identical to what the bake stored,
+  // matching the original direct-render (un-encoded) output.
+  gl_FragColor = texture2D(uBakedTexture, vUv);
 }
 `;
 
