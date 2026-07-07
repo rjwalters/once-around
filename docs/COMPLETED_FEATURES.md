@@ -10,6 +10,8 @@ Historical record of implemented features in Once Around the Night Sky.
 - [Comet System](#comet-system)
 - [Observer Location & Topocentric Mode](#observer-location--topocentric-mode)
 - [View Mode System](#view-mode-system)
+- [Space Telescope Tools](#space-telescope-tools)
+- [Eclipse Path Integration](#eclipse-path-integration)
 - [Deep Sky Objects](#deep-sky-objects)
 - [Stellar Scintillation](#stellar-scintillation)
 - [UI Framework](#ui-framework)
@@ -19,6 +21,7 @@ Historical record of implemented features in Once Around the Night Sky.
 - [Meteor Showers](#meteor-showers)
 - [ISS Pass Predictions](#iss-pass-predictions)
 - [PWA Support](#pwa-support)
+- [Accuracy Validation](#accuracy-validation)
 
 ---
 
@@ -33,7 +36,7 @@ Historical record of implemented features in Once Around the Night Sky.
 
 ## Guided Tours
 
-Planetarium-style guided tours with keyframe animation. 18 tours available.
+Planetarium-style guided tours with keyframe animation. 23 tours available.
 
 **Features:**
 - Smooth camera transitions between keyframes
@@ -52,6 +55,8 @@ Planetarium-style guided tours with keyframe animation. 18 tours available.
 - Hale-Bopp 1997
 - Halley 1986
 - Halley 2061 (preview the next return)
+- Great Comet of 1811 (visible ~9 months)
+- Ikeya-Seki 1965 (Kreutz sungrazer, visible in daylight)
 
 **Historical Supernova Tours:**
 - SN 1054: Birth of the Crab Nebula (from Kaifeng, China)
@@ -69,6 +74,14 @@ Planetarium-style guided tours with keyframe animation. 18 tours available.
 - Discovery of Uranus (1781): Herschel in Bath, England
 - Discovery of Neptune (1846): Found by Le Verrier's math, seen by Galle
 - Discovery of Pluto (1930): Tombaugh's blink comparator
+
+**Historical Eclipse Tour:**
+- 1919 Eddington Eclipse: engine-accurate totality from Sobral, Brazil (proved general relativity)
+- 585 BCE Battle of Halys Eclipse: historical sky over Anatolia (totality is beyond the engine's lunar-theory/ΔT validity that far back; scoped honestly with a user-facing caption)
+
+**Space Mission Moments Tour:**
+- Apollo 8 Earthrise (December 24, 1968): Earth-based framing of the Moon at the mission's actual instants
+- Voyager 1 Pale Blue Dot (February 14, 1990): spacecraft remote viewpoint
 
 ---
 
@@ -310,6 +323,41 @@ function horizontalToEquatorial(
 
 ---
 
+## Space Telescope Tools
+
+Enhancements to the Hubble/JWST view modes.
+
+### Orbital Constraint Overlays (Hubble)
+
+- **Sun avoidance zone** - Translucent ~50° exclusion cone around the Sun on the sky sphere
+- **South Atlantic Anomaly** - Red surface cap at ~25°S/45°W, parented to the Earth mesh so it rotates with GMST, with a camera-facing-culled "SAA" label
+- **Orbital path** - Schematic ring at HST's ~28.5° inclination and scaled ~540 km altitude (RAAN precession not modeled; fixed line of nodes)
+- JWST's existing 45° L2 field-of-regard overlay is separate — each telescope shows its own real constraints
+
+### FGS Guide Star Lock
+
+Simulates fine-guidance-sensor pointing in Hubble/JWST modes.
+
+- "Lock Guide Star" button (or `G` key) acquires the nearest bright star within a 25° cone (ties broken toward brighter)
+- 700ms slew centers the star, free navigation freezes, cyan FGS crosshair reticle tracks the star with an "FGS LOCK · name" readout
+- Releases on toggle, on leaving telescope modes, and on tour start
+- Render-on-demand compliant: a settled lock issues no re-renders
+
+---
+
+## Eclipse Path Integration
+
+Location-aware totality path tools in the eclipse banner (`eclipsePaths.ts`, `eclipse-path-map.ts`).
+
+- **Center-line data** for the 2024 (Mexico/US/Canada), 2026 (Spain), 2027 (Egypt), and 2028 (Australia) total eclipses, curated from NASA GSFC/Espenak predictions
+- **Inline-SVG mini-map** showing the center line, observer position, and nearest path point
+- **Distance readout** - "You are X km from the center line" (haversine great-circle geometry)
+- **Local circumstances** - inside-path test and local totality duration (chord-factor estimate)
+- **Navigate to path** - one click snaps the observer to the nearest center-line point via the location manager
+- Deferred: 3D on-sphere ground-track rendering and engine-computed Besselian elements
+
+---
+
 ## Deep Sky Objects
 
 DSO ellipse markers and 28 deep field images rendered with full visual treatment.
@@ -516,6 +564,11 @@ Binary format: `[count: u32][jd: f64, x: f64, y: f64, z: f64]...`
 
 Ephemeris regeneration script: `scripts/generate_satellite_ephemeris.py`
 
+### Automatic Freshness
+
+- **Weekly refresh** - GitHub Actions cron (`refresh-satellite-ephemeris.yml`, Mondays 06:00 UTC) regenerates 45-day ISS/Hubble ephemeris from NASA Horizons and commits the binaries
+- **Staleness indicator** - `getEphemerisStatus()` classifies coverage (ok/stale/future/missing); the ISS Passes panel shows an explicit "ephemeris expired" warning instead of a misleading empty state
+
 ### Visibility Rules
 
 Satellites are displayed when ALL conditions are met:
@@ -630,3 +683,21 @@ Progressive Web App for offline stargazing.
 - Apple-specific meta tags for standalone mode
 - Theme color for status bar
 - Touch icon for home screen
+
+---
+
+## Accuracy Validation
+
+Regression suites guarding the astronomy engine (`sky_engine_core`).
+
+### Golden-Value Regression Tests
+
+- Bit-identity snapshots of body/moon/comet positions guard against unintended drift (self-generated reference values)
+
+### JPL Horizons Validation
+
+External-authority accuracy tests (`tests/horizons_accuracy.rs`) against NASA/JPL Horizons reference data, checked in as an offline CSV fixture (regenerate with `scripts/fetch_horizons_reference.py`).
+
+- **Coverage:** Sun, Moon, all 8 planets, Pluto at 4 epochs (J2000/2020/2026/2030); Halley and NEOWISE near their element epochs; one topocentric Moon site
+- **Frame matching:** VSOP87/orbital-element bodies validated against astrometric ICRF (the engine omits precession); the equinox-of-date Meeus Moon against apparent-of-date
+- **Tolerances** derived from measured residuals: planets/Pluto 3′, geocentric Moon 2.5′, topocentric Moon 6′, comets 1°, distances 0.1–1%

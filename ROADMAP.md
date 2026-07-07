@@ -6,57 +6,6 @@ For completed features, see [docs/COMPLETED_FEATURES.md](docs/COMPLETED_FEATURES
 
 ---
 
-## High Priority
-
-### More Guided Tours
-
-The tour system is now mature. Ideas for additional tours:
-
-**Great Comets**
-- Comet of 1811 (visible for 9 months)
-- Comet Ikeya-Seki 1965 (sun-grazing, visible in daylight)
-
-**Historical Eclipses**
-- 1919 Eddington Eclipse (proved general relativity)
-- 585 BC Eclipse (stopped a battle)
-
-**Space Mission Moments**
-- Apollo 8 Earthrise (December 24, 1968)
-- Voyager 1 Pale Blue Dot (February 14, 1990)
-
----
-
-## Medium Priority
-
-### Eclipse Path Integration
-
-Extend the eclipse feature with location-aware path visualization.
-
-- Show eclipse center path on celestial sphere
-- "Navigate to path" button → set location to nearest path point
-- Calculate local eclipse circumstances (contact times, duration)
-- Path distance: "You are X km from the center line"
-
-Upcoming eclipses: Spain 2026, Egypt 2027, Australia 2028.
-
-### Orbital Mechanics Visualization
-
-Help users understand orbital constraints for space telescope view modes.
-
-- Sun avoidance zone overlay (~50° for Hubble)
-- South Atlantic Anomaly (SAA) visualization
-- Show orbital path
-
-### Guide Star Lock
-
-Simulate how space telescopes maintain precise pointing using guide stars.
-
-- User selects a star as guide star
-- Camera locks onto that star, tracking it
-- FGS crosshair overlay shows the lock
-
----
-
 ## Low Priority
 
 ### Rise/Set Times
@@ -91,8 +40,9 @@ Ride on Voyager, see what it saw at Jupiter flyby.
 
 ## Technical Debt
 
-- **Satellite ephemeris date range** - Current data covers ~30 days. Need cron regeneration or TLE/SGP4.
-- **Test coverage** - Astronomy calculations should have regression tests against JPL Horizons.
+- **Eclipse ground track on globe** - Eclipse paths (2026) shipped with an SVG mini-map; a 3D on-sphere ground track and engine-computed Besselian elements were deferred.
+- **Minor-body accuracy** - Most minor bodies use estimated mean anomalies (Ceres is ~18° off Horizons); refine elements or document the limitation.
+- **Rust tests in CI** - `cargo test` (golden + Horizons accuracy suites) runs only locally; CI covers just web typecheck + unit tests.
 
 ---
 
