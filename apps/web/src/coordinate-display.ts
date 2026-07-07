@@ -10,6 +10,16 @@ const REFERENCE_ARCSEC = 50;
 // Throttle interval for coordinate updates
 const COORD_UPDATE_INTERVAL = 100; // ms - update at most 10 times per second
 
+/**
+ * Compute how long to wait before the next throttled update.
+ * @returns 0 if an update should run immediately (the interval has elapsed),
+ *          otherwise the number of milliseconds remaining in the interval.
+ */
+export function throttleRemainingMs(now: number, lastUpdateTime: number, interval: number): number {
+  const elapsed = now - lastUpdateTime;
+  return elapsed >= interval ? 0 : interval - elapsed;
+}
+
 export interface CoordinateDisplayOptions {
   getViewMode: () => 'geocentric' | 'topocentric' | 'hubble' | 'jwst';
   getCameraState: () => { fov: number };
@@ -90,15 +100,18 @@ export function createCoordinateDisplay(options: CoordinateDisplayOptions): Coor
   }
 
   function update(): void {
-    const now = performance.now();
-    if (now - lastUpdateTime < COORD_UPDATE_INTERVAL) {
-      // Schedule update if not already pending
+    const remaining = throttleRemainingMs(performance.now(), lastUpdateTime, COORD_UPDATE_INTERVAL);
+    if (remaining > 0) {
+      // Within the throttle window. Schedule a single trailing update at the
+      // end of the interval so we honor the intended 10 Hz cap during drags.
+      // (The previous rAF callback fired ~16 ms later and ran immediately,
+      // ignoring the interval and yielding ~30 Hz updates.)
       if (!updatePending) {
         updatePending = true;
-        requestAnimationFrame(() => {
+        setTimeout(() => {
           updatePending = false;
           updateImmediate();
-        });
+        }, remaining);
       }
       return;
     }
