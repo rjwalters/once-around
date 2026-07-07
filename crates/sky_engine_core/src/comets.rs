@@ -556,8 +556,13 @@ mod tests {
 
     #[test]
     fn test_halley_1986_perihelion() {
-        // At perihelion (Feb 9, 1986), Halley should be at ~0.586 AU from Sun
-        let time = SkyTime::from_jd(2449400.5); // Feb 9, 1986
+        // At perihelion (Feb 9, 1986), Halley should be at ~0.586 AU from Sun.
+        // JD 2446470.5 == 1986-02-09 (and == HALLEY.perihelion_jd). The previous
+        // value 2449400.5 was a typo for 1994-02-17, ~8 years past perihelion,
+        // where Halley is ~18.9 AU out — so the assertion always failed. See the
+        // Horizons regression suite (tests/horizons_accuracy.rs), which validates
+        // Halley at this same corrected 1986 perihelion epoch.
+        let time = SkyTime::from_jd(2446470.5); // Feb 9, 1986
         let pos = compute_comet_position(Comet::Halley, &time);
 
         let helio_au = pos.helio_distance_km / AU_TO_KM;
