@@ -1788,11 +1788,18 @@ canvas {
   border-radius: 8px;
   padding: 12px 20px;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   z-index: 150;
   box-shadow: 0 4px 20px rgba(136, 85, 170, 0.3);
   transition: opacity 0.3s, transform 0.3s;
+  max-width: 92vw;
+}
+
+.eclipse-banner-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .eclipse-banner.hidden {
@@ -1829,6 +1836,66 @@ canvas {
   background: rgba(0, 0, 0, 0.3);
   padding: 6px 10px;
   border-radius: 4px;
+}
+
+/* Location-aware eclipse path section */
+.eclipse-path-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid rgba(136, 85, 170, 0.4);
+  padding-top: 12px;
+}
+
+.eclipse-path-section.hidden {
+  display: none;
+}
+
+.eclipse-path-map {
+  width: 300px;
+  max-width: 55vw;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.eclipse-path-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.eclipse-path-distance {
+  color: #ffcc66;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.eclipse-path-circumstances {
+  color: #aaa;
+  font-size: 12px;
+}
+
+.eclipse-navigate-btn {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #6633aa 0%, #8855cc 100%);
+  color: #fff;
+  border: 1px solid #aa77dd;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.eclipse-navigate-btn:hover {
+  filter: brightness(1.15);
+}
+
+.eclipse-navigate-btn:active {
+  transform: translateY(1px);
 }
 
 /* Tour UI */
@@ -2497,6 +2564,17 @@ canvas {
 
   .eclipse-banner.hidden {
     transform: translateY(20px);
+  }
+
+  .eclipse-path-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .eclipse-path-map {
+    width: 100%;
+    max-width: none;
   }
 
   /* Adjust tour playback for mobile */
