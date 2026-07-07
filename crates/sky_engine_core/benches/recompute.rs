@@ -12,7 +12,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use sky_engine_core::coords::{compute_nutation, true_obliquity};
-use sky_engine_core::planets::compute_all_body_positions_full;
+use sky_engine_core::planets::{compute_all_body_positions_full, compute_planet_position_full, Planet};
 use sky_engine_core::time::SkyTime;
 
 fn bench_recompute(c: &mut Criterion) {
@@ -23,6 +23,13 @@ fn bench_recompute(c: &mut Criterion) {
     // per-frame VSOP87 work.
     c.bench_function("compute_all_body_positions_full", |b| {
         b.iter(|| compute_all_body_positions_full(black_box(&time)))
+    });
+
+    // Single planet evaluation — the per-sample cost of the orbit-worker's
+    // `fill_planet_track` targeted path (issue #10). One orbit refresh does
+    // 7 planets * 120 samples of exactly this, instead of 840 full recomputes.
+    c.bench_function("compute_planet_position_full", |b| {
+        b.iter(|| compute_planet_position_full(black_box(Planet::Jupiter), black_box(&time)))
     });
 
     // Nutation + obliquity series (IAU 1980, 63-term). Runs every recompute.

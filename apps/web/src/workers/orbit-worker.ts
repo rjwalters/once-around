@@ -21,8 +21,11 @@ const ORBIT_PERIODS_DAYS: Record<number, number> = {
 };
 const SKY_RADIUS = 50;
 
+// Julian Date of the Unix epoch (1970-01-01T00:00:00Z).
+const JD_UNIX_EPOCH = 2440587.5;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 let engine: SkyEngine | null = null;
-let wasmMemory: WebAssembly.Memory | null = null;
 let isInitializing = false;
 
 interface ComputeMessage {
@@ -51,9 +54,8 @@ async function initEngine(): Promise<void> {
   isInitializing = true;
 
   try {
-    // Initialize WASM module - returns the exports including memory
-    const wasm = await init();
-    wasmMemory = wasm.memory;
+    // Initialize WASM module
+    await init();
 
     // Create a minimal engine with no star data
     // Just need planetary ephemeris capability
@@ -70,33 +72,6 @@ async function initEngine(): Promise<void> {
   }
 }
 
-function getBodiesPositionBuffer(): Float32Array {
-  if (!engine || !wasmMemory) {
-    throw new Error("Engine not initialized");
-  }
-  const ptr = engine.bodies_pos_ptr();
-  const len = engine.bodies_pos_len();
-  return new Float32Array(wasmMemory.buffer, ptr, len);
-}
-
-function readPositionFromBuffer(
-  buffer: Float32Array,
-  bodyIndex: number,
-  radius: number
-): { x: number; y: number; z: number } {
-  const baseIdx = bodyIndex * 3;
-  const eqX = buffer[baseIdx];
-  const eqY = buffer[baseIdx + 1];
-  const eqZ = buffer[baseIdx + 2];
-
-  // Convert equatorial (Z-up) to Three.js (Y-up): (x, y, z) -> (-x, z, y)
-  return {
-    x: -eqX * radius,
-    y: eqZ * radius,
-    z: eqY * radius,
-  };
-}
-
 async function computeOrbits(centerDateMs: number): Promise<Float32Array[]> {
   if (!engine) {
     await initEngine();
@@ -106,45 +81,43 @@ async function computeOrbits(centerDateMs: number): Promise<Float32Array[]> {
     throw new Error("Engine not initialized");
   }
 
-  const centerDate = new Date(centerDateMs);
+  const t0 = performance.now();
   const radius = SKY_RADIUS - 1;
-  const msPerDay = 24 * 60 * 60 * 1000;
   const orbits: Float32Array[] = [];
+
+  // Julian Date (UTC) of the requested center instant.
+  const centerJd = centerDateMs / MS_PER_DAY + JD_UNIX_EPOCH;
 
   for (const bodyIdx of ORBIT_PLANET_INDICES) {
     const orbitPeriod = ORBIT_PERIODS_DAYS[bodyIdx];
     const halfSpan = orbitPeriod / 2;
+    const stepDays = orbitPeriod / (ORBIT_NUM_POINTS - 1);
+    const startJd = centerJd - halfSpan;
+
+    // Targeted planet-only evaluation: one call computes all ORBIT_NUM_POINTS samples for
+    // this planet, skipping the Moon, other planets, moons, comets, satellites and stars.
+    // Returns raw equatorial unit vectors (x, y, z) identical to the bodies position buffer.
+    const raw = engine.fill_planet_track(bodyIdx, startJd, stepDays, ORBIT_NUM_POINTS);
+
     const positions = new Float32Array(ORBIT_NUM_POINTS * 3);
-
     for (let i = 0; i < ORBIT_NUM_POINTS; i++) {
-      const t = i / (ORBIT_NUM_POINTS - 1);
-      const dayOffset = -halfSpan + t * orbitPeriod;
-      const sampleDate = new Date(centerDate.getTime() + dayOffset * msPerDay);
+      const eqX = raw[i * 3];
+      const eqY = raw[i * 3 + 1];
+      const eqZ = raw[i * 3 + 2];
 
-      // Set engine time and compute
-      engine.set_time_utc(
-        sampleDate.getUTCFullYear(),
-        sampleDate.getUTCMonth() + 1,
-        sampleDate.getUTCDate(),
-        sampleDate.getUTCHours(),
-        sampleDate.getUTCMinutes(),
-        sampleDate.getUTCSeconds()
-      );
-      engine.recompute();
-
-      // Get body position from WASM buffer
-      const bodyPositions = getBodiesPositionBuffer();
-      const pos = readPositionFromBuffer(bodyPositions, bodyIdx, radius);
-
-      positions[i * 3] = pos.x;
-      positions[i * 3 + 1] = pos.y;
-      positions[i * 3 + 2] = pos.z;
+      // Convert equatorial (Z-up) to Three.js (Y-up): (x, y, z) -> (-x, z, y), scaled to radius.
+      positions[i * 3] = -eqX * radius;
+      positions[i * 3 + 1] = eqZ * radius;
+      positions[i * 3 + 2] = eqY * radius;
     }
 
     orbits.push(positions);
   }
 
-  console.log(`[OrbitWorker] Computed orbits centered on ${centerDate.toISOString()}`);
+  const elapsed = performance.now() - t0;
+  console.log(
+    `[OrbitWorker] Computed orbits centered on JD ${centerJd.toFixed(3)} in ${elapsed.toFixed(2)}ms`
+  );
   return orbits;
 }
 
