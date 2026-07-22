@@ -61,3 +61,6 @@ tests/screenshots/
 .loom/*.log
 .loom/*.sock
 .loom/logs/
+
+# Repo Skills machine-local install metadata (absolute source path + timestamp)
+.claude/skills/repo/.install-local.json
