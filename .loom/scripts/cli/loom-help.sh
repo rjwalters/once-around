@@ -151,7 +151,7 @@ ${YELLOW}FOR MORE HELP:${NC}
 ${YELLOW}RELATED COMMANDS:${NC}
     /loom:sweep <issue>       Orchestrate a single issue lifecycle (Curator → Merge)
     /builder, /judge, etc.    Assume specialized agent roles
-    spawn-loop.sh             Multi-issue batch driver (Tier 2)
+    mcp__loom__dispatch_sweep Multi-issue dispatch via loom-daemon (Tier 2)
 
 ${GRAY}Loom CLI v0.1.0${NC}
 EOF
@@ -171,8 +171,8 @@ show_command_help() {
             fi
             ;;
         status)
-            if [[ -n "$REPO_ROOT" && -f "$REPO_ROOT/.loom/scripts/loom-status.sh" ]]; then
-                exec "$REPO_ROOT/.loom/scripts/loom-status.sh" --help
+            if [[ -n "$CLI_DIR" && -f "$CLI_DIR/loom-status.sh" ]]; then
+                exec "$CLI_DIR/loom-status.sh" --help
             else
                 echo -e "${RED}Error: status command not installed${NC}"
                 exit 1

@@ -31,6 +31,11 @@ apps/web/src/wasm/package.json
 test-results/
 playwright-report/
 tests/screenshots/
+
+# Repo Skills machine-local install metadata (absolute source path + timestamp)
+.claude/skills/repo/.install-local.json
+# >>> loom-managed (do not edit) >>>
+# Loom runtime state (don't commit these)
 .loom-in-use
 .loom-checkpoint
 .loom/.daemon.pid
@@ -61,6 +66,4 @@ tests/screenshots/
 .loom/*.log
 .loom/*.sock
 .loom/logs/
-
-# Repo Skills machine-local install metadata (absolute source path + timestamp)
-.claude/skills/repo/.install-local.json
+# <<< loom-managed <<<
