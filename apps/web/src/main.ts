@@ -26,6 +26,7 @@ import { renderShortcutHelp } from "./keyboard-shortcuts";
 import { setupOrbitFocus } from "./orbit-focus";
 import { readUrlState, createUrlStateUpdater, type UrlState } from "./url-state";
 import { ISSPassesUI } from "./iss-passes-ui";
+import { RiseSetUI } from "./rise-set-ui";
 import {
   getBodyPositions,
   positionToRaDec,
@@ -355,6 +356,25 @@ async function main(): Promise<void> {
   // Update currentDate to use initialDate from restoration
   currentDate = initialDate;
 
+  // Rise/Set Times UI (sun/moon/planet observing times for the selected date).
+  // Independent of satellite ephemerides, so it is wired up immediately. Shown
+  // only in topocentric mode; recomputes on location/date/mode change (see below).
+  const riseSetUI = new RiseSetUI({
+    containerId: "rise-set-section",
+    onTimeClick: (time: Date) => {
+      const datetimeInput = document.getElementById("datetime") as HTMLInputElement | null;
+      if (datetimeInput) {
+        const pad = (n: number) => n.toString().padStart(2, "0");
+        datetimeInput.value =
+          `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}` +
+          `T${pad(time.getHours())}:${pad(time.getMinutes())}`;
+        datetimeInput.dispatchEvent(new Event("change"));
+      }
+    },
+  });
+  riseSetUI.setEngine(engine);
+  riseSetUI.setDate(initialDate);
+
   // Reference to video markers layer (set later after creation)
   let videoMarkersRef: { updateMovingPositions: (bodyPositions: BodyPositions) => void } | null = null;
 
@@ -393,6 +413,9 @@ async function main(): Promise<void> {
       if (sunMoonSep !== null) {
         renderer.updateEclipse(sunMoonSep);
       }
+      // Update rise/set times (recomputes only when the civil date changes,
+      // so scrubbing the time slider within a day does no extra work).
+      riseSetUI.setDate(date);
       settingsSaver.save({ datetime: date.toISOString() });
       // Update URL with new time
       updateUrlState({ t: date.toISOString() });
@@ -692,6 +715,8 @@ async function main(): Promise<void> {
       if (issPassesUI) {
         issPassesUI.setVisible(mode === 'topocentric');
       }
+      // Show/hide rise/set times (only relevant in topocentric mode)
+      riseSetUI.setVisible(mode === 'topocentric');
       // Show/hide the guide-star lock button; auto-release when leaving space modes.
       guideStarLockRef?.onViewModeChange(mode);
       settingsSaver.save({ viewMode: mode });
@@ -787,6 +812,8 @@ async function main(): Promise<void> {
     // ISS passes panel visibility is set once the ephemeris finishes loading
     // (see the satellitesLoadedPromise handler above); issPassesUI is not yet
     // constructed at this synchronous point in startup.
+    // The rise/set panel has no such dependency, so show it now.
+    riseSetUI.setVisible(true);
   }
 
   // Handle seeing control changes
@@ -850,6 +877,8 @@ async function main(): Promise<void> {
         if (issPassesUI) {
           issPassesUI.refresh();
         }
+        // Recompute rise/set times for the new observer location.
+        riseSetUI.refresh();
         // Ground plane / topocentric orientation changed — repaint.
         requestRender();
       },

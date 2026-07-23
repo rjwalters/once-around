@@ -20,6 +20,7 @@ Historical record of implemented features in Once Around the Night Sky.
 - [Satellite Tracking](#satellite-tracking)
 - [Meteor Showers](#meteor-showers)
 - [ISS Pass Predictions](#iss-pass-predictions)
+- [Rise & Set Times](#rise--set-times)
 - [PWA Support](#pwa-support)
 - [Accuracy Validation](#accuracy-validation)
 
@@ -648,6 +649,46 @@ A pass is visible when ALL conditions are met:
 | `iss-passes.ts` | Pass prediction algorithm |
 | `iss-passes-ui.ts` | UI component |
 | `lib.rs` | `sun_altitude()` and `satellite_ephemeris_range()` functions |
+
+---
+
+## Rise & Set Times
+
+Tonight's sun, moon, and planet observing times for the observer location, shown
+only in topocentric mode.
+
+### Sections
+
+- **Sun** - rise, set, meridian transit, and civil / nautical / astronomical
+  twilight (dawn and dusk), with graceful polar-day/night states.
+- **Moon** - rise, transit, set, using the parallax-dependent lunar horizon
+  (Meeus `h0 = 0.7275·π − 0.5667°`), with always-up / not-up-tonight states.
+- **Planets** - each naked-eye planet's dark-sky visibility window, computed as
+  the interval intersection of [planet above −0.5667°] ∩ [sun below −6°], or
+  "not visible tonight".
+
+### Implementation
+
+- **Engine events module** (`crates/sky_engine_core/src/events.rs`) - non-mutating
+  coarse scan (10-min step) + 1-second bisection of altitude crossings (rise/set)
+  and hour-angle transit, generic over any `CelestialBody`. Standard `h0`
+  conventions built in; a `NaN` sentinel selects the per-body standard.
+- **WASM binding** - `find_body_events` returns a flat `Float64Array` of
+  `[event_type, jd_utc, azimuth_deg]` records (`EVENT_RECORD_LEN`), plus
+  `body_altitude_at` for classifying circumpolar / never-up windows.
+- **TS composition** (`rise-set.ts`) - scan-window derivation, buffer parsing,
+  and interval algebra for planet visibility (WASM-free, unit-tested).
+- **Render-on-demand** - recomputes only on location / civil-date / mode change;
+  scrubbing the time slider within a day does no work. No worker needed.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `crates/sky_engine_core/src/events.rs` | Altitude/crossing scan + bisection, transit, h0 conventions |
+| `crates/sky_engine/src/lib.rs` | `find_body_events()` / `body_altitude_at()` WASM methods |
+| `rise-set.ts` | Scan window, buffer parsing, planet-visibility interval intersection |
+| `rise-set-ui.ts` | Collapsible topocentric-only panel |
 
 ---
 
