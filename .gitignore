@@ -67,3 +67,5 @@ tests/screenshots/
 .loom/*.sock
 .loom/logs/
 # <<< loom-managed <<<
+# Loom worktree marker (written by worktree.sh into each issue worktree; not in the managed block yet)
+.loom-managed
