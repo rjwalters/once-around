@@ -744,4 +744,4 @@ External-authority accuracy tests (`tests/horizons_accuracy.rs`) against NASA/JP
 - **Frame matching:** VSOP87/orbital-element bodies validated against astrometric ICRF (the engine omits precession); the equinox-of-date Meeus Moon against apparent-of-date
 - **Tolerances** derived from measured residuals: planets/Pluto/minor bodies 3′, geocentric Moon 2.5′, topocentric Moon 6′, comets 1°, distances 0.1–1%
 - **Minor bodies** use real Horizons osculating elements at a documented epoch (2026-07-06), back-propagated to the J2000 anchor — Ceres improved from ~18° to 0.21′; two-body drift limits documented per body
-- **CI:** the lib + Horizons suites run on every PR (`rust-test` job); the bit-exact golden suite remains a local macOS guard (1-2 ULP libm divergence across platforms)
+- **CI:** the lib + Horizons suites run on every PR on Linux (`rust-test` job); the bit-exact golden suite runs on a dedicated `rust-golden-test` job pinned to a macOS/Apple Silicon runner (`macos-15`), the platform its constants were captured on (Linux libm rounds 1-2 ULP differently, so the suite cannot run there)

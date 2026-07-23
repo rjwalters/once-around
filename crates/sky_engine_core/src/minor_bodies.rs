@@ -15,6 +15,13 @@
 //! mean motion). Two-body mean-anomaly propagation is exact, so this reproduces the
 //! Horizons mean anomaly at the 2026 epoch to f64 precision.
 //!
+//! These constants are refreshed by `scripts/generate_minor_body_elements.py`
+//! (Pluto and every `radius_km` are left untouched). The refresh runs on a
+//! quarterly schedule via `.github/workflows/refresh-minor-body-elements.yml`,
+//! which opens a PR rather than committing directly because advancing the epoch
+//! requires a local, platform-specific regeneration of `tests/golden_positions.rs`
+//! and the `tests/horizons_accuracy.rs` fixture.
+//!
 //! Accuracy is validated against Horizons in `tests/horizons_accuracy.rs`. Near the
 //! 2026 element epoch all bodies match to a few arcminutes. Away from the epoch,
 //! two-body propagation drifts because planetary perturbations are not modeled; this

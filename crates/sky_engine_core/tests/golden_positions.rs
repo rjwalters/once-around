@@ -30,6 +30,18 @@
 //!
 //! Do NOT add floating-point tolerances here. A failure means either an unintended
 //! regression (investigate) or a deliberate algorithm change (regenerate consciously).
+//!
+//! # CI coverage and canonical platform
+//!
+//! These constants are bit-exact only on the platform they were captured on:
+//! **macOS/Apple Silicon**. On x86_64 Linux the values differ by 1-2 ULP because the
+//! two platforms' libm trig implementations round differently, so this suite CANNOT run
+//! on the default Linux CI runners. It runs instead on a dedicated `rust-golden-test`
+//! job pinned to a macOS Apple Silicon image (`macos-15`) in `.github/workflows/ci.yml`,
+//! which matches the capture platform. Regenerate these constants on macOS/Apple Silicon
+//! (the canonical platform) using the generator invocation above; if the pinned CI image
+//! is ever bumped to a version whose libm diverges, regenerate on that image and adopt it
+//! as the new canonical platform — never paper over a divergence with tolerances.
 
 use sky_engine_core::planets::compute_all_body_positions_full;
 use sky_engine_core::{
