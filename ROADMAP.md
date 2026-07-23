@@ -8,14 +8,6 @@ For completed features, see [docs/COMPLETED_FEATURES.md](docs/COMPLETED_FEATURES
 
 ## Low Priority
 
-### Rise/Set Times
-
-Show when objects rise, transit, and set for the current location.
-
-- Sun rise/set and twilight times
-- Moon rise/set and transit
-- Planet visibility windows
-
 ### Tonight's Highlights Panel
 
 Surface observing info in topocentric mode (moon phase, visible planets, ISS passes).

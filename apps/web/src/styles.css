@@ -3252,3 +3252,128 @@ body.night-vision .iss-goto-pass-btn:hover {
 body.night-vision .iss-pass-item:hover {
   background: rgba(180, 60, 60, 0.1);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Rise / Set Times panel (topocentric mode).                                 */
+/* Mirrors the .iss-passes-section collapsible-panel styling.                 */
+/* -------------------------------------------------------------------------- */
+.rise-set-section {
+  margin: 8px 0;
+  background: rgba(30, 40, 60, 0.6);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rise-set-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.rise-set-header:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.rise-set-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rise-set-toggle {
+  color: #666;
+  font-size: 10px;
+}
+
+.rise-set-body {
+  padding: 4px 0 8px;
+}
+
+.rise-set-group {
+  padding: 6px 12px 2px;
+}
+
+.rise-set-group-title {
+  font-size: 10px;
+  color: #4a9eff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.rise-set-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.rise-set-label {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.rise-set-value {
+  font-size: 12px;
+  color: #ccc;
+  text-align: right;
+}
+
+.rise-set-sep {
+  font-size: 9px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rise-set-state {
+  font-size: 11px;
+  color: #888;
+  font-style: italic;
+}
+
+/* Clickable time chips jump the app to that instant. */
+.rise-set-time {
+  background: none;
+  border: none;
+  padding: 0 1px;
+  color: #4a9eff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rise-set-time:hover {
+  color: #7bb8ff;
+  text-decoration: underline;
+}
+
+.rise-set-time--absent {
+  color: #666;
+  cursor: default;
+}
+
+/* Night vision mode overrides */
+body.night-vision .rise-set-section {
+  background: rgba(30, 10, 10, 0.6);
+}
+
+body.night-vision .rise-set-group-title {
+  color: #b43c3c;
+}
+
+body.night-vision .rise-set-time {
+  color: #b43c3c;
+}
+
+body.night-vision .rise-set-time:hover {
+  color: #d46c6c;
+}
