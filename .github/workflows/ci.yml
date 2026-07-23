@@ -39,7 +39,7 @@ jobs:
         run: pnpm --filter once-around-web test:unit
 
   rust-test:
-    name: Rust tests (sky_engine_core)
+    name: Rust tests (sky_engine_core + sky_engine)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -76,6 +76,16 @@ jobs:
       # on. See issue #75 for the analysis.
       - name: Run Rust tests
         run: cargo test -p sky_engine_core --lib --test horizons_accuracy
+
+      # The `sky_engine` crate owns `find_passes` and its legacy-scan equivalence
+      # test. It builds/tests natively as an rlib (no wasm-pack/target needed), and
+      # its pass-prediction test now uses a fixed, committed fixture
+      # (crates/sky_engine/tests/fixtures/iss_ephemeris_fixture.bin) instead of the
+      # weekly-refreshed apps/web ephemeris, so it is deterministic here. Previously
+      # this crate had no CI job, so a real `find_passes` regression could merge
+      # unnoticed (issue #82).
+      - name: Run sky_engine tests
+        run: cargo test -p sky_engine
 
   rust-golden-test:
     name: Rust golden positions (macOS/Apple Silicon)
