@@ -1,6 +1,13 @@
 /**
  * Keyboard shortcuts handler.
+ *
+ * The set of bindings lives in `keyboard-shortcuts.ts` (the single source of
+ * truth shared with the help overlay). This module maps each dispatched
+ * shortcut id to its callback and wires a single `keydown` listener from the
+ * registry, so the overlay and the dispatch cannot drift apart.
  */
+
+import { KEYBOARD_SHORTCUTS, isDispatchShortcut, type ShortcutId } from "./keyboard-shortcuts";
 
 export interface KeyboardHandlerOptions {
   // Toggle callbacks
@@ -30,26 +37,40 @@ export interface KeyboardHandlerOptions {
  * Set up global keyboard shortcuts.
  */
 export function setupKeyboardHandler(options: KeyboardHandlerOptions): void {
-  const {
-    toggleLabels,
-    toggleConstellations,
-    toggleVideos,
-    toggleOrbits,
-    toggleDSOs,
-    toggleDeepFields,
-    toggleMeteorShowers,
-    toggleNightVision,
-    toggleHorizon,
-    handleNextEclipse,
-    jumpToNow,
-    animateToGalacticCenter,
-    stepTimeBackward,
-    stepTimeForward,
-    togglePlayback,
-    focusSearch,
-    showHelp,
-    toggleGuideStarLock,
-  } = options;
+  // Map each registry shortcut id to its callback. Keyed by `ShortcutId`, so a
+  // new dispatched entry in the registry forces a matching callback here at
+  // compile time (and removing one is likewise caught).
+  const handlers: Record<ShortcutId, (() => void) | undefined> = {
+    toggleLabels: options.toggleLabels,
+    toggleConstellations: options.toggleConstellations,
+    toggleVideos: options.toggleVideos,
+    toggleOrbits: options.toggleOrbits,
+    toggleDSOs: options.toggleDSOs,
+    toggleDeepFields: options.toggleDeepFields,
+    toggleMeteorShowers: options.toggleMeteorShowers,
+    toggleNightVision: options.toggleNightVision,
+    toggleHorizon: options.toggleHorizon,
+    toggleGuideStarLock: options.toggleGuideStarLock,
+    handleNextEclipse: options.handleNextEclipse,
+    jumpToNow: options.jumpToNow,
+    animateToGalacticCenter: options.animateToGalacticCenter,
+    stepTimeBackward: options.stepTimeBackward,
+    stepTimeForward: options.stepTimeForward,
+    togglePlayback: options.togglePlayback,
+    focusSearch: options.focusSearch,
+    showHelp: options.showHelp,
+  };
+
+  // Build the `event.key.toLowerCase()` -> handler map from the registry.
+  const keyMap = new Map<string, { run: () => void; preventDefault: boolean }>();
+  for (const shortcut of KEYBOARD_SHORTCUTS) {
+    if (!isDispatchShortcut(shortcut)) continue;
+    const run = handlers[shortcut.id as ShortcutId];
+    if (!run) continue;
+    for (const key of shortcut.eventKeys) {
+      keyMap.set(key, { run, preventDefault: shortcut.preventDefault ?? false });
+    }
+  }
 
   window.addEventListener("keydown", (event) => {
     // Don't trigger shortcuts when typing in input fields
@@ -62,66 +83,12 @@ export function setupKeyboardHandler(options: KeyboardHandlerOptions): void {
       return;
     }
 
-    switch (event.key.toLowerCase()) {
-      case "l":
-        toggleLabels();
-        break;
-      case "c":
-        toggleConstellations();
-        break;
-      case "v":
-        toggleVideos();
-        break;
-      case "o":
-        toggleOrbits();
-        break;
-      case "d":
-        toggleDSOs();
-        break;
-      case "f":
-        toggleDeepFields();
-        break;
-      case "m":
-        toggleMeteorShowers();
-        break;
-      case "r":
-        toggleNightVision();
-        break;
-      case "h":
-        toggleHorizon();
-        break;
-      case "g":
-        toggleGuideStarLock?.();
-        break;
-      case "e":
-        handleNextEclipse();
-        break;
-      case "n":
-        jumpToNow();
-        break;
-      case " ":
-        event.preventDefault();
-        animateToGalacticCenter();
-        break;
-      case "arrowleft":
-        event.preventDefault();
-        stepTimeBackward();
-        break;
-      case "arrowright":
-        event.preventDefault();
-        stepTimeForward();
-        break;
-      case "p":
-        togglePlayback();
-        break;
-      case "/":
-        event.preventDefault();
-        focusSearch();
-        break;
-      case "?":
-        event.preventDefault();
-        showHelp();
-        break;
+    const entry = keyMap.get(event.key.toLowerCase());
+    if (!entry) return;
+
+    if (entry.preventDefault) {
+      event.preventDefault();
     }
+    entry.run();
   });
 }
