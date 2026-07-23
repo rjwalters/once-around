@@ -22,6 +22,7 @@ import { setupVideoMarkerInteractions } from "./video-marker-interactions";
 import { createEclipseHandler } from "./eclipse-handler";
 import { setupInfoModals } from "./info-modals";
 import { setupKeyboardHandler } from "./keyboard-handler";
+import { renderShortcutHelp } from "./keyboard-shortcuts";
 import { setupOrbitFocus } from "./orbit-focus";
 import { readUrlState, createUrlStateUpdater, type UrlState } from "./url-state";
 import { ISSPassesUI } from "./iss-passes-ui";
@@ -937,6 +938,12 @@ async function main(): Promise<void> {
 
   // Help modal (keyboard shortcuts)
   const helpModal = document.getElementById("help-modal");
+  const helpSections = document.getElementById("help-modal-sections");
+  if (helpSections) {
+    // Build the shortcut rows from the single-source-of-truth registry so the
+    // overlay can't drift from the actual key bindings.
+    renderShortcutHelp(helpSections);
+  }
   setupModalClose(helpModal, document.getElementById("help-modal-close"), { closeOnEscape: true });
 
   // Populate build info
@@ -1094,10 +1101,9 @@ async function main(): Promise<void> {
     togglePlayback: () => timeControls?.togglePlayback(),
     focusSearch: () => document.getElementById("search")?.focus(),
     showHelp: () => {
+      // Toggle: `?` opens the overlay, and pressing `?` again closes it.
       const helpModal = document.getElementById("help-modal");
-      if (helpModal) {
-        helpModal.classList.remove("hidden");
-      }
+      helpModal?.classList.toggle("hidden");
     },
     toggleGuideStarLock: () => guideStarLock.toggle(),
   });
