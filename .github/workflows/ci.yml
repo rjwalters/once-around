@@ -70,11 +70,41 @@ jobs:
       # machine; on CI's x86_64 Linux they differ by 1-2 ULP (e.g. Sun
       # direction.x -0.2351194894444659 vs ...661) because the two platforms'
       # libm trig implementations round differently. It is a within-platform
-      # bit-identity guard, not a cross-platform one, so it stays a local check.
-      # See PR discussion / issue #65 for the follow-up options (regenerate for
-      # Linux, run on a macOS runner, or relax the exact-equality contract).
+      # bit-identity guard, not a cross-platform one, so it must not be added to
+      # this Linux job — instead it runs on the dedicated macOS `rust-golden-test`
+      # job below, on the same Apple Silicon platform its constants were captured
+      # on. See issue #75 for the analysis.
       - name: Run Rust tests
         run: cargo test -p sky_engine_core --lib --test horizons_accuracy
+
+  rust-golden-test:
+    name: Rust golden positions (macOS/Apple Silicon)
+    # Pinned to a specific macOS Apple Silicon image (NOT macos-latest): the
+    # golden_positions.rs constants are bit-exact against this platform's libm,
+    # and macos-latest silently rolls to a newer image whose libm may round
+    # trig 1-2 ULP differently, which would break the exact-equality suite on an
+    # unrelated image bump. Bumping this pin is a deliberate, reviewed change
+    # (and may require regenerating the constants on the new image — see the
+    # regeneration procedure in tests/golden_positions.rs; do NOT add tolerances).
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+
+      # Bit-exact golden position suite. Runs only on this pinned macOS/Apple
+      # Silicon runner because its `assert_eq!` constants are platform-specific
+      # (see the exclusion note in the Linux rust-test job above). Keep this to
+      # the golden suite alone; the lib + Horizons suites are covered on Linux.
+      - name: Run golden position tests
+        run: cargo test -p sky_engine_core --test golden_positions
 
   typecheck:
     name: Typecheck (web)
