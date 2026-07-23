@@ -2,6 +2,7 @@ use sky_engine_core::{
     catalog::StarCatalog,
     comets::{compute_all_comet_positions_with_ctx, Comet},
     coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, compute_lst, ra_dec_to_cartesian},
+    events,
     minor_bodies::{compute_all_minor_body_positions_with_ctx, MinorBody},
     planetary_moons::{compute_all_planetary_moon_positions_with_ctx, PlanetaryMoon},
     planets::{compute_all_body_positions_with_ctx, compute_moon_position_full, compute_planet_position_full, compute_sun_position, CelestialBody, Planet},
@@ -15,6 +16,12 @@ use wasm_bindgen::prelude::*;
 /// Number of `f64` values per pass record returned by [`SkyEngine::find_passes`].
 /// Layout: `[rise_jd, rise_az_deg, max_jd, max_alt_deg, max_az_deg, set_jd, set_az_deg]`.
 pub const PASS_RECORD_LEN: usize = 7;
+
+/// Number of `f64` values per event record returned by [`SkyEngine::find_body_events`].
+/// Layout: `[event_type, jd_utc, azimuth_deg]`, where `event_type` is
+/// `0 = rise`, `1 = set`, `2 = transit`. Mirrors `EVENT_RECORD_LEN` in
+/// `sky_engine_core::events` and the TS constant in `apps/web/src/rise-set.ts`.
+pub const EVENT_RECORD_LEN: usize = events::EVENT_RECORD_LEN;
 
 /// The main sky engine exposed to JavaScript.
 /// Computes star and planet positions, maintaining buffers for efficient WebGL rendering.
@@ -999,6 +1006,69 @@ impl SkyEngine {
         (max_jd, max_alt, max_az)
     }
 
+    // --- Rise / set / transit events for celestial bodies ---
+
+    /// Find rise / set / transit events for a celestial body over `[start_jd, end_jd]`
+    /// without mutating engine state, using the observer's current location.
+    ///
+    /// This is the sun/moon/planet analogue of [`Self::find_passes`]: a coarse
+    /// altitude scan with binary-search refinement of each horizon crossing, plus a
+    /// meridian-transit crossing. All heavy lifting lives in
+    /// [`sky_engine_core::events::find_body_events`]; see that function for the
+    /// scan/bisection details and the standard `h0` conventions.
+    ///
+    /// # Arguments
+    /// * `body_index` - [`CelestialBody`] ordering: `0 = Sun`, `1 = Moon`,
+    ///   `2..=8 = Mercury..Neptune`.
+    /// * `start_jd`, `end_jd` - Scan window (UTC Julian Dates).
+    /// * `step_days` - Coarse scan step in days (e.g. 10 minutes = `10.0 / 1440.0`).
+    /// * `h0_deg` - Horizon threshold in degrees, or `NaN` to use the body's
+    ///   standard convention (sun −0.8333°, planets −0.5667°, and the Moon's
+    ///   parallax-dependent `0.7275·π − 0.5667°`). Pass an explicit value for
+    ///   twilights (`-6.0` / `-12.0` / `-18.0`).
+    ///
+    /// Returns a flat `Vec<f64>` (a `Float64Array` in JS) of [`EVENT_RECORD_LEN`]
+    /// values per event: `[event_type, jd_utc, azimuth_deg]`
+    /// (`event_type`: `0 = rise`, `1 = set`, `2 = transit`). Empty when the body has
+    /// no crossings in the window (caller distinguishes always-up vs never-up via
+    /// [`Self::body_altitude_at`]), or when `body_index` is out of range / the
+    /// window is degenerate.
+    pub fn find_body_events(
+        &self,
+        body_index: usize,
+        start_jd: f64,
+        end_jd: f64,
+        step_days: f64,
+        h0_deg: f64,
+    ) -> Vec<f64> {
+        let body = match CelestialBody::ALL.get(body_index) {
+            Some(b) => *b,
+            None => return Vec::new(),
+        };
+        events::find_body_events(
+            body,
+            start_jd,
+            end_jd,
+            step_days,
+            self.observer_lat_rad,
+            self.observer_lon_rad,
+            h0_deg,
+        )
+    }
+
+    /// Topocentric-equivalent altitude (degrees) of a body at `jd` for the
+    /// observer's current location. Lets the TS layer classify the "always up" /
+    /// "never up" polar-day/night cases when [`Self::find_body_events`] returns no
+    /// crossings. Returns `NaN` when `body_index` is out of range.
+    pub fn body_altitude_at(&self, body_index: usize, jd: f64) -> f64 {
+        match CelestialBody::ALL.get(body_index) {
+            Some(b) => {
+                events::body_altitude_deg(*b, jd, self.observer_lat_rad, self.observer_lon_rad)
+            }
+            None => f64::NAN,
+        }
+    }
+
     // --- All stars buffer accessors (for constellation drawing, not magnitude-filtered) ---
 
     /// Get pointer to all stars position buffer (for constellation line drawing).
@@ -1404,5 +1474,55 @@ mod tests {
         let s = engine.satellite_ephemeris_range(0).unwrap()[0];
         let out = engine.find_passes(0, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 10);
         assert_eq!(out.len() % PASS_RECORD_LEN, 0);
+    }
+
+    /// JD (UTC) for a UTC calendar instant, matching the events-module convention.
+    fn events_jd_utc(year: i32, month: u8, day: u8, hour: u8, minute: u8) -> f64 {
+        SkyTime::from_utc(year, month, day, hour, minute, 0.0).julian_date_utc()
+    }
+
+    #[test]
+    fn find_body_events_sun_rise_set_transit() {
+        // London, 2026-12-21, local day = UTC day (UTC+0 in December).
+        let mut engine = SkyEngine::new(&[]).expect("engine");
+        engine.set_observer_location(51.5074, -0.1278);
+        let start = events_jd_utc(2026, 12, 21, 0, 0);
+        let end = start + 1.0;
+
+        let buf = engine.find_body_events(0, start, end, 10.0 / 1440.0, -0.8333);
+        assert_eq!(buf.len() % EVENT_RECORD_LEN, 0, "whole event records");
+
+        let mut rises = 0;
+        let mut sets = 0;
+        let mut transits = 0;
+        for rec in buf.chunks_exact(EVENT_RECORD_LEN) {
+            match rec[0] as u32 {
+                0 => rises += 1,
+                1 => sets += 1,
+                2 => {
+                    transits += 1;
+                    // Northern-hemisphere upper culmination is due South.
+                    assert!((rec[2] - 180.0).abs() < 3.0, "transit azimuth: {}", rec[2]);
+                }
+                other => panic!("unexpected event type {other}"),
+            }
+            assert!(rec[2] >= 0.0 && rec[2] < 360.0, "azimuth in range");
+        }
+        assert_eq!(rises, 1, "one sunrise");
+        assert_eq!(sets, 1, "one sunset");
+        assert_eq!(transits, 1, "one solar transit");
+    }
+
+    #[test]
+    fn find_body_events_out_of_range_and_altitude_helper() {
+        let mut engine = SkyEngine::new(&[]).expect("engine");
+        engine.set_observer_location(40.0, 0.0);
+        let start = events_jd_utc(2026, 3, 20, 0, 0);
+        // Out-of-range body index -> empty buffer / NaN altitude.
+        assert!(engine.find_body_events(99, start, start + 1.0, 10.0 / 1440.0, f64::NAN).is_empty());
+        assert!(engine.body_altitude_at(99, start).is_nan());
+        // In-range altitude is finite and within [-90, 90].
+        let alt = engine.body_altitude_at(0, start);
+        assert!(alt.is_finite() && (-90.0..=90.0).contains(&alt), "sun altitude: {alt}");
     }
 }
