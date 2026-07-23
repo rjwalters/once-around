@@ -1,0 +1,131 @@
+name: Refresh minor-body elements
+
+# Minor-body positions are driven by static two-body osculating elements baked
+# into crates/sky_engine_core/src/minor_bodies.rs. Those elements drift over
+# time (main-belt asteroids ~3'/year; NEO elements are meaningless across an
+# Earth encounter), so this workflow periodically refetches them from JPL
+# Horizons via scripts/generate_minor_body_elements.py.
+#
+# WHY THIS OPENS A PR INSTEAD OF PUSHING TO main (unlike the sibling
+# refresh-satellite-ephemeris.yml, which commits opaque binaries directly):
+# the rewritten element constants are pinned by two checked-in Rust test
+# fixtures that a Linux CI runner CANNOT regenerate:
+#   * tests/golden_positions.rs -- bit-exact per platform (macOS/Apple Silicon
+#     differs 1-2 ULP from Linux libm), excluded from CI, regenerated only on
+#     the maintainer's machine.
+#   * tests/horizons_accuracy.rs + tests/data/horizons_reference.csv -- whose
+#     "2026-today" fixture epoch is coupled to the element epoch; advancing the
+#     elements requires advancing that fixture epoch and regenerating the CSV.
+# So an automated refresh must produce a PR that a human finishes locally, never
+# a direct push that would leave the golden suite red and the fixture stale.
+#
+# APOPHIS FLYBY: Apophis passes within ~0.0002 AU of Earth on 2029-04-13. Fixed
+# two-body elements are meaningless after that encounter (see the APOPHIS
+# LIMITATION comment in minor_bodies.rs). The elements MUST be refreshed after
+# the flyby -- the quarterly cadence below will pick it up, but a maintainer
+# should force a workflow_dispatch run shortly after 2029-04-13.
+
+on:
+  schedule:
+    # Quarterly (1st of Jan/Apr/Jul/Oct, 07:00 UTC). Main-belt drift is only
+    # ~3'/year and each refresh needs human-in-the-loop test regeneration, so a
+    # tighter cadence buys nothing.
+    - cron: "0 7 1 1,4,7,10 *"
+  workflow_dispatch:
+    inputs:
+      epoch:
+        description: "Element epoch YYYY-MM-DD (default: today)"
+        required: false
+        default: ""
+
+# Never run two refreshes concurrently -- they would race on the same branch.
+concurrency:
+  group: refresh-minor-body-elements
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    name: Refresh minor-body osculating elements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Detect drift
+        id: drift
+        run: |
+          EPOCH="${{ github.event.inputs.epoch }}"
+          ARGS=""
+          if [ -n "$EPOCH" ]; then ARGS="--epoch $EPOCH"; fi
+          echo "args=$ARGS" >> "$GITHUB_OUTPUT"
+          # --check exits non-zero when a rewrite would occur.
+          if python3 scripts/generate_minor_body_elements.py --check $ARGS; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Elements are up to date -- no PR needed."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rewrite elements
+        if: steps.drift.outputs.changed == 'true'
+        run: |
+          python3 scripts/generate_minor_body_elements.py ${{ steps.drift.outputs.args }}
+
+      - name: Open refresh PR
+        if: steps.drift.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          STAMP="$(date -u +%Y%m%d)"
+          BRANCH="chore/refresh-minor-body-elements-${STAMP}"
+          git checkout -b "$BRANCH"
+          git add crates/sky_engine_core/src/minor_bodies.rs
+          git commit -m "chore(engine): refresh minor-body osculating elements from Horizons"
+          git push -u origin "$BRANCH" --force-with-lease
+
+          cat > /tmp/pr-body.md <<'EOF'
+          ## Summary
+
+          Automated refresh of minor-body osculating elements in
+          `crates/sky_engine_core/src/minor_bodies.rs` from JPL Horizons, produced by
+          `scripts/generate_minor_body_elements.py`.
+
+          This PR only rewrites the element constants + epoch stamps. It intentionally
+          does **not** touch the two coupled test fixtures, because a Linux runner
+          cannot regenerate them correctly (see the workflow header comment).
+
+          ## Required human steps before merge
+
+          The golden suite is red and the accuracy fixture is stale until a maintainer
+          on a macOS/Apple Silicon checkout completes these steps on this branch:
+
+          - [ ] Advance the `"2026-today"` (or successor) fixture epoch in
+                `scripts/fetch_horizons_reference.py` to match the new element epoch,
+                then regenerate the CSV:
+                `python3 scripts/fetch_horizons_reference.py`
+          - [ ] Regenerate the bit-exact golden constants locally per the procedure in
+                `crates/sky_engine_core/tests/golden_positions.rs`:
+                `cargo test -p sky_engine_core --test golden_positions generate_golden_constants -- --ignored --nocapture`
+                then paste the emitted literals into that file.
+          - [ ] Run the full engine suite and confirm it is green:
+                `cargo test -p sky_engine_core`
+          - [ ] Merge via `./.loom/scripts/merge-pr.sh <PR>` (never `gh pr merge`).
+          EOF
+
+          gh pr create \
+            --title "chore(engine): refresh minor-body osculating elements from Horizons" \
+            --body-file /tmp/pr-body.md \
+            --head "$BRANCH"
