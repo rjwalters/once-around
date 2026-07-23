@@ -1,3 +1,16 @@
+// One-time catalog-bootstrap pipeline — STAGE 1 of 2.
+//
+// Reads `data/catalog.json`, writes `data/video_placements.csv` (a
+// human-inspection export), and prints placement JSON to stdout (historically
+// redirected to `data/video_placements.json`, which feeds STAGE 2,
+// `create_final_placements.js`). That chain produced the initial
+// `data/final_placements.json` that `generate-videos-json.js` turns into
+// `apps/web/public/videos.json`.
+//
+// This is NOT the routine update path. Incremental catalog updates today are
+// done by hand-editing `data/catalog.json` / `data/final_placements.json` and
+// re-running `generate-videos-json.js` + `generate_table.js`. This script is
+// kept only so the bootstrap chain can be re-run from scratch if ever needed.
 const fs = require('fs');
 const catalog = require('../data/catalog.json');
 
