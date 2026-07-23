@@ -762,6 +762,11 @@ mod tests {
 
         println!("Jupiter distance: {:.0} km", jupiter.distance_km);
         println!("Jupiter angular diameter: {:.1} arcsec", jupiter_ang_diam_arcsec);
+        println!(
+            "Jupiter RA/Dec: {:.4}° / {:.4}°",
+            jup_ra.to_degrees(),
+            jup_dec.to_degrees()
+        );
 
         // Get each moon's position and calculate angular separation
         for moon in [PlanetaryMoon::Io, PlanetaryMoon::Europa, PlanetaryMoon::Ganymede, PlanetaryMoon::Callisto] {
@@ -780,8 +785,10 @@ mod tests {
             let expected_max_arcsec = (elem.semi_major_axis_km / jupiter.distance_km).atan() * 206264.806;
 
             println!(
-                "{}: separation = {:.1} arcsec ({:.1} Jupiter diameters from center), expected max = {:.1} arcsec",
+                "{}: RA/Dec = {:.4}° / {:.4}°, separation = {:.1} arcsec ({:.1} Jupiter diameters from center), expected max = {:.1} arcsec",
                 moon.name(),
+                moon_ra.to_degrees(),
+                moon_dec.to_degrees(),
                 sep_arcsec,
                 sep_arcsec / jupiter_ang_diam_arcsec,
                 expected_max_arcsec
