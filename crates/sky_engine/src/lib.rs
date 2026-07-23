@@ -1209,9 +1209,33 @@ mod tests {
     // a faithful transcription of that old mutate-and-recompute path.
     // ------------------------------------------------------------------------
 
-    // The committed ISS ephemeris used by the web app (covers 2026-01-17 .. 2026-02-15).
-    const ISS_EPHEMERIS_PATH: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/web/public/data/iss_ephemeris.bin");
+    // Dedicated, fixed-window ISS ephemeris fixture for the pass-prediction tests.
+    //
+    // This is intentionally NOT the live `apps/web/public/data/iss_ephemeris.bin`,
+    // which `.github/workflows/refresh-satellite-ephemeris.yml` regenerates weekly
+    // starting from the run's own date. The `find_passes_matches_legacy_scan` test
+    // depends on the first ~48 h of the window actually containing dark-sky ISS
+    // passes for the fixed test observer — an invariant that drifts as the live
+    // window slides forward each week, so coupling the test to that file made it
+    // fail non-deterministically on clean checkouts (issue #82).
+    //
+    // The fixture is the first 3 days (2026-01-17 00:00 .. 2026-01-20 00:00 UTC,
+    // 1-minute steps) of the original ISS ephemeris this test was authored against
+    // (git commit 779be6f, which covered 2026-01-17 .. 2026-02-15). It is committed
+    // permanently and lives outside the path glob the refresh workflow touches, so
+    // it never changes underneath the test. Mirrors the "pin to a fixed epoch,
+    // regenerate consciously" contract of `sky_engine_core/tests/golden_positions.rs`.
+    //
+    // To regenerate (only if the fixture is ever intentionally moved to a new
+    // window): pick a fixed date range confirmed to contain several dark-sky passes
+    // for the test observer and run
+    //   scripts/generate_satellite_ephemeris.py iss --start YYYY-MM-DD --end YYYY-MM-DD \
+    //     --output crates/sky_engine/tests/fixtures/iss_ephemeris_fixture.bin
+    // then update the date range in this comment and re-run `cargo test -p sky_engine`.
+    const ISS_EPHEMERIS_PATH: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/iss_ephemeris_fixture.bin"
+    );
 
     fn engine_with_iss() -> SkyEngine {
         let bytes = std::fs::read(ISS_EPHEMERIS_PATH).expect("read committed ISS ephemeris");
