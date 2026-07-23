@@ -1,3 +1,15 @@
+// One-time catalog-bootstrap pipeline — STAGE 2 of 2.
+//
+// Reads `data/video_placements.json` (STAGE 1 output, from
+// `create_placement_data.js`) + `data/ephemeris.json`, writes
+// `data/final_placements.json` / `data/final_placements.csv`, and prints viz
+// JSON to stdout. `data/final_placements.json` in turn feeds
+// `generate-videos-json.js`, which produces `apps/web/public/videos.json`.
+//
+// This is NOT the routine update path. Incremental catalog updates today are
+// done by hand-editing `data/catalog.json` / `data/final_placements.json` and
+// re-running `generate-videos-json.js` + `generate_table.js`. This script is
+// kept only so the bootstrap chain can be re-run from scratch if ever needed.
 const fs = require('fs');
 const placements = require('../data/video_placements.json');
 const ephemeris = require('../data/ephemeris.json');

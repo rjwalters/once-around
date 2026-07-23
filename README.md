@@ -108,11 +108,27 @@ once-around/
 ├── crates/
 │   ├── sky_engine/        # WASM bindings
 │   └── sky_engine_core/   # Core astronomy calculations (Rust)
-├── data/                  # Star catalog and video placement data
+├── data/                  # Star catalog, ephemerides, and pipeline intermediates
 ├── scripts/               # Data pipeline (ephemerides, catalogs, transcripts)
 ├── docs/                  # Project documentation
 └── tests/                 # Playwright end-to-end tests
 ```
+
+The `scripts/` directory holds two generations of data tooling:
+
+- **Routine / current pipeline** — the path used for ongoing updates: transcript
+  scraping (`get_transcripts.sh`, `scrape_transcripts.js`) and catalog building
+  (`build_catalog.js`), plus satellite ephemeris generation
+  (`generate_satellite_ephemeris.py`, auto-refreshed weekly). Catalog changes are
+  applied by hand-editing `data/catalog.json` / `data/final_placements.json` and
+  re-running `generate-videos-json.js` (produces `apps/web/public/videos.json`)
+  and `generate_table.js` (produces `data/catalog.csv`).
+- **One-time catalog-bootstrap chain** — `create_placement_data.js` (stage 1) →
+  `create_final_placements.js` (stage 2) originally produced the initial
+  `data/final_placements.json` / `data/video_placements.json`. It is superseded
+  for incremental updates by the routine path above and is kept only so the
+  catalog can be rebuilt from scratch if ever needed (see the header comments in
+  each script).
 
 ## Development
 
