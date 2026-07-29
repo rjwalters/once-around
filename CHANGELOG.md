@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Rise/set times panel for the Sun, Moon, and planets in topocentric mode (#81)
+- Periodic minor-body element refresh machinery: a Horizons-backed rewrite script plus a quarterly workflow that opens a refresh PR when osculating elements drift (#80)
+
+### Changed
+- Keyboard help overlay is now driven by a shared shortcut registry, so the `?` overlay and the handlers can't drift apart (#79)
+- Golden position suite runs on a dedicated macOS Apple Silicon CI job; `sky_engine` pass-prediction tests are pinned to a fixed ISS ephemeris fixture and run in CI (#78, #85)
+
 ## [0.9.0] - 2026-07-07
 
 First tagged release, snapshotting the app after the July 2026 development cycle. The baseline product — ~8,400 Yale BSC stars, VSOP87 planets and moons, geocentric/topocentric/Hubble/JWST view modes, deep fields, satellites, meteor showers, AR mode, and PWA support — is documented in [docs/COMPLETED_FEATURES.md](docs/COMPLETED_FEATURES.md).

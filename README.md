@@ -149,13 +149,14 @@ pnpm test:unit
 # Run the Rust engine test suites
 cargo test -p sky_engine_core
 
-# Playwright end-to-end tests
+# Playwright end-to-end tests (also: test:perf, test:ui)
 pnpm test
 
-# Build for production
+# Build for production (build:all = build:wasm + build), preview locally
 pnpm build:all
+pnpm preview
 
-# Deploy to Cloudflare
+# Deploy to Cloudflare (also: deploy:preview, deploy:all)
 pnpm deploy:prod
 ```
 
