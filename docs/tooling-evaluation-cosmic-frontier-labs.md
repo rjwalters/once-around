@@ -107,11 +107,12 @@ The two fresh sources agree with each other to < 1 km (§1) and both disagree wi
 shipped file by the same growing amount, so the shipped file is the outlier — and because it
 was only two days old, **the growth is drag-model divergence inside JPL's own 28-day
 prediction, not staleness accumulated between weekly refreshes.** The error is a function of
-how far past the generation epoch a sample sits, and it grows smoothly and monotonically from
-that epoch: independent differencing during review (fresh Horizons vs. the same committed
-file) measured 1.9 km at +2 d, 10.1 km at +7 d, 71.6 km at +14 d, 186.7 km at +21 d and
-241.1 km at +23.5 d — a smooth, roughly quadratic curve with **no kink at the file's two-day
-age or at the seven-day refresh interval**, which a staleness explanation would require.
+how far past the generation epoch a sample sits, and past a shallow minimum a few days out it
+grows smoothly and monotonically: independent differencing during review (fresh Horizons vs.
+the same committed file) measured 1.9 km at +2 d, a 0.6 km minimum at +4 d, then 10.1 km at
++7 d, 71.6 km at +14 d, 186.7 km at +21 d and 241.1 km at +23.5 d — a smooth, roughly
+quadratic curve with **no kink at the file's two-day age or at the seven-day refresh
+interval**, which a staleness explanation would require.
 
 242 km along-track is ≈ 31 seconds of ISS motion — i.e. a pass predicted from the far end of
 the shipped window can be off by roughly half a minute, degrading toward the window edge.
