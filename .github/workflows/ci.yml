@@ -26,7 +26,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11 (see "packageManager" in package.json) requires Node >= 22.13;
+          # 24 is the active LTS line. Bumping this is a hard requirement of the pin.
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -191,7 +193,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # pnpm 11 (see "packageManager" in package.json) requires Node >= 22.13;
+          # 24 is the active LTS line. Bumping this is a hard requirement of the pin.
+          node-version: 24
           cache: pnpm
 
       - name: Install Rust toolchain
