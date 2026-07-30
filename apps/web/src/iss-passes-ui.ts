@@ -5,7 +5,16 @@
  */
 
 import type { SkyEngine } from "./wasm/sky_engine";
-import { ISSPass, EphemerisStatus, findISSPasses, getEphemerisStatus, getNextPassSummary, parsePassBuffer } from "./iss-passes";
+import {
+  ISSPass,
+  EphemerisStatus,
+  APPROXIMATE_FORECAST_DAYS,
+  findISSPasses,
+  getEphemerisStatus,
+  getNextPassSummary,
+  isApproximatePass,
+  parsePassBuffer
+} from "./iss-passes";
 
 /** Sun altitude limit for dark sky (civil twilight). Mirrors iss-passes.ts default. */
 const SUN_ALTITUDE_LIMIT = -6;
@@ -257,6 +266,29 @@ export class ISSPassesUI {
   }
 
   /**
+   * Inline "≈" marker for a pass whose start time is far enough into the
+   * forecast that its timing is approximate (see `APPROXIMATE_FORECAST_DAYS`).
+   *
+   * Deliberately understated — this is an accuracy caveat on data we *do*
+   * have, not the "expired data" warning from `renderStale()`, which means we
+   * have nothing to show at all. Returns an empty string for near-term passes.
+   */
+  private approximateMarker(pass: ISSPass, nowMs: number): string {
+    if (!isApproximatePass(pass, nowMs)) return '';
+    return `<span class="iss-pass-approx" title="More than ${APPROXIMATE_FORECAST_DAYS} days out — predicted timing may shift by a few seconds" aria-label="approximate">≈</span>`;
+  }
+
+  /** Footnote explaining the "≈" marker. Only rendered when one is shown. */
+  private renderApproximateNote(): string {
+    return `
+      <div class="iss-passes-approx-note" role="note">
+        <span class="iss-pass-approx" aria-hidden="true">≈</span>
+        Passes more than ${APPROXIMATE_FORECAST_DAYS} days out are approximate — the bundled orbit forecast drifts with range, so these times may shift by a few seconds once the data refreshes.
+      </div>
+    `;
+  }
+
+  /**
    * Render the UI.
    */
   private render(): void {
@@ -301,13 +333,20 @@ export class ISSPassesUI {
         <div class="iss-passes-header">
           <span class="iss-passes-title">ISS Pass Predictions</span>
         </div>
-        <div class="iss-passes-empty">No visible passes found in the next 30 days</div>
+        <div class="iss-passes-empty">No visible passes found in the loaded forecast window</div>
       `;
       return;
     }
 
     const nextPass = this.passes[0];
     const timeUntil = getNextPassSummary(nextPass);
+
+    // Grade the rendered passes by forecast horizon. This is additive to the
+    // `ok` coverage state above: we have data, but its far end is a longer-range
+    // prediction and drifts. Track whether any rendered pass is marked so the
+    // explanatory footnote is only shown when it applies.
+    const nowMs = Date.now();
+    let anyApproximate = isApproximatePass(nextPass, nowMs);
 
     // Build HTML
     let html = `
@@ -320,7 +359,7 @@ export class ISSPassesUI {
         <div class="iss-next-pass-label">Next Visible Pass</div>
         <div class="iss-next-pass-time">${this.formatTime(nextPass.riseTime)}</div>
         <div class="iss-next-pass-date">${this.formatDate(nextPass.riseTime)}</div>
-        <div class="iss-next-pass-countdown">${timeUntil}</div>
+        <div class="iss-next-pass-countdown">${timeUntil}${this.approximateMarker(nextPass, nowMs)}</div>
         <div class="iss-next-pass-details">
           <span class="iss-detail">
             <span class="iss-detail-label">Max</span>
@@ -346,10 +385,12 @@ export class ISSPassesUI {
 
       for (let i = 1; i < this.passes.length; i++) {
         const pass = this.passes[i];
+        const marker = this.approximateMarker(pass, nowMs);
+        if (marker) anyApproximate = true;
         html += `
           <div class="iss-pass-item" data-pass-index="${i}">
             <div class="iss-pass-item-date">${this.formatDate(pass.riseTime)}</div>
-            <div class="iss-pass-item-time">${this.formatTime(pass.riseTime)}</div>
+            <div class="iss-pass-item-time">${this.formatTime(pass.riseTime)}${marker}</div>
             <div class="iss-pass-item-details">
               <span>${Math.round(pass.maxAltitude)}° max</span>
               <span>${this.formatDuration(pass.duration)}</span>
@@ -359,6 +400,10 @@ export class ISSPassesUI {
       }
 
       html += '</div>';
+    }
+
+    if (anyApproximate) {
+      html += this.renderApproximateNote();
     }
 
     this.container.innerHTML = html;

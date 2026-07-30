@@ -568,8 +568,9 @@ Ephemeris regeneration script: `scripts/generate_satellite_ephemeris.py`
 
 ### Automatic Freshness
 
-- **Weekly refresh** - GitHub Actions cron (`refresh-satellite-ephemeris.yml`, Mondays 06:00 UTC) regenerates 45-day ISS/Hubble ephemeris from NASA Horizons and commits the binaries
+- **Weekly refresh** - GitHub Actions cron (`refresh-satellite-ephemeris.yml`, Mondays 06:00 UTC) regenerates the ISS/Hubble ephemeris from NASA Horizons and commits the binaries. Window lengths are per-satellite: **14 days for the ISS**, 45 days for Hubble (Horizons clamps the latter to its own predicted-trajectory cutoff). Horizons' spacecraft trajectories are predictions that degrade with forecast horizon — measured ISS error was ~26 km at +9.5 d and ~242 km at +23.5 d — so the ISS window is capped short while still leaving a 7-day buffer if one weekly run fails. Hubble orbits higher, where drag-driven divergence is far weaker, so its window is unchanged
 - **Staleness indicator** - `getEphemerisStatus()` classifies coverage (ok/stale/future/missing); the ISS Passes panel shows an explicit "ephemeris expired" warning instead of a misleading empty state
+- **Long-range forecast caveat** - additive to the coverage state: `isApproximatePass()` flags passes starting more than `APPROXIMATE_FORECAST_DAYS` (7) out, and the ISS Passes panel marks them with a muted "≈" plus a footnote, visually distinct from the "expired" warning
 
 ### Visibility Rules
 

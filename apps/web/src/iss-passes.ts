@@ -147,6 +147,49 @@ export function getEphemerisStatus(
 }
 
 /**
+ * Forecast horizon, in days past `now`, beyond which a pass prediction is
+ * flagged as approximate.
+ *
+ * The bundled ephemeris is a JPL Horizons *prediction*, and its error grows
+ * with how far past the generation epoch a sample sits (drag-model divergence,
+ * not refresh staleness). Measured against fresh Horizons pulls and SGP4:
+ * ~4 km at +5.5 d, ~26 km at +9.5 d, ~107 km at +16.5 d. 26 km along-track is
+ * about 3 seconds of ISS motion, which is where pass timing starts to visibly
+ * drift — so 7 days is the point past which we tell the user the prediction is
+ * approximate. See issue #91.
+ *
+ * This is deliberately independent of `getEphemerisStatus()`: coverage
+ * (`ok`/`stale`/`future`/`missing`) says whether we have data at all, this says
+ * how much to trust the data we do have.
+ */
+export const APPROXIMATE_FORECAST_DAYS = 7;
+
+/**
+ * Days between `nowMs` and an instant. Negative for instants in the past.
+ */
+export function forecastHorizonDays(
+  time: Date,
+  nowMs: number = Date.now()
+): number {
+  return (time.getTime() - nowMs) / MS_PER_DAY;
+}
+
+/**
+ * Whether a pass starts far enough into the forecast that its predicted timing
+ * should be presented as approximate (see `APPROXIMATE_FORECAST_DAYS`).
+ *
+ * Additive to the coverage state from `getEphemerisStatus()` — a pass can only
+ * exist when coverage is `ok`, and this further grades passes inside that
+ * window by how far out they are.
+ */
+export function isApproximatePass(
+  pass: ISSPass,
+  nowMs: number = Date.now()
+): boolean {
+  return forecastHorizonDays(pass.riseTime, nowMs) > APPROXIMATE_FORECAST_DAYS;
+}
+
+/**
  * Convert the flat `find_passes` buffer into `ISSPass[]`.
  * Shared by the synchronous path and the Web Worker path.
  */

@@ -3223,6 +3223,35 @@ canvas {
   justify-content: flex-end;
 }
 
+/*
+ * Long-range forecast caveat. The bundled ephemeris is a prediction whose error
+ * grows with range, so passes beyond APPROXIMATE_FORECAST_DAYS carry a "≈"
+ * marker plus a footnote. Kept deliberately muted (no amber, no border) so it
+ * never reads like the .iss-passes-stale "data expired" warning, which means
+ * there is no usable data at all.
+ */
+.iss-pass-approx {
+  color: #7a8899;
+  font-size: 0.9em;
+  margin-left: 4px;
+  cursor: help;
+}
+
+.iss-passes-approx-note {
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.4;
+  color: #7a8899;
+}
+
+.iss-passes-approx-note .iss-pass-approx {
+  margin-left: 0;
+  margin-right: 2px;
+  font-style: normal;
+}
+
 /* Night vision mode overrides */
 body.night-vision .iss-passes-section {
   background: rgba(30, 10, 10, 0.6);
@@ -3251,6 +3280,11 @@ body.night-vision .iss-goto-pass-btn:hover {
 
 body.night-vision .iss-pass-item:hover {
   background: rgba(180, 60, 60, 0.1);
+}
+
+body.night-vision .iss-pass-approx,
+body.night-vision .iss-passes-approx-note {
+  color: #99787a;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { SkyEngine } from "./wasm/sky_engine";
-import { getEphemerisStatus, passScanWindow } from "./iss-passes";
+import {
+  APPROXIMATE_FORECAST_DAYS,
+  forecastHorizonDays,
+  getEphemerisStatus,
+  isApproximatePass,
+  passScanWindow,
+  type ISSPass
+} from "./iss-passes";
 
 const JD_UNIX_EPOCH = 2440587.5;
 const MS_PER_DAY = 86400000;
@@ -79,5 +86,59 @@ describe("passScanWindow", () => {
 
   it("returns null when no ephemeris is loaded", () => {
     expect(passScanWindow(mockEngine(null), 0, now)).toBeNull();
+  });
+});
+
+describe("approximate long-range passes", () => {
+  const now = Date.UTC(2026, 5, 1); // 2026-06-01
+
+  /** Minimal pass stub — only `riseTime` drives the horizon classification. */
+  function passAt(riseMs: number): ISSPass {
+    return {
+      riseTime: new Date(riseMs),
+      riseAzimuth: 300,
+      riseDirection: "WNW",
+      maxTime: new Date(riseMs + 180000),
+      maxAltitude: 62,
+      maxAzimuth: 210,
+      setTime: new Date(riseMs + 360000),
+      setAzimuth: 120,
+      setDirection: "ESE",
+      duration: 360,
+      brightness: -3
+    };
+  }
+
+  const DAY_MS = 86400000;
+
+  it("measures the forecast horizon in days from now", () => {
+    expect(forecastHorizonDays(new Date(now + 3 * DAY_MS), now)).toBeCloseTo(3, 9);
+    // A pass already under way sits behind `now`.
+    expect(forecastHorizonDays(new Date(now - DAY_MS), now)).toBeCloseTo(-1, 9);
+  });
+
+  it("does not flag a near-term pass", () => {
+    expect(isApproximatePass(passAt(now + 2 * DAY_MS), now)).toBe(false);
+    expect(isApproximatePass(passAt(now + 60000), now)).toBe(false);
+  });
+
+  it("flags a pass past the forecast horizon", () => {
+    const far = now + (APPROXIMATE_FORECAST_DAYS + 3) * DAY_MS;
+    expect(isApproximatePass(passAt(far), now)).toBe(true);
+  });
+
+  it("treats the threshold itself as still precise", () => {
+    const atThreshold = now + APPROXIMATE_FORECAST_DAYS * DAY_MS;
+    expect(isApproximatePass(passAt(atThreshold), now)).toBe(false);
+    expect(isApproximatePass(passAt(atThreshold + 60000), now)).toBe(true);
+  });
+
+  it("is independent of ephemeris coverage state", () => {
+    // A far-out pass inside a perfectly valid ('ok') coverage window is still
+    // flagged: coverage says whether we have data, this says how far out it is.
+    const startJD = msToJD(Date.UTC(2026, 4, 15));
+    const endJD = msToJD(Date.UTC(2026, 5, 14));
+    expect(getEphemerisStatus(mockEngine([startJD, endJD]), 0, now).state).toBe("ok");
+    expect(isApproximatePass(passAt(now + 10 * DAY_MS), now)).toBe(true);
   });
 });
