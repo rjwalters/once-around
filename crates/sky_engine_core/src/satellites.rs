@@ -776,19 +776,33 @@ mod tests {
         let omega = 2.0 * PI / period_s;
         let edge_shift_s = (theta_cylinder - theta_umbra) / omega;
 
-        // #88 measured ~60.5 s per edge averaged over 31 real ISS eclipse
-        // cycles; the central crossing modelled here is the worst case at
-        // ~64 s. Bounded loosely enough to survive constant refinements.
+        // The central (beta = 0) crossing modelled here yields ~56.6 s per
+        // edge. That is the *lower bound*, not the worst case: a central
+        // crossing traverses the shadow boundary at the steepest angle, so it
+        // shifts the least. The shift grows monotonically with the orbital
+        // beta angle (the angle between the orbit plane and the Sun
+        // direction) — ~57.5 s at 10 deg, ~60.7 s at 20 deg, ~77 s at 40 deg,
+        // ~113 s at 55 deg — because off-axis passes cross the boundary
+        // obliquely.
+        //
+        // This is what validates the model against #88, which measured
+        // ~60.5 s per edge averaged over 31 real ISS eclipse cycles: that
+        // average sits at beta ~= 20 deg, squarely in the typical ISS beta
+        // range. Bounded loosely enough to survive constant refinements
+        // (varying the Sun distance over the full 147.1-152.1e6 km range
+        // moves this by less than 0.2 s).
         assert!(
-            (45.0..85.0).contains(&edge_shift_s),
-            "per-edge eclipse timing shift was {edge_shift_s} s, expected ~60-65 s"
+            (54.0..59.0).contains(&edge_shift_s),
+            "per-edge eclipse timing shift was {edge_shift_s} s, expected ~56.6 s \
+             (central-crossing beta=0 lower bound; real off-axis passes shift more)"
         );
 
-        // Each visible pass gains the shift at both ends: ~2 minutes total.
+        // Each visible pass gains the shift at both ends: ~113 s here, and
+        // more for off-axis passes.
         let pass_extension_s = 2.0 * edge_shift_s;
         assert!(
-            (90.0..170.0).contains(&pass_extension_s),
-            "pass extension was {pass_extension_s} s, expected ~2 min"
+            (108.0..118.0).contains(&pass_extension_s),
+            "pass extension was {pass_extension_s} s, expected ~113 s"
         );
     }
 
