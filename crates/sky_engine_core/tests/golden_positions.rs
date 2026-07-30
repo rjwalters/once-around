@@ -45,8 +45,8 @@
 
 use sky_engine_core::planets::compute_all_body_positions_full;
 use sky_engine_core::{
-    compute_all_comet_positions, compute_all_minor_body_positions,
-    compute_all_planetary_moon_positions, SkyTime,
+    SkyTime, compute_all_comet_positions, compute_all_minor_body_positions,
+    compute_all_planetary_moon_positions,
 };
 
 /// Fixed epoch: 2026-07-06 00:00:00 UTC (JD ~= 2461227.5).
@@ -75,22 +75,75 @@ const NEOWISE_IDX: usize = 4; // near-parabolic, e ~= 0.999 (near-parabolic solv
 // Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune.
 // Tuple layout: (direction.x, direction.y, direction.z, distance_km).
 const GOLDEN_BODIES: [(f64, f64, f64, f64); 9] = [
-    (-0.2351194894444659, 0.8917928476130479, 0.3865544497604251, 152087601.81875545), // Sun
-    (0.9893439786114928, -0.14313563001654067, -0.02665864596993393, 387584.5422214532), // Moon
-    (-0.4128388826518284, 0.8594996574443441, 0.3013708609402129, 86603196.21859373), // Mercury
-    (-0.82351961196764, 0.5087069725110095, 0.25106306941354484, 150336366.84742627), // Venus
-    (0.4267344544516065, 0.831437266074312, 0.3558226777016375, 312852285.18028677), // Mars
-    (-0.5131701290198377, 0.7843734458009743, 0.34844614534253254, 933494383.2290201), // Jupiter
-    (0.9693831702774837, 0.2386759781156493, 0.057706556415309716, 1408273136.9075882), // Saturn
-    (0.4448358861658738, 0.8228179587348095, 0.3536829670234393, 3025558042.361685), // Uranus
-    (0.9972199675153923, 0.07426324726409099, 0.006107904255347144, 4442238442.169452), // Neptune
+    (
+        -0.2351194894444659,
+        0.8917928476130479,
+        0.3865544497604251,
+        152087601.81875545,
+    ), // Sun
+    (
+        0.9893439786114928,
+        -0.14313563001654067,
+        -0.02665864596993393,
+        387584.5422214532,
+    ), // Moon
+    (
+        -0.4128388826518284,
+        0.8594996574443441,
+        0.3013708609402129,
+        86603196.21859373,
+    ), // Mercury
+    (
+        -0.82351961196764,
+        0.5087069725110095,
+        0.25106306941354484,
+        150336366.84742627,
+    ), // Venus
+    (
+        0.4267344544516065,
+        0.831437266074312,
+        0.3558226777016375,
+        312852285.18028677,
+    ), // Mars
+    (
+        -0.5131701290198377,
+        0.7843734458009743,
+        0.34844614534253254,
+        933494383.2290201,
+    ), // Jupiter
+    (
+        0.9693831702774837,
+        0.2386759781156493,
+        0.057706556415309716,
+        1408273136.9075882,
+    ), // Saturn
+    (
+        0.4448358861658738,
+        0.8228179587348095,
+        0.3536829670234393,
+        3025558042.361685,
+    ), // Uranus
+    (
+        0.9972199675153923,
+        0.07426324726409099,
+        0.006107904255347144,
+        4442238442.169452,
+    ), // Neptune
 ];
 
 // Planetary moons. Tuple layout: (direction.x, direction.y, direction.z, distance_km).
-const GOLDEN_GANYMEDE: (f64, f64, f64, f64) =
-    (-0.5132026756698126, 0.7843633155220431, 0.3484210139308667, 933494383.2290201);
-const GOLDEN_TITAN: (f64, f64, f64, f64) =
-    (0.9695001935169961, 0.23816716896374995, 0.0578426693566229, 1408273136.9075882);
+const GOLDEN_GANYMEDE: (f64, f64, f64, f64) = (
+    -0.5132026756698126,
+    0.7843633155220431,
+    0.3484210139308667,
+    933494383.2290201,
+);
+const GOLDEN_TITAN: (f64, f64, f64, f64) = (
+    0.9695001935169961,
+    0.23816716896374995,
+    0.0578426693566229,
+    1408273136.9075882,
+);
 
 // Minor bodies. Tuple layout: (direction.x, direction.y, direction.z, distance_km, helio_distance_km).
 const GOLDEN_PLUTO: (f64, f64, f64, f64, f64) = (
@@ -144,10 +197,22 @@ fn test_golden_body_positions() {
     // --- Planetary moons ---
     let moons = compute_all_planetary_moon_positions(&time);
     let ganymede = &moons[GANYMEDE_IDX];
-    assert_eq!(ganymede.direction.x, GOLDEN_GANYMEDE.0, "Ganymede direction.x");
-    assert_eq!(ganymede.direction.y, GOLDEN_GANYMEDE.1, "Ganymede direction.y");
-    assert_eq!(ganymede.direction.z, GOLDEN_GANYMEDE.2, "Ganymede direction.z");
-    assert_eq!(ganymede.distance_km, GOLDEN_GANYMEDE.3, "Ganymede distance_km");
+    assert_eq!(
+        ganymede.direction.x, GOLDEN_GANYMEDE.0,
+        "Ganymede direction.x"
+    );
+    assert_eq!(
+        ganymede.direction.y, GOLDEN_GANYMEDE.1,
+        "Ganymede direction.y"
+    );
+    assert_eq!(
+        ganymede.direction.z, GOLDEN_GANYMEDE.2,
+        "Ganymede direction.z"
+    );
+    assert_eq!(
+        ganymede.distance_km, GOLDEN_GANYMEDE.3,
+        "Ganymede distance_km"
+    );
 
     let titan = &moons[TITAN_IDX];
     assert_eq!(titan.direction.x, GOLDEN_TITAN.0, "Titan direction.x");
@@ -162,14 +227,20 @@ fn test_golden_body_positions() {
     assert_eq!(pluto.direction.y, GOLDEN_PLUTO.1, "Pluto direction.y");
     assert_eq!(pluto.direction.z, GOLDEN_PLUTO.2, "Pluto direction.z");
     assert_eq!(pluto.distance_km, GOLDEN_PLUTO.3, "Pluto distance_km");
-    assert_eq!(pluto.helio_distance_km, GOLDEN_PLUTO.4, "Pluto helio_distance_km");
+    assert_eq!(
+        pluto.helio_distance_km, GOLDEN_PLUTO.4,
+        "Pluto helio_distance_km"
+    );
 
     let ceres = &minor[CERES_IDX];
     assert_eq!(ceres.direction.x, GOLDEN_CERES.0, "Ceres direction.x");
     assert_eq!(ceres.direction.y, GOLDEN_CERES.1, "Ceres direction.y");
     assert_eq!(ceres.direction.z, GOLDEN_CERES.2, "Ceres direction.z");
     assert_eq!(ceres.distance_km, GOLDEN_CERES.3, "Ceres distance_km");
-    assert_eq!(ceres.helio_distance_km, GOLDEN_CERES.4, "Ceres helio_distance_km");
+    assert_eq!(
+        ceres.helio_distance_km, GOLDEN_CERES.4,
+        "Ceres helio_distance_km"
+    );
 
     // --- Comets ---
     let comets = compute_all_comet_positions(&time);
@@ -178,14 +249,20 @@ fn test_golden_body_positions() {
     assert_eq!(halley.direction.y, GOLDEN_HALLEY.1, "Halley direction.y");
     assert_eq!(halley.direction.z, GOLDEN_HALLEY.2, "Halley direction.z");
     assert_eq!(halley.distance_km, GOLDEN_HALLEY.3, "Halley distance_km");
-    assert_eq!(halley.helio_distance_km, GOLDEN_HALLEY.4, "Halley helio_distance_km");
+    assert_eq!(
+        halley.helio_distance_km, GOLDEN_HALLEY.4,
+        "Halley helio_distance_km"
+    );
 
     let neowise = &comets[NEOWISE_IDX];
     assert_eq!(neowise.direction.x, GOLDEN_NEOWISE.0, "NEOWISE direction.x");
     assert_eq!(neowise.direction.y, GOLDEN_NEOWISE.1, "NEOWISE direction.y");
     assert_eq!(neowise.direction.z, GOLDEN_NEOWISE.2, "NEOWISE direction.z");
     assert_eq!(neowise.distance_km, GOLDEN_NEOWISE.3, "NEOWISE distance_km");
-    assert_eq!(neowise.helio_distance_km, GOLDEN_NEOWISE.4, "NEOWISE helio_distance_km");
+    assert_eq!(
+        neowise.helio_distance_km, GOLDEN_NEOWISE.4,
+        "NEOWISE helio_distance_km"
+    );
 }
 
 /// Generator for the golden constants above. Ignored by default; run on demand to

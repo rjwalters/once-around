@@ -80,11 +80,7 @@ pub fn cartesian_to_ra_dec(coord: &CartesianCoord) -> (f64, f64) {
 
 /// Convert ecliptic coordinates to equatorial coordinates.
 /// Obliquity is the axial tilt of Earth (about 23.4 degrees for J2000).
-pub fn ecliptic_to_equatorial(
-    lon_rad: f64,
-    lat_rad: f64,
-    obliquity_rad: f64,
-) -> CartesianCoord {
+pub fn ecliptic_to_equatorial(lon_rad: f64, lat_rad: f64, obliquity_rad: f64) -> CartesianCoord {
     let cos_lat = lat_rad.cos();
     let sin_lat = lat_rad.sin();
     let cos_lon = lon_rad.cos();
@@ -118,7 +114,8 @@ pub fn mean_obliquity(jde: f64) -> f64 {
     // ε₀ = 84381.406" - 46.836769"T - 0.0001831"T² + 0.00200340"T³
     //      - 0.000000576"T⁴ - 0.0000000434"T⁵
     let eps0_arcsec = 84381.406 - 46.836769 * t - 0.0001831 * t2 + 0.00200340 * t3
-        - 0.000000576 * t4 - 0.0000000434 * t5;
+        - 0.000000576 * t4
+        - 0.0000000434 * t5;
 
     // Convert arcseconds to radians
     eps0_arcsec * PI / (180.0 * 3600.0)
@@ -304,7 +301,12 @@ const ABERRATION_CONSTANT: f64 = 20.49552 * PI / (180.0 * 3600.0);
 ///
 /// # Returns
 /// Aberration corrections to apply to the object's position
-pub fn compute_aberration(sun_lon: f64, obj_lon: f64, obj_lat: f64, jde: f64) -> AberrationCorrection {
+pub fn compute_aberration(
+    sun_lon: f64,
+    obj_lon: f64,
+    obj_lat: f64,
+    jde: f64,
+) -> AberrationCorrection {
     // Julian centuries from J2000.0
     let t = (jde - 2451545.0) / 36525.0;
 
@@ -370,10 +372,8 @@ pub fn compute_gmst(jd_ut1: f64) -> f64 {
     // GMST at 0h UT in degrees (Meeus eq. 12.4)
     // θ₀ = 280.46061837 + 360.98564736629 * (JD - 2451545.0)
     //      + 0.000387933 * T² - T³/38710000
-    let gmst_deg = 280.46061837
-        + 360.98564736629 * (jd_ut1 - 2451545.0)
-        + 0.000387933 * t2
-        - t3 / 38710000.0;
+    let gmst_deg =
+        280.46061837 + 360.98564736629 * (jd_ut1 - 2451545.0) + 0.000387933 * t2 - t3 / 38710000.0;
 
     // Normalize to [0, 360)
     let gmst_deg = gmst_deg.rem_euclid(360.0);
@@ -462,7 +462,10 @@ pub fn compute_topocentric_correction(
     // Δδ = -π × (sin(φ) × cos(δ) - cos(φ) × cos(H) × sin(δ))
     let delta_dec = -parallax * (sin_lat * cos_dec - cos_lat * cos_h * sin_dec);
 
-    TopocentricCorrection { delta_ra, delta_dec }
+    TopocentricCorrection {
+        delta_ra,
+        delta_dec,
+    }
 }
 
 /// Apply topocentric correction to get corrected RA/Dec.

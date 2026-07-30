@@ -9,7 +9,7 @@
 //! to match the planet's actual axial orientation in space.
 
 use crate::coords::CartesianCoord;
-use crate::planets::{compute_planet_position_with_ctx, Planet, PlanetPosition};
+use crate::planets::{Planet, PlanetPosition, compute_planet_position_with_ctx};
 use crate::time::SkyTime;
 use crate::time_context::TimeContext;
 use std::f64::consts::PI;
@@ -317,17 +317,15 @@ pub const URANUS_MOONS: [MoonOrbitalElements; 5] = [
 
 /// Neptune's major moon - Triton (only large moon, captured KBO)
 /// Note: Triton has a RETROGRADE orbit, handled by negative period
-pub const NEPTUNE_MOONS: [MoonOrbitalElements; 1] = [
-    MoonOrbitalElements {
-        name: "Triton",
-        parent: Planet::Neptune,
-        semi_major_axis_km: 354_759.0,
-        orbital_period_days: -5.876854, // Negative = retrograde orbit
-        eccentricity: 0.000016, // Nearly circular
-        radius_km: 1353.4,
-        mean_longitude_j2000_deg: 264.0,
-    },
-];
+pub const NEPTUNE_MOONS: [MoonOrbitalElements; 1] = [MoonOrbitalElements {
+    name: "Triton",
+    parent: Planet::Neptune,
+    semi_major_axis_km: 354_759.0,
+    orbital_period_days: -5.876854, // Negative = retrograde orbit
+    eccentricity: 0.000016,         // Nearly circular
+    radius_km: 1353.4,
+    mean_longitude_j2000_deg: 264.0,
+}];
 
 /// Mars's moons - Phobos and Deimos
 /// Both are small, irregularly shaped captured asteroids
@@ -439,10 +437,7 @@ impl PlanetaryMoon {
     ];
 
     /// Mars's moons only
-    pub const MARS_MOONS_ENUM: [PlanetaryMoon; 2] = [
-        PlanetaryMoon::Phobos,
-        PlanetaryMoon::Deimos,
-    ];
+    pub const MARS_MOONS_ENUM: [PlanetaryMoon; 2] = [PlanetaryMoon::Phobos, PlanetaryMoon::Deimos];
 
     pub fn name(&self) -> &'static str {
         self.elements().name
@@ -536,9 +531,8 @@ pub fn compute_planetary_moon_position_with_parent(
 
     // True anomaly
     let cos_e = eccentric_anomaly.cos();
-    let true_anomaly = 2.0
-        * ((1.0 + e).sqrt() * (eccentric_anomaly / 2.0).tan())
-            .atan2((1.0 - e).sqrt());
+    let true_anomaly =
+        2.0 * ((1.0 + e).sqrt() * (eccentric_anomaly / 2.0).tan()).atan2((1.0 - e).sqrt());
 
     // Distance from parent planet (in km)
     let r_from_parent = elem.semi_major_axis_km * (1.0 - e * cos_e);
@@ -659,10 +653,8 @@ mod tests {
             let pos = compute_planetary_moon_position(moon, &time);
 
             // Direction should be a unit vector
-            let len = (pos.direction.x.powi(2)
-                + pos.direction.y.powi(2)
-                + pos.direction.z.powi(2))
-            .sqrt();
+            let len = (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2))
+                .sqrt();
             assert!(
                 (len - 1.0).abs() < 0.001,
                 "{} direction should be unit vector, got len={}",
@@ -692,7 +684,10 @@ mod tests {
         let saturn_ang_diam_arcsec = saturn.angular_diameter_rad * 206264.806;
 
         eprintln!("Saturn distance: {:.0} km", saturn.distance_km);
-        eprintln!("Saturn angular diameter: {:.1} arcsec", saturn_ang_diam_arcsec);
+        eprintln!(
+            "Saturn angular diameter: {:.1} arcsec",
+            saturn_ang_diam_arcsec
+        );
 
         // Get each moon's position and calculate angular separation
         for moon in PlanetaryMoon::SATURN_MOONS_ENUM {
@@ -707,7 +702,8 @@ mod tests {
 
             // Expected max separation based on orbital distance
             let elem = moon.elements();
-            let expected_max_arcsec = (elem.semi_major_axis_km / saturn.distance_km).atan() * 206264.806;
+            let expected_max_arcsec =
+                (elem.semi_major_axis_km / saturn.distance_km).atan() * 206264.806;
 
             eprintln!(
                 "{}: separation = {:.1} arcsec ({:.1} Saturn diameters from center), expected max = {:.1} arcsec",
@@ -742,10 +738,7 @@ mod tests {
         let diff = (pos1.direction.x - pos2.direction.x).abs()
             + (pos1.direction.y - pos2.direction.y).abs()
             + (pos1.direction.z - pos2.direction.z).abs();
-        assert!(
-            diff > 0.0001,
-            "Io should have moved after half a period"
-        );
+        assert!(diff > 0.0001, "Io should have moved after half a period");
     }
 
     #[test]
@@ -761,7 +754,10 @@ mod tests {
         let jupiter_ang_diam_arcsec = jupiter.angular_diameter_rad * 206264.806;
 
         println!("Jupiter distance: {:.0} km", jupiter.distance_km);
-        println!("Jupiter angular diameter: {:.1} arcsec", jupiter_ang_diam_arcsec);
+        println!(
+            "Jupiter angular diameter: {:.1} arcsec",
+            jupiter_ang_diam_arcsec
+        );
         println!(
             "Jupiter RA/Dec: {:.4}° / {:.4}°",
             jup_ra.to_degrees(),
@@ -769,7 +765,12 @@ mod tests {
         );
 
         // Get each moon's position and calculate angular separation
-        for moon in [PlanetaryMoon::Io, PlanetaryMoon::Europa, PlanetaryMoon::Ganymede, PlanetaryMoon::Callisto] {
+        for moon in [
+            PlanetaryMoon::Io,
+            PlanetaryMoon::Europa,
+            PlanetaryMoon::Ganymede,
+            PlanetaryMoon::Callisto,
+        ] {
             let moon_pos = compute_planetary_moon_position(moon, &time);
             let (moon_ra, moon_dec) = cartesian_to_ra_dec(&moon_pos.direction);
 
@@ -782,7 +783,8 @@ mod tests {
 
             // Expected max separation based on orbital distance
             let elem = moon.elements();
-            let expected_max_arcsec = (elem.semi_major_axis_km / jupiter.distance_km).atan() * 206264.806;
+            let expected_max_arcsec =
+                (elem.semi_major_axis_km / jupiter.distance_km).atan() * 206264.806;
 
             println!(
                 "{}: RA/Dec = {:.4}° / {:.4}°, separation = {:.1} arcsec ({:.1} Jupiter diameters from center), expected max = {:.1} arcsec",
@@ -836,8 +838,14 @@ mod tests {
         let z_variation = (offset1_z - offset2_z).abs();
 
         eprintln!("=== Saturn Orbital Plane Test ===");
-        eprintln!("Titan offset at t1: ({:.6}, {:.6}, {:.6})", offset1_x, offset1_y, offset1_z);
-        eprintln!("Titan offset at t2: ({:.6}, {:.6}, {:.6})", offset2_x, offset2_y, offset2_z);
+        eprintln!(
+            "Titan offset at t1: ({:.6}, {:.6}, {:.6})",
+            offset1_x, offset1_y, offset1_z
+        );
+        eprintln!(
+            "Titan offset at t2: ({:.6}, {:.6}, {:.6})",
+            offset2_x, offset2_y, offset2_z
+        );
         eprintln!("Z-component variation: {:.6}", z_variation);
 
         // Saturn's tilt should cause measurable z-variation in Titan's orbit
@@ -855,9 +863,13 @@ mod tests {
             dot.clamp(-1.0, 1.0).acos() * 206264.806
         };
 
-        let expected_max_arcsec = (TITAN.semi_major_axis_km / saturn1.distance_km).atan() * 206264.806;
+        let expected_max_arcsec =
+            (TITAN.semi_major_axis_km / saturn1.distance_km).atan() * 206264.806;
 
-        eprintln!("Titan separation: {:.1} arcsec, expected max: {:.1} arcsec", sep1_arcsec, expected_max_arcsec);
+        eprintln!(
+            "Titan separation: {:.1} arcsec, expected max: {:.1} arcsec",
+            sep1_arcsec, expected_max_arcsec
+        );
         eprintln!("Saturn distance: {:.0} km", saturn1.distance_km);
 
         assert!(
@@ -879,8 +891,10 @@ mod tests {
         // For Jupiter (pole at Dec=64.5°), the equatorial plane is tilted
         // ~25.5° from J2000 equator (90° - 64.5°)
         let jupiter_point = planet_equatorial_to_j2000(1.0, 0.0, 0.0, &JUPITER_POLE);
-        eprintln!("Jupiter equatorial point: ({:.4}, {:.4}, {:.4})",
-                  jupiter_point.x, jupiter_point.y, jupiter_point.z);
+        eprintln!(
+            "Jupiter equatorial point: ({:.4}, {:.4}, {:.4})",
+            jupiter_point.x, jupiter_point.y, jupiter_point.z
+        );
 
         // The z-component (J2000 north) should reflect the pole's declination offset
         // Jupiter's pole is at dec 64.5°, so equatorial points can have z up to cos(64.5°) ≈ 0.43
@@ -892,8 +906,10 @@ mod tests {
         // For Saturn (pole at Dec=83.5°), the equatorial plane is only
         // ~6.5° from J2000 equator
         let saturn_point = planet_equatorial_to_j2000(1.0, 0.0, 0.0, &SATURN_POLE);
-        eprintln!("Saturn equatorial point: ({:.4}, {:.4}, {:.4})",
-                  saturn_point.x, saturn_point.y, saturn_point.z);
+        eprintln!(
+            "Saturn equatorial point: ({:.4}, {:.4}, {:.4})",
+            saturn_point.x, saturn_point.y, saturn_point.z
+        );
 
         // Saturn's pole is close to J2000 pole, so equatorial z-component is small
         // This is correct! Saturn's ~27° tilt from ECLIPTIC, but only ~6.5° from J2000 equator
@@ -904,15 +920,19 @@ mod tests {
 
         // Verify the pole direction is correct
         let saturn_pole_j2000 = planet_equatorial_to_j2000(0.0, 0.0, 1.0, &SATURN_POLE);
-        eprintln!("Saturn pole in J2000: ({:.4}, {:.4}, {:.4})",
-                  saturn_pole_j2000.x, saturn_pole_j2000.y, saturn_pole_j2000.z);
+        eprintln!(
+            "Saturn pole in J2000: ({:.4}, {:.4}, {:.4})",
+            saturn_pole_j2000.x, saturn_pole_j2000.y, saturn_pole_j2000.z
+        );
 
         // The pole should point toward (RA=40.6°, Dec=83.5°)
         let expected_pole_x = (83.537_f64 * PI / 180.0).cos() * (40.589_f64 * PI / 180.0).cos();
         let expected_pole_y = (83.537_f64 * PI / 180.0).cos() * (40.589_f64 * PI / 180.0).sin();
         let expected_pole_z = (83.537_f64 * PI / 180.0).sin();
-        eprintln!("Expected Saturn pole: ({:.4}, {:.4}, {:.4})",
-                  expected_pole_x, expected_pole_y, expected_pole_z);
+        eprintln!(
+            "Expected Saturn pole: ({:.4}, {:.4}, {:.4})",
+            expected_pole_x, expected_pole_y, expected_pole_z
+        );
 
         assert!(
             (saturn_pole_j2000.x - expected_pole_x).abs() < 0.01,

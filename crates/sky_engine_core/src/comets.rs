@@ -3,7 +3,7 @@
 //! Supports elliptical (e < 1), parabolic (e = 1), and hyperbolic (e > 1) orbits.
 //! Uses perihelion time and perihelion distance rather than mean anomaly at epoch.
 
-use crate::coords::{ecliptic_to_equatorial, CartesianCoord};
+use crate::coords::{CartesianCoord, ecliptic_to_equatorial};
 use crate::planets::AU_TO_KM;
 use crate::time::SkyTime;
 use crate::time_context::TimeContext;
@@ -93,56 +93,54 @@ impl CometElements {
 /// Next perihelion: July 28, 2061
 pub const HALLEY: CometElements = CometElements::from_degrees(
     "1P/Halley",
-    0.586,              // Perihelion distance (AU)
-    0.96714,            // Eccentricity
-    162.26,             // Inclination (degrees) - retrograde!
-    58.42,              // Longitude of ascending node (degrees)
-    111.33,             // Argument of perihelion (degrees)
-    2446470.5,          // Perihelion JD: Feb 9, 1986
-    5.5,                // Absolute magnitude
-    4.0,                // Magnitude slope
+    0.586,     // Perihelion distance (AU)
+    0.96714,   // Eccentricity
+    162.26,    // Inclination (degrees) - retrograde!
+    58.42,     // Longitude of ascending node (degrees)
+    111.33,    // Argument of perihelion (degrees)
+    2446470.5, // Perihelion JD: Feb 9, 1986
+    5.5,       // Absolute magnitude
+    4.0,       // Magnitude slope
 );
 
 /// 2P/Encke - Shortest period comet (3.3 years)
 /// Orbital elements: JPL Small-Body Database
 pub const ENCKE: CometElements = CometElements::from_degrees(
-    "2P/Encke",
-    0.336,              // Perihelion distance (AU)
-    0.8483,             // Eccentricity
-    11.78,              // Inclination (degrees)
-    334.57,             // Longitude of ascending node (degrees)
-    186.54,             // Argument of perihelion (degrees)
-    2460229.5,          // Perihelion JD: Oct 22, 2023
-    11.0,               // Absolute magnitude (faint)
-    10.0,               // Magnitude slope
+    "2P/Encke", 0.336,     // Perihelion distance (AU)
+    0.8483,    // Eccentricity
+    11.78,     // Inclination (degrees)
+    334.57,    // Longitude of ascending node (degrees)
+    186.54,    // Argument of perihelion (degrees)
+    2460229.5, // Perihelion JD: Oct 22, 2023
+    11.0,      // Absolute magnitude (faint)
+    10.0,      // Magnitude slope
 );
 
 /// 67P/Churyumov-Gerasimenko - Rosetta mission target
 /// Orbital elements: JPL Small-Body Database
 pub const CHURYUMOV_GERASIMENKO: CometElements = CometElements::from_degrees(
-    "67P/C-G",
-    1.243,              // Perihelion distance (AU)
-    0.6405,             // Eccentricity
-    7.04,               // Inclination (degrees)
-    50.19,              // Longitude of ascending node (degrees)
-    12.78,              // Argument of perihelion (degrees)
-    2460585.5,          // Perihelion JD: Nov 2, 2028
-    11.3,               // Absolute magnitude
-    8.0,                // Magnitude slope
+    "67P/C-G", 1.243,     // Perihelion distance (AU)
+    0.6405,    // Eccentricity
+    7.04,      // Inclination (degrees)
+    50.19,     // Longitude of ascending node (degrees)
+    12.78,     // Argument of perihelion (degrees)
+    2460585.5, // Perihelion JD: Nov 2, 2028
+    11.3,      // Absolute magnitude
+    8.0,       // Magnitude slope
 );
 
 /// 46P/Wirtanen - Close approach comet, small but active
 /// Orbital elements: JPL Small-Body Database
 pub const WIRTANEN: CometElements = CometElements::from_degrees(
     "46P/Wirtanen",
-    1.055,              // Perihelion distance (AU)
-    0.6588,             // Eccentricity
-    11.75,              // Inclination (degrees)
-    82.16,              // Longitude of ascending node (degrees)
-    356.34,             // Argument of perihelion (degrees)
-    2460405.5,          // Perihelion JD: April 27, 2029
-    6.8,                // Absolute magnitude
-    6.0,                // Magnitude slope
+    1.055,     // Perihelion distance (AU)
+    0.6588,    // Eccentricity
+    11.75,     // Inclination (degrees)
+    82.16,     // Longitude of ascending node (degrees)
+    356.34,    // Argument of perihelion (degrees)
+    2460405.5, // Perihelion JD: April 27, 2029
+    6.8,       // Absolute magnitude
+    6.0,       // Magnitude slope
 );
 
 // =============================================================================
@@ -153,42 +151,42 @@ pub const WIRTANEN: CometElements = CometElements::from_degrees(
 /// Orbital elements: JPL Small-Body Database
 pub const NEOWISE: CometElements = CometElements::from_degrees(
     "C/2020 F3 NEOWISE",
-    0.295,              // Perihelion distance (AU)
-    0.9992,             // Eccentricity (near-parabolic)
-    128.94,             // Inclination (degrees) - retrograde
-    61.01,              // Longitude of ascending node (degrees)
-    37.28,              // Argument of perihelion (degrees)
-    2459034.18,         // Perihelion JD: July 3, 2020
-    6.5,                // Absolute magnitude (bright!)
-    4.5,                // Magnitude slope
+    0.295,      // Perihelion distance (AU)
+    0.9992,     // Eccentricity (near-parabolic)
+    128.94,     // Inclination (degrees) - retrograde
+    61.01,      // Longitude of ascending node (degrees)
+    37.28,      // Argument of perihelion (degrees)
+    2459034.18, // Perihelion JD: July 3, 2020
+    6.5,        // Absolute magnitude (bright!)
+    4.5,        // Magnitude slope
 );
 
 /// C/2023 A3 (Tsuchinshan-ATLAS) - Great comet of 2024
 /// Orbital elements: JPL Small-Body Database
 pub const TSUCHINSHAN_ATLAS: CometElements = CometElements::from_degrees(
     "C/2023 A3 T-ATLAS",
-    0.391,              // Perihelion distance (AU)
-    1.0001,             // Eccentricity (hyperbolic - will not return)
-    139.11,             // Inclination (degrees) - retrograde
-    21.55,              // Longitude of ascending node (degrees)
-    308.48,             // Argument of perihelion (degrees)
-    2460585.3,          // Perihelion JD: Sept 27, 2024
-    4.5,                // Absolute magnitude (very bright!)
-    4.0,                // Magnitude slope
+    0.391,     // Perihelion distance (AU)
+    1.0001,    // Eccentricity (hyperbolic - will not return)
+    139.11,    // Inclination (degrees) - retrograde
+    21.55,     // Longitude of ascending node (degrees)
+    308.48,    // Argument of perihelion (degrees)
+    2460585.3, // Perihelion JD: Sept 27, 2024
+    4.5,       // Absolute magnitude (very bright!)
+    4.0,       // Magnitude slope
 );
 
 /// C/1995 O1 (Hale-Bopp) - Great comet of 1997
 /// Orbital elements: JPL Small-Body Database
 pub const HALE_BOPP: CometElements = CometElements::from_degrees(
     "C/1995 O1 Hale-Bopp",
-    0.914,              // Perihelion distance (AU)
-    0.9951,             // Eccentricity
-    89.43,              // Inclination (degrees) - nearly perpendicular
-    282.47,             // Longitude of ascending node (degrees)
-    130.59,             // Argument of perihelion (degrees)
-    2450538.9,          // Perihelion JD: April 1, 1997
-    -0.8,               // Absolute magnitude (extremely bright!)
-    4.0,                // Magnitude slope
+    0.914,     // Perihelion distance (AU)
+    0.9951,    // Eccentricity
+    89.43,     // Inclination (degrees) - nearly perpendicular
+    282.47,    // Longitude of ascending node (degrees)
+    130.59,    // Argument of perihelion (degrees)
+    2450538.9, // Perihelion JD: April 1, 1997
+    -0.8,      // Absolute magnitude (extremely bright!)
+    4.0,       // Magnitude slope
 );
 
 // =============================================================================
@@ -202,14 +200,14 @@ pub const HALE_BOPP: CometElements = CometElements::from_degrees(
 /// Perihelion: September 12, 1811. Orbital period ~3,000 years.
 pub const GREAT_COMET_1811: CometElements = CometElements::from_degrees(
     "C/1811 F1 (1811)",
-    1.0354,             // Perihelion distance (AU)
-    0.99509,            // Eccentricity (near-parabolic)
-    106.93,             // Inclination (degrees) - retrograde
-    140.53,             // Longitude of ascending node (degrees)
-    65.41,              // Argument of perihelion (degrees)
-    2382767.5,          // Perihelion JD: Sept 12, 1811
-    0.0,                // Absolute magnitude (intrinsically very bright)
-    4.0,                // Magnitude slope
+    1.0354,    // Perihelion distance (AU)
+    0.99509,   // Eccentricity (near-parabolic)
+    106.93,    // Inclination (degrees) - retrograde
+    140.53,    // Longitude of ascending node (degrees)
+    65.41,     // Argument of perihelion (degrees)
+    2382767.5, // Perihelion JD: Sept 12, 1811
+    0.0,       // Absolute magnitude (intrinsically very bright)
+    4.0,       // Magnitude slope
 );
 
 /// C/1965 S1 (Ikeya-Seki) - Great sungrazing comet of 1965
@@ -220,14 +218,14 @@ pub const GREAT_COMET_1811: CometElements = CometElements::from_degrees(
 /// Perihelion: October 21, 1965. Orbital period ~880 years.
 pub const IKEYA_SEKI: CometElements = CometElements::from_degrees(
     "C/1965 S1 Ikeya-Seki",
-    0.0077858,          // Perihelion distance (AU) - grazes the Sun!
-    0.999915,           // Eccentricity (near-parabolic)
-    141.8642,           // Inclination (degrees) - retrograde
-    346.9947,           // Longitude of ascending node (degrees)
-    69.0486,            // Argument of perihelion (degrees)
-    2439054.68,         // Perihelion JD: Oct 21, 1965
-    6.5,                // Absolute magnitude
-    4.0,                // Magnitude slope
+    0.0077858,  // Perihelion distance (AU) - grazes the Sun!
+    0.999915,   // Eccentricity (near-parabolic)
+    141.8642,   // Inclination (degrees) - retrograde
+    346.9947,   // Longitude of ascending node (degrees)
+    69.0486,    // Argument of perihelion (degrees)
+    2439054.68, // Perihelion JD: Oct 21, 1965
+    6.5,        // Absolute magnitude
+    4.0,        // Magnitude slope
 );
 
 /// Comet identifier
@@ -402,8 +400,7 @@ fn compute_heliocentric_ecliptic_comet(elem: &CometElements, jde: f64) -> (f64, 
         let cos_e = e_anomaly.cos();
 
         // True anomaly from eccentric anomaly
-        let nu = 2.0 * ((1.0 + e).sqrt() * (e_anomaly / 2.0).tan())
-            .atan2((1.0 - e).sqrt());
+        let nu = 2.0 * ((1.0 + e).sqrt() * (e_anomaly / 2.0).tan()).atan2((1.0 - e).sqrt());
 
         // Heliocentric distance
         let r = a * (1.0 - e * cos_e);
@@ -417,8 +414,7 @@ fn compute_heliocentric_ecliptic_comet(elem: &CometElements, jde: f64) -> (f64, 
         let h = solve_kepler_hyperbolic(m, e);
 
         // True anomaly from hyperbolic anomaly
-        let nu = 2.0 * ((e + 1.0).sqrt() * (h / 2.0).tanh())
-            .atan2((e - 1.0).sqrt());
+        let nu = 2.0 * ((e + 1.0).sqrt() * (h / 2.0).tanh()).atan2((e - 1.0).sqrt());
 
         // Heliocentric distance
         let r = a * (1.0 - e * h.cosh());
@@ -461,7 +457,11 @@ fn compute_heliocentric_ecliptic_comet(elem: &CometElements, jde: f64) -> (f64, 
 /// Compute comet magnitude using standard formula:
 /// m = H + 5*log10(Δ) + K*log10(r)
 /// where Δ = geocentric distance, r = heliocentric distance
-fn compute_comet_magnitude(elem: &CometElements, geo_distance_au: f64, helio_distance_au: f64) -> f64 {
+fn compute_comet_magnitude(
+    elem: &CometElements,
+    geo_distance_au: f64,
+    helio_distance_au: f64,
+) -> f64 {
     elem.abs_magnitude
         + 5.0 * geo_distance_au.log10()
         + elem.magnitude_slope * helio_distance_au.log10()
@@ -645,11 +645,13 @@ mod tests {
             let pos = compute_comet_position(*comet, &time);
 
             // Direction should be a unit vector
-            let len = (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2)).sqrt();
+            let len = (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2))
+                .sqrt();
             assert!(
                 (len - 1.0).abs() < 0.001,
                 "{} direction should be unit vector, got len={}",
-                comet.name(), len
+                comet.name(),
+                len
             );
 
             // Distance should be positive
@@ -657,7 +659,8 @@ mod tests {
             assert!(
                 distance_au > 0.01,
                 "{} distance should be positive, got {} AU",
-                comet.name(), distance_au
+                comet.name(),
+                distance_au
             );
 
             eprintln!(
