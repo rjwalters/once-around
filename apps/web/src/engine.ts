@@ -229,8 +229,15 @@ export function getCometsBuffer(engine: SkyEngine): Float32Array {
 }
 
 /**
+ * Floats per satellite in the satellites position buffer.
+ * Must match `SATELLITE_FLOATS` in `crates/sky_engine/src/lib.rs`.
+ */
+const SATELLITE_FLOATS = 7;
+
+/**
  * Create a Float32Array view into the satellites position buffer.
- * N satellites * 6 floats: x, y, z (direction), illuminated (0/1), visible (0/1), distance_km.
+ * N satellites * 7 floats: x, y, z (direction), illuminated (0/1), visible (0/1),
+ * distance_km, shadow_depth (0.0..1.0).
  */
 export function getSatellitesBuffer(engine: SkyEngine): Float32Array {
   const memory = getWasmMemory();
@@ -241,15 +248,23 @@ export function getSatellitesBuffer(engine: SkyEngine): Float32Array {
 
 /**
  * Get position data for a specific satellite.
+ *
+ * `illuminated` is the umbra-boundary boolean the engine uses for visibility and
+ * pass prediction: a satellite in the penumbra is only partially shaded and
+ * still counts as illuminated. `shadowDepth` is the continuous counterpart
+ * (0 = fully sunlit, 1 = fully inside the umbra) and is presentation-only — it
+ * reaches 1.0 exactly where `illuminated` flips to false.
+ *
  * @param engine - The SkyEngine instance
  * @param index - Satellite index (SATELLITE_ISS, SATELLITE_HUBBLE, etc.)
- * @returns Object with x, y, z, illuminated, aboveHorizon, distanceKm
+ * @returns Object with x, y, z, illuminated, shadowDepth, aboveHorizon, distanceKm
  */
 export function getSatellitePosition(engine: SkyEngine, index: number): {
-  x: number; y: number; z: number; illuminated: boolean; aboveHorizon: boolean; distanceKm: number;
+  x: number; y: number; z: number; illuminated: boolean; shadowDepth: number;
+  aboveHorizon: boolean; distanceKm: number;
 } {
   const buffer = getSatellitesBuffer(engine);
-  const baseIdx = index * 6;
+  const baseIdx = index * SATELLITE_FLOATS;
   return {
     x: buffer[baseIdx],
     y: buffer[baseIdx + 1],
@@ -257,6 +272,7 @@ export function getSatellitePosition(engine: SkyEngine, index: number): {
     illuminated: buffer[baseIdx + 3] > 0.5,
     aboveHorizon: buffer[baseIdx + 4] > 0.5,
     distanceKm: buffer[baseIdx + 5],
+    shadowDepth: buffer[baseIdx + 6],
   };
 }
 

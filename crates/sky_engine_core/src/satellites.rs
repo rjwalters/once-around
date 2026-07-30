@@ -246,6 +246,13 @@ pub struct SatellitePosition {
     pub azimuth_deg: f64,
     /// Whether satellite is illuminated by the Sun (not in Earth's shadow)
     pub illuminated: bool,
+    /// How deeply the satellite sits in Earth's shadow: `0.0` = fully sunlit,
+    /// ramping across the penumbra to `1.0` = fully inside the umbra.
+    ///
+    /// Presentation-only (drives the renderer's marker fade); `illuminated`
+    /// remains the authoritative umbra-boundary boolean used for pass timing.
+    /// See [`earth_shadow_depth`].
+    pub shadow_depth: f64,
     /// Whether satellite is above the horizon (only valid if topocentric)
     pub above_horizon: bool,
 }
@@ -290,27 +297,31 @@ fn earth_shadow_radii(s_km: f64, sun_dist_km: f64) -> (f64, f64) {
     (umbra_r, penumbra_r)
 }
 
-/// Check if a satellite is in Earth's shadow.
+/// Position of a satellite relative to Earth's shadow axis.
 ///
-/// Uses a conical umbra model:
-/// 1. Get Sun direction from Earth
-/// 2. Project satellite position onto the anti-Sun (shadow) axis
-/// 3. If the projection is "behind" Earth and the satellite is closer to the
-///    axis than the umbra cone radius at that distance, it's eclipsed
+/// Shared by [`is_in_earth_shadow`] and [`earth_shadow_depth`] so the two always
+/// agree on the geometry (they differ only in how they interpret it).
+struct ShadowAxisGeometry {
+    /// Distance along the shadow axis behind Earth's centre (km, always positive)
+    axial_dist: f64,
+    /// Distance from the satellite to the Earth-Sun line (km)
+    perp_dist: f64,
+    /// Earth-Sun distance (km)
+    sun_dist: f64,
+}
+
+/// Project a satellite onto Earth's anti-Sun shadow axis.
 ///
-/// "Illuminated" here means **outside the umbra**: a satellite inside the
-/// penumbra is only partially shaded and stays visible to the naked eye (it
-/// merely dims), so treating the penumbra as darkness would truncate visible
-/// passes. See [`earth_shadow_radii`] for the cone geometry.
-///
-/// This replaces an earlier cylindrical approximation (radius `1.02 * R_earth`
-/// = 6506 km) that was ~159 km wider than the umbra at ISS altitude, which
-/// began eclipses ~60 s early and ended them ~60 s late.
+/// Returns `None` when the satellite is on the Sun-facing side (`proj >= 0.0`),
+/// where no shadow geometry applies.
 ///
 /// # Arguments
 /// * `sat_eci` - Satellite position in ECI coordinates (km)
 /// * `sun_eci` - Sun position in ECI coordinates (km, from Earth center)
-fn is_in_earth_shadow(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> bool {
+fn shadow_axis_geometry(
+    sat_eci: (f64, f64, f64),
+    sun_eci: (f64, f64, f64),
+) -> Option<ShadowAxisGeometry> {
     // Satellite position vector
     let (ix, iy, iz) = sat_eci;
 
@@ -323,7 +334,7 @@ fn is_in_earth_shadow(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> boo
 
     // Satellite must be on the anti-Sun side (behind Earth from Sun's perspective)
     if proj >= 0.0 {
-        return false; // Satellite is on the Sun-facing side
+        return None; // Satellite is on the Sun-facing side
     }
 
     // Distance along the shadow axis, measured behind Earth's centre
@@ -336,12 +347,90 @@ fn is_in_earth_shadow(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> boo
     let cross_z = ix * sy - iy * sx;
     let perp_dist = (cross_x * cross_x + cross_y * cross_y + cross_z * cross_z).sqrt();
 
+    Some(ShadowAxisGeometry {
+        axial_dist,
+        perp_dist,
+        sun_dist,
+    })
+}
+
+/// Check if a satellite is in Earth's shadow.
+///
+/// Uses a conical umbra model:
+/// 1. Get Sun direction from Earth
+/// 2. Project satellite position onto the anti-Sun (shadow) axis
+/// 3. If the projection is "behind" Earth and the satellite is closer to the
+///    axis than the umbra cone radius at that distance, it's eclipsed
+///
+/// "Illuminated" here means **outside the umbra**: a satellite inside the
+/// penumbra is only partially shaded and stays visible to the naked eye (it
+/// merely dims), so treating the penumbra as darkness would truncate visible
+/// passes. See [`earth_shadow_radii`] for the cone geometry, and
+/// [`earth_shadow_depth`] for the continuous version used for rendering.
+///
+/// This replaces an earlier cylindrical approximation (radius `1.02 * R_earth`
+/// = 6506 km) that was ~159 km wider than the umbra at ISS altitude, which
+/// began eclipses ~60 s early and ended them ~60 s late.
+///
+/// # Arguments
+/// * `sat_eci` - Satellite position in ECI coordinates (km)
+/// * `sun_eci` - Sun position in ECI coordinates (km, from Earth center)
+fn is_in_earth_shadow(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> bool {
+    let Some(geom) = shadow_axis_geometry(sat_eci, sun_eci) else {
+        return false; // Satellite is on the Sun-facing side
+    };
+
     // Satellite is eclipsed only inside the umbra cone. The penumbra radius is
     // computed alongside it to document the model (and is asserted in tests),
     // but a partially-shaded satellite still counts as illuminated.
-    let (umbra_r, _penumbra_r) = earth_shadow_radii(axial_dist, sun_dist);
+    let (umbra_r, _penumbra_r) = earth_shadow_radii(geom.axial_dist, geom.sun_dist);
 
-    perp_dist < umbra_r
+    geom.perp_dist < umbra_r
+}
+
+/// How deeply a satellite sits inside Earth's shadow, as a continuous `0.0..=1.0` value.
+///
+/// The Sun is an extended source, so a satellite crossing Earth's shadow *dims*
+/// through the penumbra rather than switching off at a single instant. This is
+/// the continuous counterpart to [`is_in_earth_shadow`]:
+///
+/// ```text
+/// 0.0  fully sunlit (outside the penumbra, or on the Sun-facing side)
+/// ...  linear ramp across the penumbra annulus
+/// 1.0  fully inside the umbra (total shadow)
+/// ```
+///
+/// The ramp is `(penumbra_r - perp_dist) / (penumbra_r - umbra_r)`, clamped to
+/// `0.0..=1.0`, using the cone radii from [`earth_shadow_radii`].
+///
+/// **Boundary semantics**: the depth reaches exactly `1.0` at the *umbra* edge
+/// (numerator == denominator there), which is where [`is_in_earth_shadow`]
+/// flips. So `earth_shadow_depth(..) >= 1.0` is equivalent to
+/// `is_in_earth_shadow(..)` up to the strict-vs-inclusive comparison at the
+/// boundary itself — a satellite exactly on the umbra radius reports depth
+/// `1.0` but is *not* eclipsed (`perp_dist < umbra_r` is strict).
+///
+/// This value is presentation-only: it drives the renderer's marker fade. The
+/// pass-timing path ([`is_in_earth_shadow`] via `satellite_visible_at`) keeps
+/// its umbra-boundary boolean semantics untouched.
+///
+/// # Arguments
+/// * `sat_eci` - Satellite position in ECI coordinates (km)
+/// * `sun_eci` - Sun position in ECI coordinates (km, from Earth center)
+fn earth_shadow_depth(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> f64 {
+    let Some(geom) = shadow_axis_geometry(sat_eci, sun_eci) else {
+        return 0.0; // Sun-facing side: fully lit
+    };
+
+    let (umbra_r, penumbra_r) = earth_shadow_radii(geom.axial_dist, geom.sun_dist);
+
+    // `penumbra_r > umbra_r` strictly for every reachable `axial_dist >= 0`, but
+    // guard the degenerate case rather than emitting a NaN/infinity.
+    if penumbra_r <= umbra_r {
+        return if geom.perp_dist <= umbra_r { 1.0 } else { 0.0 };
+    }
+
+    ((penumbra_r - geom.perp_dist) / (penumbra_r - umbra_r)).clamp(0.0, 1.0)
 }
 
 /// Convert ECI (Earth-Centered Inertial) coordinates to topocentric coordinates.
@@ -465,6 +554,7 @@ pub fn compute_satellite_position(
     );
 
     let illuminated = !is_in_earth_shadow(sat_eci, sun_eci);
+    let shadow_depth = earth_shadow_depth(sat_eci, sun_eci);
     let above_horizon = altitude_deg > 0.0;
 
     Some(SatellitePosition {
@@ -474,6 +564,7 @@ pub fn compute_satellite_position(
         altitude_deg,
         azimuth_deg,
         illuminated,
+        shadow_depth,
         above_horizon,
     })
 }
@@ -711,6 +802,129 @@ mod tests {
         // Sanity: the Moon's distance is still well inside the umbra cone,
         // which is why total lunar eclipses exist.
         assert!(is_in_earth_shadow((-384_400.0, 0.0, 0.0), TEST_SUN));
+    }
+
+    #[test]
+    fn test_shadow_depth_ramp() {
+        let (umbra_r, penumbra_r) = earth_shadow_radii(ISS_RADIUS_KM, TEST_SUN.0);
+
+        // Sun-facing side: fully lit regardless of how close to the axis.
+        assert_eq!(earth_shadow_depth((ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN), 0.0);
+
+        // Outside the penumbra entirely: fully lit.
+        assert_eq!(
+            earth_shadow_depth((-ISS_RADIUS_KM, penumbra_r * 1.01, 0.0), TEST_SUN),
+            0.0
+        );
+        // Exactly on the penumbra edge: still 0.0 (numerator is zero there).
+        let at_penumbra = earth_shadow_depth((-ISS_RADIUS_KM, penumbra_r, 0.0), TEST_SUN);
+        assert!(
+            at_penumbra.abs() < 1e-9,
+            "depth at the penumbra edge was {at_penumbra}"
+        );
+
+        // Exactly on the umbra edge: the ramp reaches 1.0 (numerator == denominator).
+        let at_umbra = earth_shadow_depth((-ISS_RADIUS_KM, umbra_r, 0.0), TEST_SUN);
+        assert!(
+            (at_umbra - 1.0).abs() < 1e-9,
+            "depth at the umbra edge was {at_umbra}"
+        );
+
+        // Midway across the penumbra annulus: ~0.5 (the ramp is linear in perp_dist).
+        let mid_penumbra = 0.5 * (umbra_r + penumbra_r);
+        let at_mid = earth_shadow_depth((-ISS_RADIUS_KM, mid_penumbra, 0.0), TEST_SUN);
+        assert!(
+            (at_mid - 0.5).abs() < 1e-9,
+            "depth midway across the penumbra was {at_mid}"
+        );
+
+        // Deep inside the umbra (and dead on the axis): clamped to 1.0.
+        assert_eq!(
+            earth_shadow_depth((-ISS_RADIUS_KM, umbra_r * 0.5, 0.0), TEST_SUN),
+            1.0
+        );
+        assert_eq!(earth_shadow_depth((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN), 1.0);
+
+        // The ramp is monotonically non-increasing as the satellite moves away
+        // from the shadow axis, and never leaves 0.0..=1.0.
+        let mut prev = f64::INFINITY;
+        for i in 0..=200 {
+            let perp = penumbra_r * 1.2 * (i as f64) / 200.0;
+            let depth = earth_shadow_depth((-ISS_RADIUS_KM, perp, 0.0), TEST_SUN);
+            assert!(
+                (0.0..=1.0).contains(&depth),
+                "depth {depth} out of range at perp {perp}"
+            );
+            assert!(depth <= prev, "depth increased at perp {perp}");
+            prev = depth;
+        }
+    }
+
+    #[test]
+    fn test_shadow_depth_reduces_to_boolean_at_umbra_edge() {
+        // The continuous depth must agree with the boolean the pass-timing path
+        // uses: `depth >= 1.0` iff eclipsed. The two disagree only exactly at
+        // `perp_dist == umbra_r`, where the boolean's comparison is strict.
+        let (_, penumbra_r) = earth_shadow_radii(ISS_RADIUS_KM, TEST_SUN.0);
+
+        for i in 0..=500 {
+            let perp = penumbra_r * 1.5 * (i as f64) / 500.0;
+            let sat = (-ISS_RADIUS_KM, perp, 0.0);
+            let depth = earth_shadow_depth(sat, TEST_SUN);
+            let eclipsed = is_in_earth_shadow(sat, TEST_SUN);
+
+            // Eclipsed => saturated depth.
+            if eclipsed {
+                assert_eq!(depth, 1.0, "eclipsed but depth was {depth} at perp {perp}");
+            }
+            // Un-saturated depth => not eclipsed (contrapositive of the above).
+            if depth < 1.0 {
+                assert!(!eclipsed, "depth {depth} < 1.0 but eclipsed at perp {perp}");
+            }
+        }
+
+        // Same check while sweeping the axial distance, staying at a fixed
+        // off-axis distance inside the ISS-altitude umbra.
+        for i in 0..=500 {
+            let axial = ISS_RADIUS_KM + 1000.0 * (i as f64);
+            let sat = (-axial, 1000.0, 0.0);
+            let depth = earth_shadow_depth(sat, TEST_SUN);
+            assert!(depth.is_finite(), "non-finite depth at axial {axial}");
+            assert!(
+                (0.0..=1.0).contains(&depth),
+                "depth {depth} out of range at axial {axial}"
+            );
+            if is_in_earth_shadow(sat, TEST_SUN) {
+                assert_eq!(depth, 1.0, "eclipsed but depth was {depth} at axial {axial}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_shadow_depth_past_apex_is_well_defined() {
+        // Past the umbra apex the umbra radius clamps to 0, so nothing can be
+        // fully eclipsed — but the penumbra keeps growing, so the ramp must
+        // stay finite and inside 0.0..=1.0 rather than dividing by zero.
+        let l_umbra = EARTH_RADIUS_KM * TEST_SUN.0 / (SUN_RADIUS_KM - EARTH_RADIUS_KM);
+
+        // Exactly on the axis past the apex is the one degenerate case where the
+        // ramp saturates (umbra_r has clamped to 0, so perp_dist == umbra_r == 0)
+        // while the boolean — which compares strictly, `perp_dist < umbra_r` —
+        // reports "not eclipsed". Physically this is the antumbra: annular, not
+        // total. It is unreachable for Earth satellites (the apex sits ~1.38e6 km
+        // out, ~200x beyond LEO) and harmless because the depth is
+        // presentation-only, but assert it so the behaviour stays deliberate.
+        let on_axis_past_apex = earth_shadow_depth((-2.0 * l_umbra, 0.0, 0.0), TEST_SUN);
+        assert!(on_axis_past_apex.is_finite());
+        assert_eq!(on_axis_past_apex, 1.0);
+        assert!(!is_in_earth_shadow((-2.0 * l_umbra, 0.0, 0.0), TEST_SUN));
+
+        // Far off-axis past the apex: outside the penumbra, fully lit.
+        let (_, penumbra_past_apex) = earth_shadow_radii(2.0 * l_umbra, TEST_SUN.0);
+        assert_eq!(
+            earth_shadow_depth((-2.0 * l_umbra, penumbra_past_apex * 1.1, 0.0), TEST_SUN),
+            0.0
+        );
     }
 
     /// The pre-#89 cylindrical shadow model, kept here only as a reference
