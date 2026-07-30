@@ -23,7 +23,7 @@ job — dormant between runs.
 | [`scrape_transcripts.js`](scrape_transcripts.js) | manual (needs Playwright; fallback when `yt-dlp` has no captions) | `data/videos_clean.json` | `data/transcripts_progress.json`, `data/videos_with_transcripts.json` (both untracked scratch output) |
 | [`build_catalog.js`](build_catalog.js) | manual | `data/videos_clean.json` | catalog JSON to stdout (merged by hand into `data/catalog.json`) |
 | [`generate-videos-json.js`](generate-videos-json.js) | manual | `data/once_around_catalog.json`, `data/final_placements.json` | `apps/web/public/videos.json` (the file the running app loads) |
-| [`generate_table.js`](generate_table.js) | manual | `data/catalog.json`, `data/subtitles/*.vtt` | `data/catalog.csv` (human-readable review table) |
+| [`generate_table.js`](generate_table.js) | manual | `data/catalog.json`, `data/subtitles/` (filenames only, to set the `hasTranscript` flag) | `data/catalog.csv` (human-readable review table) + the same rows as JSON to stdout; progress line to stderr |
 
 Catalog changes themselves are applied by **hand-editing**
 `data/catalog.json` / `data/final_placements.json` and then re-running
@@ -56,9 +56,26 @@ Run by hand when the data or fixtures they feed need to change.
 
 | Script | Invoked by | Reads | Writes |
 |---|---|---|---|
-| [`preprocess_stars/`](preprocess_stars/) (Rust workspace member: `Cargo.toml` + `src/main.rs`) | manual — `cargo run -p preprocess_stars -- <input.dat> <output_dir>/ --tiered` | `data/stars/bsc5.dat` (and `data/stars/hip_hr_xref.dat` for HR/HIP cross-referencing) | tiered packed binaries in `apps/web/public/data/stars/` (`bsc5-tier1.bin`, `bsc5-tier2.bin`, `bsc5-tier3.bin`, `constellation-stars.bin`) |
+| [`preprocess_stars/`](preprocess_stars/) — `--tiered` mode (Rust workspace member: `Cargo.toml` + `src/main.rs`) | manual — `cargo run -p preprocess_stars -- data/stars/bsc5.dat apps/web/public/data/stars/ --tiered` | `data/stars/bsc5.dat` only | exactly three magnitude-tiered binaries into the output *directory*: `apps/web/public/data/stars/bsc5-tier1.bin` (mag < 3.0), `bsc5-tier2.bin` (3.0 ≤ mag < 5.0), `bsc5-tier3.bin` (5.0 ≤ mag ≤ 6.5) |
+| [`preprocess_stars/`](preprocess_stars/) — `--hr-list` mode (same binary, separate run) | manual — `cargo run -p preprocess_stars -- data/stars/bsc5.dat apps/web/public/data/stars/constellation-stars.bin --hr-list <comma-separated HR ids>` | `data/stars/bsc5.dat` only; the HR ids are a **command-line argument**, not a file | `apps/web/public/data/stars/constellation-stars.bin` (one file) |
 | [`fetch_horizons_reference.py`](fetch_horizons_reference.py) | manual (a maintainer re-runs it per quarterly refresh PR) | JPL Horizons API | `crates/sky_engine_core/tests/data/horizons_reference.csv`, the checked-in fixture that keeps [`crates/sky_engine_core/tests/horizons_accuracy.rs`](../crates/sky_engine_core/tests/horizons_accuracy.rs) offline |
 | [`test_generate_minor_body_elements.py`](test_generate_minor_body_elements.py) | CI — `python-test` job in [`ci.yml`](../.github/workflows/ci.yml), every PR; also manual via `python3 scripts/test_generate_minor_body_elements.py` | nothing (network-free unit test of `generate_minor_body_elements.py`'s back-propagation math) | test results only |
+
+> **Note on `preprocess_stars` inputs and modes.** The binary takes exactly two
+> positional arguments — `argv[1]` input catalog, `argv[2]` output path — and
+> opens **no** second input file. The four star binaries under
+> `apps/web/public/data/stars/` therefore come from *two* separate runs: one
+> `--tiered` run (three tier files, written into a directory) and one
+> `--hr-list` run (`constellation-stars.bin` alone, written to an explicit file
+> path). A third, default mode with neither flag writes every parsed star to a
+> single file; that is what produced the tracked `data/stars/bsc5.bin`.
+>
+> The exact HR id list passed to `--hr-list` is **not recorded anywhere in the
+> repo** — no wrapper script, Makefile, or fixture stores it. It is recoverable,
+> though: the 704 ids in the committed `constellation-stars.bin` are exactly the
+> 704 unique HR numbers appearing in the `CONSTELLATIONS` line pairs in
+> [`apps/web/src/constellations.ts`](../apps/web/src/constellations.ts), so
+> regenerating it means re-deriving that set from `constellations.ts` by hand.
 
 ## One-time catalog-bootstrap chain
 

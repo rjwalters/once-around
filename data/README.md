@@ -18,6 +18,8 @@ Every entry is one of:
   catalog-bootstrap chain; not touched by the routine pipeline.
 - **generated-and-tracked** — machine-produced but checked in, either as a
   review artifact or because regenerating it is expensive.
+- **unreferenced — likely orphan** — checked in, but no script, workflow, test,
+  or app code reads it; flagged here rather than deleted (see the notes below).
 
 | Entry | Classification | Owned by | Consumed by |
 |---|---|---|---|
@@ -29,7 +31,9 @@ Every entry is one of:
 | [`ephemeris.json`](ephemeris.json) | bootstrap intermediate (frozen) | `scripts/fetch_ephemeris.js` | stage 2 — `scripts/create_final_placements.js` only |
 | [`catalog.csv`](catalog.csv) | generated-and-tracked (review artifact) | `scripts/generate_table.js` | nothing — human reading only |
 | `subtitles/` (277 × `<videoId>.en.vtt`) | generated-and-tracked | `scripts/get_transcripts.sh` (via `yt-dlp`) | `scripts/generate_table.js`, when building `catalog.csv` |
-| `stars/` (`bsc5.dat`, `bsc5.bin`, `hip_hr_xref.dat`, `.gitkeep`) | hand-maintained source (raw third-party catalogs) | downloaded once from Harvard TDC / Hipparcos (see the header comment in `scripts/preprocess_stars/src/main.rs`) | `scripts/preprocess_stars` |
+| `stars/bsc5.dat` | hand-maintained source (raw third-party catalog) | downloaded once from Harvard TDC (see the header comment in `scripts/preprocess_stars/src/main.rs`) | `scripts/preprocess_stars` — the only input file it opens |
+| `stars/bsc5.bin` | generated-and-tracked | `scripts/preprocess_stars` in its default (no-flag) single-file mode | nothing — superseded by the tiered binaries under `apps/web/public/data/stars/` |
+| `stars/hip_hr_xref.dat` | **unreferenced — likely orphan**, see below | nothing | nothing |
 | `hubble_ephemeris.bin` | **unreferenced — likely orphan**, see below | nothing | nothing |
 
 ### Two distinct catalog files
@@ -44,14 +48,38 @@ loads. Editing one does not affect the other.
 
 ### `stars/` feeds the app only indirectly
 
-Nothing under `data/stars/` is served to the browser. `scripts/preprocess_stars`
-converts `bsc5.dat` into the tiered packed binaries in
-`apps/web/public/data/stars/` (`bsc5-tier1.bin`, `bsc5-tier2.bin`,
-`bsc5-tier3.bin`, `constellation-stars.bin`), and *those* are what
-`apps/web/index.html` preloads and `apps/web/src/engine.ts` fetches at runtime.
-`bsc5.bin` here is an older single-file conversion of the same catalog, kept
-alongside the raw `.dat`; `hip_hr_xref.dat` provides the HR↔HIP cross-reference
-used when selecting constellation stars.
+Nothing under `data/stars/` is served to the browser (the directory also holds a
+`.gitkeep`). `scripts/preprocess_stars` reads `bsc5.dat` — and only `bsc5.dat`;
+it opens no second input file — and writes the packed binaries under
+`apps/web/public/data/stars/`, and *those* are what `apps/web/index.html`
+preloads and `apps/web/src/engine.ts` fetches at runtime.
+
+Those four served binaries come from **two separate runs** of the same tool:
+
+- a `--tiered` run, which writes exactly three files into an output *directory*
+  (`bsc5-tier1.bin`, `bsc5-tier2.bin`, `bsc5-tier3.bin`, split by magnitude);
+- a `--hr-list` run, which writes only `constellation-stars.bin`, filtered to
+  the HR ids given on the command line.
+
+`bsc5.bin` in this directory is neither of those: it is the output of the
+default no-flag mode (every parsed star in one file), an older conversion kept
+alongside the raw `.dat` and no longer consumed by anything. See
+[`scripts/README.md`](../scripts/README.md) for the exact invocations.
+
+### `stars/hip_hr_xref.dat` appears orphaned
+
+**Nothing references `data/stars/hip_hr_xref.dat`** — not
+`scripts/preprocess_stars` (which takes one input path and never opens a second
+file), not the web app, not the Rust crates. It arrived in commit `c021153`
+("Fix constellation rendering by using BSC catalog with HR numbers"), the same
+commit that deleted `apps/web/public/data/stars/hipparcos.bin` and moved
+constellation rendering onto BSC HR numbers. Once the Hipparcos path was
+abandoned, the HR↔HIP cross-reference it had been added to support had no
+remaining consumer.
+
+As with `hubble_ephemeris.bin` below, this file is flagged here rather than
+deleted, because this README was added as a docs-only change. Removing it is a
+reasonable follow-up in its own PR.
 
 ### `hubble_ephemeris.bin` appears orphaned
 
