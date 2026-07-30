@@ -116,6 +116,39 @@ jobs:
       - name: Run golden position tests
         run: cargo test -p sky_engine_core --test golden_positions
 
+  python-test:
+    name: Python tests (data-generation scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Pinned to 3.12 to match the interpreter that
+      # .github/workflows/refresh-minor-body-elements.yml actually runs
+      # generate_minor_body_elements.py under, so CI tests the same Python the
+      # quarterly refresh uses.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # scripts/generate_minor_body_elements.py drives the quarterly
+      # refresh-minor-body-elements.yml workflow, which rewrites the orbital
+      # element literals in crates/sky_engine_core/src/minor_bodies.rs. Its unit
+      # tests (back-propagation math, formatting, Gregorian->JD) existed but ran
+      # nowhere (issue #101), so a regression could only surface once a quarter —
+      # inside an already-generated refresh PR. Running them per-PR here catches
+      # it immediately.
+      #
+      # Deliberately lightweight: stdlib-only (no pip install, no
+      # requirements.txt), no network access, ~0.06 s wall time — in keeping with
+      # the unit-test job's <10 s convention. Invoked from the repo root with no
+      # working-directory/PYTHONPATH override on purpose: Python puts the invoked
+      # script's own directory (scripts/) on sys.path[0], which resolves the test
+      # file's bare `import generate_minor_body_elements`.
+      - name: Run minor-body element generator tests
+        run: python3 scripts/test_generate_minor_body_elements.py
+
   typecheck:
     name: Typecheck (web)
     runs-on: ubuntu-latest
