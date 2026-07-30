@@ -47,6 +47,11 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # dtolnay/rust-toolchain installs with `--profile minimal`, which does
+          # NOT include rustfmt, so the formatting gate below has to request the
+          # component explicitly.
+          components: rustfmt
 
       # Caches ~/.cargo registry/git plus the workspace target dir keyed on
       # Cargo.lock, so incremental runs skip recompiling unchanged dependencies.
@@ -55,13 +60,35 @@ jobs:
         with:
           workspaces: "."
 
-      # Test-only job by design: the astronomy engine's tolerance-based suites
-      # (53 library unit tests + JPL Horizons accuracy) complete in well under a
+      # Formatting gate. The workspace was reconciled with stable rustfmt in
+      # issue #100 and is now fmt-clean, so this check keeps it that way.
+      # Previously CI ran no fmt check at all and the checked-in style had
+      # drifted ~2300 diff lines from stable rustfmt output, which made plain
+      # `cargo fmt` unsafe for contributors: formatting your own edit dragged in
+      # hundreds of unrelated lines (see PR #93, where the reformat had to be
+      # reverted and the edits hand-styled).
+      #
+      # Note this tracks whatever `stable` resolves to at run time, and rustfmt
+      # does not promise output stability across releases — so a future stable
+      # bump may legitimately turn this step red. The fix then is another cheap
+      # `cargo fmt --all` reconciliation commit, NOT a tolerance or an exclusion.
+      # A full `rust-toolchain.toml` pin was considered in #100 and rejected as
+      # disproportionate: it would freeze rustc/clippy/wasm-pack for the whole
+      # project just to stabilize formatting. This matches how the repo already
+      # treats other environment-sensitive artifacts (golden constants, the ISS
+      # ephemeris fixture) — regenerate consciously rather than freeze
+      # everything.
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      # Test-focused job by design: the astronomy engine's tolerance-based suites
+      # (library unit tests + JPL Horizons accuracy) complete in well under a
       # minute, so an engine regression now fails CI instead of merging
-      # unnoticed. Linting is intentionally excluded — there is a known
-      # pre-existing clippy::approx_constant error and the package is not
-      # rustfmt-clean (tracked separately in issue #66), which would otherwise
-      # block this job.
+      # unnoticed. Clippy is still intentionally excluded — the workspace
+      # carries pre-existing warnings (too_many_arguments, needless_range_loop,
+      # redundant_closure, manual_range_contains and friends) that would
+      # otherwise block this job; cleaning them up is separate work from the
+      # formatting gate above.
       #
       # The tests/golden_positions.rs suite is intentionally NOT run here. It
       # pins full-precision f64 outputs with exact-equality (`assert_eq!`, no
