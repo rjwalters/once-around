@@ -1,3 +1,29 @@
 packages:
   - "apps/*"
   - "crates/*"
+
+# Build-script approval list (the `allowBuilds` gate introduced in pnpm 10/11).
+#
+# Modern pnpm does not run dependency install/postinstall scripts by default. On a
+# fresh non-interactive `pnpm install` it skips them and *appends a placeholder stub
+# to this file* ("set this to true or false" for each package), which dirties the
+# working tree of every fresh clone and agent worktree. CI never saw this because
+# `.github/workflows/ci.yml` pins pnpm to major 9, which predates the gate.
+#
+# All four packages below ship native binaries that their install scripts fetch or
+# compile, and every one sits on a build/dev/deploy path this repo actually uses --
+# skipping any of them degrades tooling silently rather than failing loudly. Hence
+# an explicit, deliberately committed `true` for each:
+#
+#   @swc/core  <- vite-plugin-top-level-await  (native SWC binding, used at build time)
+#   esbuild    <- vite (dev server + `pnpm build`) and wrangler (deploy tooling)
+#   sharp      <- wrangler -> miniflare        (local Workers runtime image codecs)
+#   workerd    <- wrangler -> miniflare / @cloudflare/unenv-preset (the Workers runtime)
+#
+# Adding a dependency that ships a build script will re-trigger the stub. Replace it
+# with a deliberate entry here (plus a justification) rather than reverting the diff.
+allowBuilds:
+  "@swc/core": true
+  esbuild: true
+  sharp: true
+  workerd: true
