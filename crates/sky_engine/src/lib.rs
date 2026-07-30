@@ -1129,8 +1129,10 @@ impl SkyEngine {
     /// **Classification cannot be done once, on the coarse bracket.** With the
     /// production 10-minute scan step and ~6-minute ISS passes, the horizon and
     /// the shadow conjunct routinely differ *together* between the coarse
-    /// endpoints — measured on the pinned fixture, **zero** of the 32 rise/set
-    /// edges isolate to a single conjunct at that width. So this bisects the
+    /// endpoints — measured on the pinned fixture, **zero** of the 24 rise/set
+    /// edges isolate to a single conjunct at that width (the count asserted by
+    /// `refine_edge_routes_shadow_edges_to_the_root_find_and_matches_bisection`
+    /// across its three observers). So this bisects the
     /// composite boolean exactly as before while carrying the full sample at each
     /// endpoint, and re-tests after every halving. The moment the bracket holds
     /// only the `illuminated` flip, [`Self::refine_shadow_transition`] takes over.

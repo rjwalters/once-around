@@ -480,8 +480,8 @@ fn is_in_earth_shadow(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> boo
 /// `1.0` but is *not* eclipsed (`perp_dist < umbra_r` is strict).
 ///
 /// This value is presentation-only: it drives the renderer's marker fade. The
-/// pass-timing path ([`is_in_earth_shadow`] via `satellite_visible_at`) keeps
-/// its umbra-boundary boolean semantics untouched.
+/// pass-timing path ([`is_in_earth_shadow`] via `sky_engine`'s `visibility_at`)
+/// keeps its umbra-boundary boolean semantics untouched.
 ///
 /// # Arguments
 /// * `sat_eci` - Satellite position in ECI coordinates (km)
