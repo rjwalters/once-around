@@ -23,6 +23,18 @@ pub const PASS_RECORD_LEN: usize = 7;
 /// `sky_engine_core::events` and the TS constant in `apps/web/src/rise-set.ts`.
 pub const EVENT_RECORD_LEN: usize = events::EVENT_RECORD_LEN;
 
+/// Floats per satellite in the `satellites_pos` output buffer.
+///
+/// Layout: `x, y, z, illuminated (0/1), visible (0/1), distance_km, shadow_depth (0.0..=1.0)`.
+///
+/// Slot 3 stays the umbra-boundary boolean that pass prediction and
+/// `satellite_illuminated` depend on; slot 6 is the continuous shadow depth
+/// added for the renderer's marker fade (see `earth_shadow_depth` in
+/// `sky_engine_core::satellites`).
+///
+/// Mirrored by `SATELLITE_FLOATS` in `apps/web/src/engine.ts`.
+const SATELLITE_FLOATS: usize = 7;
+
 /// The main sky engine exposed to JavaScript.
 /// Computes star and planet positions, maintaining buffers for efficient WebGL rendering.
 #[wasm_bindgen]
@@ -51,7 +63,9 @@ pub struct SkyEngine {
     // Satellites (ISS, Hubble, etc.)
     // Using parallel arrays: one ephemeris per satellite, one position buffer per satellite
     satellite_ephemerides: Vec<Option<SatelliteEphemeris>>, // One per SatelliteId
-    satellites_pos: Vec<f32>, // N satellites * 6 floats: x, y, z, illuminated (0/1), visible (0/1), distance_km
+    // N satellites * SATELLITE_FLOATS: x, y, z, illuminated (0/1), visible (0/1),
+    // distance_km, shadow_depth (0.0..=1.0)
+    satellites_pos: Vec<f32>,
 
     // Cached visible star count
     visible_count: usize,
@@ -105,7 +119,7 @@ impl SkyEngine {
             all_stars_pos: vec![0.0; star_count * 3],
             all_stars_meta: vec![0.0; star_count * 4],
             satellite_ephemerides: vec![None; SatelliteId::ALL.len()],
-            satellites_pos: vec![0.0; SatelliteId::ALL.len() * 6], // 6 floats per satellite
+            satellites_pos: vec![0.0; SatelliteId::ALL.len() * SATELLITE_FLOATS],
             visible_count: 0,
             stars_dirty: true, // first recompute() must populate the star buffers
         };
@@ -394,7 +408,7 @@ impl SkyEngine {
 
     fn recompute_satellites(&mut self) {
         for (i, ephemeris_opt) in self.satellite_ephemerides.iter().enumerate() {
-            let base_idx = i * 6;
+            let base_idx = i * SATELLITE_FLOATS;
             if let Some(ephemeris) = ephemeris_opt {
                 if let Some(pos) = compute_satellite_position(
                     ephemeris,
@@ -410,23 +424,14 @@ impl SkyEngine {
                     self.satellites_pos[base_idx + 3] = if pos.illuminated { 1.0 } else { 0.0 };
                     self.satellites_pos[base_idx + 4] = if pos.above_horizon { 1.0 } else { 0.0 };
                     self.satellites_pos[base_idx + 5] = pos.distance_km as f32;
+                    self.satellites_pos[base_idx + 6] = pos.shadow_depth as f32;
                 } else {
                     // Outside ephemeris range or error
-                    self.satellites_pos[base_idx] = 0.0;
-                    self.satellites_pos[base_idx + 1] = 0.0;
-                    self.satellites_pos[base_idx + 2] = 0.0;
-                    self.satellites_pos[base_idx + 3] = 0.0;
-                    self.satellites_pos[base_idx + 4] = 0.0;
-                    self.satellites_pos[base_idx + 5] = 0.0;
+                    self.satellites_pos[base_idx..base_idx + SATELLITE_FLOATS].fill(0.0);
                 }
             } else {
                 // No ephemeris loaded for this satellite
-                self.satellites_pos[base_idx] = 0.0;
-                self.satellites_pos[base_idx + 1] = 0.0;
-                self.satellites_pos[base_idx + 2] = 0.0;
-                self.satellites_pos[base_idx + 3] = 0.0;
-                self.satellites_pos[base_idx + 4] = 0.0;
-                self.satellites_pos[base_idx + 5] = 0.0;
+                self.satellites_pos[base_idx..base_idx + SATELLITE_FLOATS].fill(0.0);
             }
         }
     }
@@ -652,33 +657,51 @@ impl SkyEngine {
     }
 
     /// Get pointer to satellites position buffer.
-    /// N satellites * 5 floats: x, y, z (direction), illuminated (0/1), visible (0/1).
+    /// N satellites * 7 floats: x, y, z (direction), illuminated (0/1), visible (0/1),
+    /// distance_km, shadow_depth (0.0..=1.0).
     pub fn satellites_pos_ptr(&self) -> *const f32 {
         self.satellites_pos.as_ptr()
     }
 
     /// Get length of satellites position buffer.
-    /// satellites_count() * 6 floats.
+    /// satellites_count() * 7 floats.
     pub fn satellites_pos_len(&self) -> usize {
         self.satellites_pos.len()
     }
 
     /// Check if a satellite is currently illuminated (not in Earth's shadow).
+    ///
+    /// This is the umbra-boundary boolean: a satellite in the penumbra is only
+    /// partially shaded and still counts as illuminated. Use
+    /// [`Self::satellite_shadow_depth`] for the continuous shading value.
     pub fn satellite_illuminated(&self, index: usize) -> bool {
-        let base_idx = index * 6;
+        let base_idx = index * SATELLITE_FLOATS;
         self.satellites_pos.get(base_idx + 3).map(|v| *v > 0.5).unwrap_or(false)
     }
 
     /// Check if a satellite is currently above the observer's horizon.
     pub fn satellite_above_horizon(&self, index: usize) -> bool {
-        let base_idx = index * 6;
+        let base_idx = index * SATELLITE_FLOATS;
         self.satellites_pos.get(base_idx + 4).map(|v| *v > 0.5).unwrap_or(false)
     }
 
     /// Get the distance to a satellite in kilometers.
     pub fn satellite_distance_km(&self, index: usize) -> f32 {
-        let base_idx = index * 6;
+        let base_idx = index * SATELLITE_FLOATS;
         self.satellites_pos.get(base_idx + 5).copied().unwrap_or(0.0)
+    }
+
+    /// How deeply a satellite sits in Earth's shadow, as a continuous value:
+    /// `0.0` = fully sunlit, ramping across the penumbra to `1.0` = fully inside
+    /// the umbra.
+    ///
+    /// Intended for presentation (fading the satellite marker as it crosses the
+    /// terminator). Visibility and pass prediction keep using the
+    /// [`Self::satellite_illuminated`] boolean, which flips at the umbra
+    /// boundary — i.e. where this value reaches `1.0`.
+    pub fn satellite_shadow_depth(&self, index: usize) -> f32 {
+        let base_idx = index * SATELLITE_FLOATS;
+        self.satellites_pos.get(base_idx + 6).copied().unwrap_or(0.0)
     }
 
     /// Check if a satellite is visible (both illuminated and above horizon).
@@ -707,6 +730,10 @@ impl SkyEngine {
 
     /// Get pointer to ISS position buffer (legacy - use satellites_pos_ptr).
     /// 5 floats: x, y, z (direction unit vector), illuminated (0/1), visible (0/1).
+    ///
+    /// This is the first 5 floats of the ISS's 7-float entry in `satellites_pos`
+    /// (ISS is at index 0); the trailing distance_km and shadow_depth slots are
+    /// only reachable through the multi-satellite accessors.
     pub fn iss_pos_ptr(&self) -> *const f32 {
         // ISS is at index 0, so it's at the start of the buffer
         self.satellites_pos.as_ptr()
@@ -1535,6 +1562,97 @@ mod tests {
         assert_eq!(rises, 1, "one sunrise");
         assert_eq!(sets, 1, "one sunset");
         assert_eq!(transits, 1, "one solar transit");
+    }
+
+    /// The satellite buffer must carry exactly `SATELLITE_FLOATS` floats per
+    /// satellite, and the boolean accessors must keep reading their original
+    /// slots (3 and 4) — this is the layout `apps/web/src/engine.ts` mirrors.
+    #[test]
+    fn satellites_buffer_stride_is_seven_floats() {
+        let engine = engine_with_iss();
+        assert_eq!(SATELLITE_FLOATS, 7);
+        assert_eq!(
+            engine.satellites_pos_len(),
+            engine.satellites_count() * SATELLITE_FLOATS,
+            "buffer length must match the documented stride"
+        );
+        // Out-of-range index reads must not panic and must report "sunlit".
+        assert_eq!(engine.satellite_shadow_depth(99), 0.0);
+    }
+
+    /// The continuous shadow depth is an *additive* channel: it never changes
+    /// what `satellite_illuminated` reports (slot 3 is untouched by this
+    /// feature), and it saturates exactly where that boolean flips.
+    ///
+    /// Sweeps the pinned fixture window so the invariant is checked against real
+    /// ISS geometry rather than synthetic vectors.
+    #[test]
+    fn satellite_shadow_depth_saturates_where_illuminated_flips() {
+        let mut engine = engine_with_iss();
+        engine.set_observer_location(40.0, -105.0);
+        let range = engine.satellite_ephemeris_range(0).expect("ephemeris range");
+        let start_jd = range[0];
+
+        let step = 60.0 / 86400.0; // 1-minute coarse sweep
+        let mut prev: Option<(f64, bool)> = None;
+        let mut transition: Option<(f64, f64)> = None;
+
+        for i in 0..720 {
+            let jd = start_jd + i as f64 * step;
+            engine.time = SkyTime::from_jd(jd);
+            engine.recompute();
+
+            let illuminated = engine.satellite_illuminated(0);
+            let depth = engine.satellite_shadow_depth(0);
+
+            assert!(
+                (0.0..=1.0).contains(&depth),
+                "shadow depth {depth} out of range at jd {jd}"
+            );
+            if !illuminated {
+                assert_eq!(
+                    depth, 1.0,
+                    "eclipsed but shadow depth was {depth} at jd {jd}"
+                );
+            }
+
+            if let Some((prev_jd, prev_illuminated)) = prev
+                && prev_illuminated != illuminated
+                && transition.is_none()
+            {
+                transition = Some((prev_jd, jd));
+            }
+            prev = Some((jd, illuminated));
+        }
+
+        // The first 12 h of the fixture window must contain at least one
+        // eclipse entry/exit, otherwise the ramp check below is vacuous.
+        let (lo, hi) = transition.expect("expected an eclipse transition in the fixture window");
+
+        // Resolve the crossing finely: somewhere in that minute the ISS is
+        // *inside the penumbra* — partially shaded — which is precisely what the
+        // boolean cannot express and the continuous depth can.
+        let mut saw_partial = false;
+        for i in 0..=2000 {
+            let jd = lo + (hi - lo) * (i as f64) / 2000.0;
+            engine.time = SkyTime::from_jd(jd);
+            engine.recompute();
+            let depth = engine.satellite_shadow_depth(0);
+            assert!(
+                (0.0..=1.0).contains(&depth),
+                "shadow depth {depth} out of range at jd {jd}"
+            );
+            if depth > 0.0 && depth < 1.0 {
+                saw_partial = true;
+            }
+            if !engine.satellite_illuminated(0) {
+                assert_eq!(depth, 1.0, "eclipsed but depth was {depth} at jd {jd}");
+            }
+        }
+        assert!(
+            saw_partial,
+            "expected a partially-shaded (0 < depth < 1) sample across the terminator crossing"
+        );
     }
 
     #[test]

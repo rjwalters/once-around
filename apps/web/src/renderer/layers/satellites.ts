@@ -27,6 +27,13 @@ import { LABEL_PRIORITY } from "../label-manager";
 const COLOR_ILLUMINATED = new THREE.Color(1.0, 0.95, 0.8); // Bright yellowish-white
 const COLOR_SHADOW = new THREE.Color(0.3, 0.3, 0.4);       // Dim blue-gray (in shadow)
 
+// Marker opacity at the two ends of the shadow ramp. The engine reports a
+// continuous shadow depth (0 = sunlit, 1 = fully inside the umbra), so the
+// marker dims progressively through the penumbra instead of snapping between
+// these two values at the umbra boundary.
+const OPACITY_ILLUMINATED = 1.0;
+const OPACITY_SHADOW = 0.4;
+
 // Satellite-specific colors (optional differentiation)
 const SATELLITE_COLORS: { [key: string]: THREE.Color } = {
   ISS: new THREE.Color(1.0, 0.95, 0.8),    // Yellowish-white
@@ -67,6 +74,12 @@ export interface SatelliteState {
   detailMaterial: THREE.SpriteMaterial | null;
   glowSprite: THREE.Sprite;
   glowMaterial: THREE.SpriteMaterial;
+  /**
+   * Scratch color for the shadow fade, owned per satellite so it can be handed
+   * to the label manager (which keeps the reference) without aliasing between
+   * satellites, and reused every update instead of allocating a new Color.
+   */
+  shadedColor: THREE.Color;
 }
 
 export interface SatellitesLayer {
@@ -151,6 +164,7 @@ function createSatelliteMesh(
     detailMaterial,
     glowSprite,
     glowMaterial,
+    shadedColor: new THREE.Color(),
   };
 }
 
@@ -297,10 +311,19 @@ function updateSatellite(
   // Calculate LOD blend factor (0 = point only, 1 = detail only)
   const detailBlend = smoothstep(LOD_POINT_MAX_PX, LOD_DETAIL_MIN_PX, pixelSize);
 
-  // Update color based on illumination
+  // Update color based on how deeply the satellite sits in Earth's shadow.
+  // `shadowDepth` ramps 0 -> 1 across the penumbra and saturates at the umbra
+  // boundary (exactly where `illuminated` flips), so the marker dims smoothly
+  // through a terminator crossing instead of switching in one step.
+  //
+  // This tracks whatever depth the engine last computed; `updateSatellite` runs
+  // from `updateFromEngine` on data changes, not from a rAF loop, so the fade
+  // adds no per-frame work and no continuous-rerender driver. `shadedColor` is
+  // a per-satellite scratch Color, so no allocation happens here either.
   const baseColor = SATELLITE_COLORS[info.name] ?? COLOR_ILLUMINATED;
-  const color = pos.illuminated ? baseColor : COLOR_SHADOW;
-  const opacity = pos.illuminated ? 1.0 : 0.4;
+  const shadowDepth = Math.min(Math.max(pos.shadowDepth, 0), 1);
+  const color = sat.shadedColor.copy(baseColor).lerp(COLOR_SHADOW, shadowDepth);
+  const opacity = OPACITY_ILLUMINATED + (OPACITY_SHADOW - OPACITY_ILLUMINATED) * shadowDepth;
 
   // Position both sprites
   glowSprite.position.copy(satPos);
