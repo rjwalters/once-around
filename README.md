@@ -131,17 +131,17 @@ differ in how (and how often) they actually run:
   `generate_minor_body_elements.py` refreshes the minor-body orbital elements
   quarterly (`.github/workflows/refresh-minor-body-elements.yml`, which opens a
   PR for human review rather than committing directly).
-- **Engine-support tooling** — run by hand when the data or fixtures they feed
-  need to change. `preprocess_stars` (a Rust workspace member) converts the Yale
-  Bright Star / Hipparcos catalogs into the packed binaries under
-  `apps/web/public/data/stars/`; `fetch_horizons_reference.py` regenerates the
-  checked-in JPL Horizons CSV that keeps
-  `crates/sky_engine_core/tests/horizons_accuracy.rs` offline (the quarterly
-  refresh PR asks a maintainer to re-run it by hand); and
+- **Engine-support tooling** — the two generators here are run by hand when the
+  data or fixtures they feed need to change. `preprocess_stars` (a Rust
+  workspace member) converts the Yale Bright Star / Hipparcos catalogs into the
+  packed binaries under `apps/web/public/data/stars/`; and
+  `fetch_horizons_reference.py` regenerates the checked-in JPL Horizons CSV that
+  keeps `crates/sky_engine_core/tests/horizons_accuracy.rs` offline (the
+  quarterly refresh PR asks a maintainer to re-run it by hand). Alongside them,
   `test_generate_minor_body_elements.py` is a network-free unit test for the
-  back-propagation math inside `generate_minor_body_elements.py`, run manually
-  (`python3 scripts/test_generate_minor_body_elements.py`) when that generator
-  changes.
+  back-propagation math inside `generate_minor_body_elements.py`; it runs on
+  every PR via the `python-test` CI job, and locally with
+  `python3 scripts/test_generate_minor_body_elements.py`.
 - **One-time catalog-bootstrap chain** — `create_placement_data.js` (stage 1) →
   `create_final_placements.js` (stage 2) originally produced the initial
   `data/final_placements.json` / `data/video_placements.json`. It is superseded
