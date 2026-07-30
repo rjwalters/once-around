@@ -114,21 +114,29 @@ once-around/
 └── tests/                 # Playwright end-to-end tests
 ```
 
-The `scripts/` directory holds two generations of data tooling:
+The `scripts/` directory holds three distinct kinds of tooling, which differ in
+how (and how often) they actually run:
 
-- **Routine / current pipeline** — the path used for ongoing updates: transcript
+- **On-demand catalog pipeline** — run manually whenever new videos are
+  published on the channel; there is no schedule or CI job behind it, so it sits
+  dormant between runs (last run 2026-07-05/06, adding 42 videos). Transcript
   scraping (`get_transcripts.sh`, `scrape_transcripts.js`) and catalog building
-  (`build_catalog.js`), plus satellite ephemeris generation
-  (`generate_satellite_ephemeris.py`, auto-refreshed weekly). Catalog changes are
-  applied by hand-editing `data/catalog.json` / `data/final_placements.json` and
-  re-running `generate-videos-json.js` (produces `apps/web/public/videos.json`)
-  and `generate_table.js` (produces `data/catalog.csv`).
+  (`build_catalog.js`). Catalog changes are then applied by hand-editing
+  `data/catalog.json` / `data/final_placements.json` and re-running
+  `generate-videos-json.js` (produces `apps/web/public/videos.json`) and
+  `generate_table.js` (produces `data/catalog.csv`).
+- **Automated satellite ephemeris generation** (`generate_satellite_ephemeris.py`)
+  — the one piece of this directory that genuinely is on a schedule: refreshed
+  weekly by GitHub Actions
+  (`.github/workflows/refresh-satellite-ephemeris.yml`).
 - **One-time catalog-bootstrap chain** — `create_placement_data.js` (stage 1) →
   `create_final_placements.js` (stage 2) originally produced the initial
   `data/final_placements.json` / `data/video_placements.json`. It is superseded
-  for incremental updates by the routine path above and is kept only so the
+  for incremental updates by the on-demand path above and is kept only so the
   catalog can be rebuilt from scratch if ever needed (see the header comments in
-  each script).
+  each script). Stage 2 also reads `data/ephemeris.json`, which is why that file
+  and its producer `fetch_ephemeris.js` are still here despite nothing invoking
+  them routinely.
 
 ## Development
 
