@@ -19,9 +19,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install pnpm
+        # No `version:` input on purpose: action-setup reads the pinned version
+        # from the "packageManager" field in package.json (single source of truth).
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -184,9 +184,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install pnpm
+        # No `version:` input on purpose: action-setup reads the pinned version
+        # from the "packageManager" field in package.json (single source of truth).
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
