@@ -9,17 +9,32 @@ name: Refresh satellite ephemeris
 # Safety net: even if a run fails (e.g. Horizons is unreachable) or the deploy
 # lags, the web UI detects out-of-range coverage and shows a "data out of date"
 # indicator instead of silently rendering stale positions (see iss-passes-ui.ts).
+#
+# Window lengths are per-satellite (see #91). Horizons publishes *predicted*
+# spacecraft trajectories, and the prediction degrades with forecast horizon,
+# not with how long ago the file was generated: measured ISS error against a
+# fresh Horizons pull was ~4 km at +5.5 d, ~26 km at +9.5 d, ~107 km at +16.5 d
+# and ~242 km (≈31 s of along-track motion) at +23.5 d. So the ISS window is
+# deliberately capped at 14 days — worst-case tail error ~72 km (≈9 s) while
+# still leaving a 7-day buffer if one weekly run fails. Hubble stays at 45 days
+# (Horizons clamps it to its own cutoff): it orbits higher, where drag-driven
+# divergence is far weaker, and it has no pass-prediction UI riding on it.
 
 on:
   schedule:
-    # Weekly, Mondays 06:00 UTC. The generated window (default 45 days) is far
-    # wider than the 7-day cadence, so several consecutive failures can occur
-    # before coverage actually lapses.
+    # Weekly, Mondays 06:00 UTC. Both generated windows are wider than the
+    # 7-day cadence, so consecutive failures can occur before coverage lapses
+    # (14 days for the ISS leaves a one-run buffer; 45 days for Hubble leaves
+    # several).
     - cron: "0 6 * * 1"
   workflow_dispatch:
     inputs:
+      iss_window_days:
+        description: "Days of ISS ephemeris to generate from today"
+        required: false
+        default: "14"
       window_days:
-        description: "Days of ephemeris to generate from today"
+        description: "Days of Hubble ephemeris to generate from today"
         required: false
         default: "45"
 
@@ -44,25 +59,30 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Compute end date
+      - name: Compute end dates
         id: dates
         run: |
-          WINDOW="${{ github.event.inputs.window_days || '45' }}"
-          END="$(date -u -d "+${WINDOW} days" +%Y-%m-%d)"
-          echo "window=${WINDOW}" >> "$GITHUB_OUTPUT"
-          echo "end=${END}" >> "$GITHUB_OUTPUT"
-          echo "Generating ${WINDOW} days of ephemeris (through ${END})"
+          ISS_WINDOW="${{ github.event.inputs.iss_window_days || '14' }}"
+          HUBBLE_WINDOW="${{ github.event.inputs.window_days || '45' }}"
+          ISS_END="$(date -u -d "+${ISS_WINDOW} days" +%Y-%m-%d)"
+          HUBBLE_END="$(date -u -d "+${HUBBLE_WINDOW} days" +%Y-%m-%d)"
+          echo "iss_window=${ISS_WINDOW}" >> "$GITHUB_OUTPUT"
+          echo "iss_end=${ISS_END}" >> "$GITHUB_OUTPUT"
+          echo "hubble_window=${HUBBLE_WINDOW}" >> "$GITHUB_OUTPUT"
+          echo "hubble_end=${HUBBLE_END}" >> "$GITHUB_OUTPUT"
+          echo "ISS: ${ISS_WINDOW} days (through ${ISS_END})"
+          echo "Hubble: ${HUBBLE_WINDOW} days (through ${HUBBLE_END})"
 
       - name: Generate ISS ephemeris
         run: |
           python scripts/generate_satellite_ephemeris.py iss \
-            --end "${{ steps.dates.outputs.end }}" \
+            --end "${{ steps.dates.outputs.iss_end }}" \
             --output apps/web/public/data/iss_ephemeris.bin
 
       - name: Generate Hubble ephemeris
         run: |
           python scripts/generate_satellite_ephemeris.py hubble \
-            --end "${{ steps.dates.outputs.end }}" \
+            --end "${{ steps.dates.outputs.hubble_end }}" \
             --output apps/web/public/data/hubble_ephemeris.bin
 
       - name: Commit refreshed data
@@ -74,5 +94,5 @@ jobs:
             echo "Ephemeris unchanged — nothing to commit."
             exit 0
           fi
-          git commit -m "chore(data): refresh ISS & Hubble ephemeris (through ${{ steps.dates.outputs.end }})"
+          git commit -m "chore(data): refresh ISS (through ${{ steps.dates.outputs.iss_end }}) & Hubble (through ${{ steps.dates.outputs.hubble_end }}) ephemeris"
           git push
