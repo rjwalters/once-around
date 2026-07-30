@@ -21,8 +21,8 @@
 //! precomputed values produces bit-identical outputs. Do NOT reorder the field
 //! computations or fold them into different expressions.
 
-use crate::coords::{compute_gmst, compute_nutation, mean_obliquity, Nutation};
-use crate::planets::{heliocentric_position, Planet};
+use crate::coords::{Nutation, compute_gmst, compute_nutation, mean_obliquity};
+use crate::planets::{Planet, heliocentric_position};
 use crate::time::SkyTime;
 
 /// Time-invariant intermediates shared across all body position calculations
@@ -68,15 +68,15 @@ mod tests {
     use super::*;
     use crate::coords::NUTATION_EVAL_COUNT;
     use crate::planets::{
-        compute_all_body_positions_full, compute_all_body_positions_with_ctx,
-        compute_moon_position_full, compute_planet_position_full, compute_sun_position_full,
-        EARTH_VSOP_EVAL_COUNT,
+        EARTH_VSOP_EVAL_COUNT, compute_all_body_positions_full,
+        compute_all_body_positions_with_ctx, compute_moon_position_full,
+        compute_planet_position_full, compute_sun_position_full,
     };
     use crate::{
-        compute_all_comet_positions, compute_all_comet_positions_with_ctx,
-        compute_all_minor_body_positions, compute_all_minor_body_positions_with_ctx,
-        compute_all_planetary_moon_positions, compute_all_planetary_moon_positions_with_ctx,
-        Comet, MinorBody, PlanetaryMoon,
+        Comet, MinorBody, PlanetaryMoon, compute_all_comet_positions,
+        compute_all_comet_positions_with_ctx, compute_all_minor_body_positions,
+        compute_all_minor_body_positions_with_ctx, compute_all_planetary_moon_positions,
+        compute_all_planetary_moon_positions_with_ctx,
     };
 
     /// A spread of test epochs: J2000.0, ~2020, today (2026-07-06), and a far-future date.
@@ -100,10 +100,22 @@ mod tests {
             let shared = compute_all_body_positions_with_ctx(&ctx);
             let independent = compute_all_body_positions_full(&time);
             for i in 0..9 {
-                assert_eq!(shared[i].direction.x, independent[i].direction.x, "body {i} x @ {jd}");
-                assert_eq!(shared[i].direction.y, independent[i].direction.y, "body {i} y @ {jd}");
-                assert_eq!(shared[i].direction.z, independent[i].direction.z, "body {i} z @ {jd}");
-                assert_eq!(shared[i].distance_km, independent[i].distance_km, "body {i} dist @ {jd}");
+                assert_eq!(
+                    shared[i].direction.x, independent[i].direction.x,
+                    "body {i} x @ {jd}"
+                );
+                assert_eq!(
+                    shared[i].direction.y, independent[i].direction.y,
+                    "body {i} y @ {jd}"
+                );
+                assert_eq!(
+                    shared[i].direction.z, independent[i].direction.z,
+                    "body {i} z @ {jd}"
+                );
+                assert_eq!(
+                    shared[i].distance_km, independent[i].distance_km,
+                    "body {i} dist @ {jd}"
+                );
                 assert_eq!(
                     shared[i].angular_diameter_rad, independent[i].angular_diameter_rad,
                     "body {i} ang @ {jd}"
@@ -114,10 +126,22 @@ mod tests {
             let shared_moons = compute_all_planetary_moon_positions_with_ctx(&ctx);
             let independent_moons = compute_all_planetary_moon_positions(&time);
             for i in 0..PlanetaryMoon::ALL.len() {
-                assert_eq!(shared_moons[i].direction.x, independent_moons[i].direction.x, "moon {i} x @ {jd}");
-                assert_eq!(shared_moons[i].direction.y, independent_moons[i].direction.y, "moon {i} y @ {jd}");
-                assert_eq!(shared_moons[i].direction.z, independent_moons[i].direction.z, "moon {i} z @ {jd}");
-                assert_eq!(shared_moons[i].distance_km, independent_moons[i].distance_km, "moon {i} dist @ {jd}");
+                assert_eq!(
+                    shared_moons[i].direction.x, independent_moons[i].direction.x,
+                    "moon {i} x @ {jd}"
+                );
+                assert_eq!(
+                    shared_moons[i].direction.y, independent_moons[i].direction.y,
+                    "moon {i} y @ {jd}"
+                );
+                assert_eq!(
+                    shared_moons[i].direction.z, independent_moons[i].direction.z,
+                    "moon {i} z @ {jd}"
+                );
+                assert_eq!(
+                    shared_moons[i].distance_km, independent_moons[i].distance_km,
+                    "moon {i} dist @ {jd}"
+                );
                 assert_eq!(
                     shared_moons[i].angular_diameter_rad, independent_moons[i].angular_diameter_rad,
                     "moon {i} ang @ {jd}"
@@ -128,22 +152,52 @@ mod tests {
             let shared_minor = compute_all_minor_body_positions_with_ctx(&ctx);
             let independent_minor = compute_all_minor_body_positions(&time);
             for i in 0..MinorBody::ALL.len() {
-                assert_eq!(shared_minor[i].direction.x, independent_minor[i].direction.x, "minor {i} x @ {jd}");
-                assert_eq!(shared_minor[i].direction.y, independent_minor[i].direction.y, "minor {i} y @ {jd}");
-                assert_eq!(shared_minor[i].direction.z, independent_minor[i].direction.z, "minor {i} z @ {jd}");
-                assert_eq!(shared_minor[i].distance_km, independent_minor[i].distance_km, "minor {i} dist @ {jd}");
-                assert_eq!(shared_minor[i].helio_distance_km, independent_minor[i].helio_distance_km, "minor {i} helio @ {jd}");
+                assert_eq!(
+                    shared_minor[i].direction.x, independent_minor[i].direction.x,
+                    "minor {i} x @ {jd}"
+                );
+                assert_eq!(
+                    shared_minor[i].direction.y, independent_minor[i].direction.y,
+                    "minor {i} y @ {jd}"
+                );
+                assert_eq!(
+                    shared_minor[i].direction.z, independent_minor[i].direction.z,
+                    "minor {i} z @ {jd}"
+                );
+                assert_eq!(
+                    shared_minor[i].distance_km, independent_minor[i].distance_km,
+                    "minor {i} dist @ {jd}"
+                );
+                assert_eq!(
+                    shared_minor[i].helio_distance_km, independent_minor[i].helio_distance_km,
+                    "minor {i} helio @ {jd}"
+                );
             }
 
             // --- Comets ---
             let shared_comets = compute_all_comet_positions_with_ctx(&ctx);
             let independent_comets = compute_all_comet_positions(&time);
             for i in 0..Comet::ALL.len() {
-                assert_eq!(shared_comets[i].direction.x, independent_comets[i].direction.x, "comet {i} x @ {jd}");
-                assert_eq!(shared_comets[i].direction.y, independent_comets[i].direction.y, "comet {i} y @ {jd}");
-                assert_eq!(shared_comets[i].direction.z, independent_comets[i].direction.z, "comet {i} z @ {jd}");
-                assert_eq!(shared_comets[i].distance_km, independent_comets[i].distance_km, "comet {i} dist @ {jd}");
-                assert_eq!(shared_comets[i].magnitude, independent_comets[i].magnitude, "comet {i} mag @ {jd}");
+                assert_eq!(
+                    shared_comets[i].direction.x, independent_comets[i].direction.x,
+                    "comet {i} x @ {jd}"
+                );
+                assert_eq!(
+                    shared_comets[i].direction.y, independent_comets[i].direction.y,
+                    "comet {i} y @ {jd}"
+                );
+                assert_eq!(
+                    shared_comets[i].direction.z, independent_comets[i].direction.z,
+                    "comet {i} z @ {jd}"
+                );
+                assert_eq!(
+                    shared_comets[i].distance_km, independent_comets[i].distance_km,
+                    "comet {i} dist @ {jd}"
+                );
+                assert_eq!(
+                    shared_comets[i].magnitude, independent_comets[i].magnitude,
+                    "comet {i} mag @ {jd}"
+                );
             }
         }
     }
@@ -165,10 +219,20 @@ mod tests {
         let _comets = compute_all_comet_positions_with_ctx(&ctx);
 
         EARTH_VSOP_EVAL_COUNT.with(|c| {
-            assert_eq!(c.get(), 1, "expected exactly 1 Earth-VSOP eval per recompute, got {}", c.get())
+            assert_eq!(
+                c.get(),
+                1,
+                "expected exactly 1 Earth-VSOP eval per recompute, got {}",
+                c.get()
+            )
         });
         NUTATION_EVAL_COUNT.with(|c| {
-            assert_eq!(c.get(), 1, "expected exactly 1 nutation eval per recompute, got {}", c.get())
+            assert_eq!(
+                c.get(),
+                1,
+                "expected exactly 1 nutation eval per recompute, got {}",
+                c.get()
+            )
         });
     }
 

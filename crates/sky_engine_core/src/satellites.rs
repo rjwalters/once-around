@@ -4,8 +4,8 @@
 //! ephemeris data with interpolation for accurate positioning.
 //! Includes Earth shadow calculations for visibility determination.
 
-use crate::coords::{compute_gmst, CartesianCoord};
-use crate::planets::{heliocentric_position, Planet, AU_TO_KM, SUN_RADIUS_KM};
+use crate::coords::{CartesianCoord, compute_gmst};
+use crate::planets::{AU_TO_KM, Planet, SUN_RADIUS_KM, heliocentric_position};
 use crate::time::SkyTime;
 use std::f64::consts::PI;
 
@@ -113,23 +113,52 @@ impl SatelliteEphemeris {
 
         for _ in 0..count {
             let jd = f64::from_le_bytes([
-                data[offset], data[offset + 1], data[offset + 2], data[offset + 3],
-                data[offset + 4], data[offset + 5], data[offset + 6], data[offset + 7],
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+                data[offset + 4],
+                data[offset + 5],
+                data[offset + 6],
+                data[offset + 7],
             ]);
             let x_km = f64::from_le_bytes([
-                data[offset + 8], data[offset + 9], data[offset + 10], data[offset + 11],
-                data[offset + 12], data[offset + 13], data[offset + 14], data[offset + 15],
+                data[offset + 8],
+                data[offset + 9],
+                data[offset + 10],
+                data[offset + 11],
+                data[offset + 12],
+                data[offset + 13],
+                data[offset + 14],
+                data[offset + 15],
             ]);
             let y_km = f64::from_le_bytes([
-                data[offset + 16], data[offset + 17], data[offset + 18], data[offset + 19],
-                data[offset + 20], data[offset + 21], data[offset + 22], data[offset + 23],
+                data[offset + 16],
+                data[offset + 17],
+                data[offset + 18],
+                data[offset + 19],
+                data[offset + 20],
+                data[offset + 21],
+                data[offset + 22],
+                data[offset + 23],
             ]);
             let z_km = f64::from_le_bytes([
-                data[offset + 24], data[offset + 25], data[offset + 26], data[offset + 27],
-                data[offset + 28], data[offset + 29], data[offset + 30], data[offset + 31],
+                data[offset + 24],
+                data[offset + 25],
+                data[offset + 26],
+                data[offset + 27],
+                data[offset + 28],
+                data[offset + 29],
+                data[offset + 30],
+                data[offset + 31],
             ]);
 
-            points.push(SatelliteEphemerisPoint { jd, x_km, y_km, z_km });
+            points.push(SatelliteEphemerisPoint {
+                jd,
+                x_km,
+                y_km,
+                z_km,
+            });
             offset += 32;
         }
 
@@ -154,7 +183,10 @@ impl SatelliteEphemeris {
         if self.points.is_empty() {
             None
         } else {
-            Some((self.points.first().unwrap().jd, self.points.last().unwrap().jd))
+            Some((
+                self.points.first().unwrap().jd,
+                self.points.last().unwrap().jd,
+            ))
         }
     }
 
@@ -167,10 +199,17 @@ impl SatelliteEphemeris {
         }
 
         // Find the bracketing points
-        let idx = match self.points.binary_search_by(|p| {
-            p.jd.partial_cmp(&jd).unwrap()
-        }) {
-            Ok(i) => return Some((self.points[i].x_km, self.points[i].y_km, self.points[i].z_km)),
+        let idx = match self
+            .points
+            .binary_search_by(|p| p.jd.partial_cmp(&jd).unwrap())
+        {
+            Ok(i) => {
+                return Some((
+                    self.points[i].x_km,
+                    self.points[i].y_km,
+                    self.points[i].z_km,
+                ));
+            }
             Err(i) => i,
         };
 
@@ -336,7 +375,11 @@ fn shadow_axis_geometry(
 
     // Sun direction (unit vector from Earth toward Sun)
     let sun_dist = (sun_eci.0 * sun_eci.0 + sun_eci.1 * sun_eci.1 + sun_eci.2 * sun_eci.2).sqrt();
-    let (sx, sy, sz) = (sun_eci.0 / sun_dist, sun_eci.1 / sun_dist, sun_eci.2 / sun_dist);
+    let (sx, sy, sz) = (
+        sun_eci.0 / sun_dist,
+        sun_eci.1 / sun_dist,
+        sun_eci.2 / sun_dist,
+    );
 
     // Project satellite onto Sun direction: dot(sat, sun_dir)
     let proj = ix * sx + iy * sy + iz * sz;
@@ -667,7 +710,10 @@ impl IssEphemeris {
 
     /// Create from binary data (legacy format).
     pub fn from_binary(data: &[u8]) -> Result<Self, &'static str> {
-        Ok(Self(SatelliteEphemeris::from_binary(SatelliteId::ISS, data)?))
+        Ok(Self(SatelliteEphemeris::from_binary(
+            SatelliteId::ISS,
+            data,
+        )?))
     }
 
     /// Check if a given Julian Date is within the ephemeris coverage.
@@ -918,7 +964,10 @@ mod tests {
             earth_shadow_depth((-ISS_RADIUS_KM, umbra_r * 0.5, 0.0), TEST_SUN),
             1.0
         );
-        assert_eq!(earth_shadow_depth((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN), 1.0);
+        assert_eq!(
+            earth_shadow_depth((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN),
+            1.0
+        );
 
         // The ramp is monotonically non-increasing as the satellite moves away
         // from the shadow axis, and never leaves 0.0..=1.0.
@@ -970,7 +1019,10 @@ mod tests {
                 "depth {depth} out of range at axial {axial}"
             );
             if is_in_earth_shadow(sat, TEST_SUN) {
-                assert_eq!(depth, 1.0, "eclipsed but depth was {depth} at axial {axial}");
+                assert_eq!(
+                    depth, 1.0,
+                    "eclipsed but depth was {depth} at axial {axial}"
+                );
             }
         }
     }
@@ -1021,15 +1073,24 @@ mod tests {
             at_boundary.abs() < 1e-6,
             "expected ~0 on the umbra boundary, got {at_boundary}"
         );
-        assert!(!is_in_earth_shadow((-ISS_RADIUS_KM, umbra_r, 0.0), TEST_SUN));
+        assert!(!is_in_earth_shadow(
+            (-ISS_RADIUS_KM, umbra_r, 0.0),
+            TEST_SUN
+        ));
 
         // A genuine sign change brackets the crossing, which is the precondition
         // bisection / regula falsi / Brent all require. `depth - 1.0` cannot do
         // this: it is zero throughout the umbra interior, not positive.
         let inside = umbra_signed_distance_km((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN);
         let outside = umbra_signed_distance_km((-ISS_RADIUS_KM, penumbra_r, 0.0), TEST_SUN);
-        assert!(inside * outside < 0.0, "must straddle: {inside} / {outside}");
-        assert_eq!(earth_shadow_depth((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN) - 1.0, 0.0);
+        assert!(
+            inside * outside < 0.0,
+            "must straddle: {inside} / {outside}"
+        );
+        assert_eq!(
+            earth_shadow_depth((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN) - 1.0,
+            0.0
+        );
         assert_eq!(
             earth_shadow_depth((-ISS_RADIUS_KM, umbra_r * 0.5, 0.0), TEST_SUN) - 1.0,
             0.0,
@@ -1082,7 +1143,11 @@ mod tests {
         let (ix, iy, iz) = sat_eci;
         let sun_dist =
             (sun_eci.0 * sun_eci.0 + sun_eci.1 * sun_eci.1 + sun_eci.2 * sun_eci.2).sqrt();
-        let (sx, sy, sz) = (sun_eci.0 / sun_dist, sun_eci.1 / sun_dist, sun_eci.2 / sun_dist);
+        let (sx, sy, sz) = (
+            sun_eci.0 / sun_dist,
+            sun_eci.1 / sun_dist,
+            sun_eci.2 / sun_dist,
+        );
         let proj = ix * sx + iy * sy + iz * sz;
         if proj >= 0.0 {
             return false;
@@ -1172,8 +1237,18 @@ mod tests {
     #[test]
     fn test_ephemeris_coverage() {
         let points = vec![
-            SatelliteEphemerisPoint { jd: 2460000.0, x_km: 6800.0, y_km: 0.0, z_km: 0.0 },
-            SatelliteEphemerisPoint { jd: 2460001.0, x_km: 0.0, y_km: 6800.0, z_km: 0.0 },
+            SatelliteEphemerisPoint {
+                jd: 2460000.0,
+                x_km: 6800.0,
+                y_km: 0.0,
+                z_km: 0.0,
+            },
+            SatelliteEphemerisPoint {
+                jd: 2460001.0,
+                x_km: 0.0,
+                y_km: 6800.0,
+                z_km: 0.0,
+            },
         ];
         let eph = SatelliteEphemeris::new(SatelliteId::Hubble, points);
 

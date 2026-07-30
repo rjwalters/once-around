@@ -1,12 +1,18 @@
 use sky_engine_core::{
     catalog::StarCatalog,
-    comets::{compute_all_comet_positions_with_ctx, Comet},
-    coords::{apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, compute_lst, ra_dec_to_cartesian},
+    comets::{Comet, compute_all_comet_positions_with_ctx},
+    coords::{
+        apply_topocentric_correction, cartesian_to_ra_dec, compute_gmst, compute_lst,
+        ra_dec_to_cartesian,
+    },
     events,
-    minor_bodies::{compute_all_minor_body_positions_with_ctx, MinorBody},
-    planetary_moons::{compute_all_planetary_moon_positions_with_ctx, PlanetaryMoon},
-    planets::{compute_all_body_positions_with_ctx, compute_moon_position_full, compute_planet_position_full, compute_sun_position, CelestialBody, Planet},
-    satellites::{compute_satellite_position, SatelliteEphemeris, SatelliteId},
+    minor_bodies::{MinorBody, compute_all_minor_body_positions_with_ctx},
+    planetary_moons::{PlanetaryMoon, compute_all_planetary_moon_positions_with_ctx},
+    planets::{
+        CelestialBody, Planet, compute_all_body_positions_with_ctx, compute_moon_position_full,
+        compute_planet_position_full, compute_sun_position,
+    },
+    satellites::{SatelliteEphemeris, SatelliteId, compute_satellite_position},
     time::SkyTime,
     time_context::TimeContext,
 };
@@ -188,8 +194,7 @@ impl SkyEngine {
         let catalog = if catalog_bytes.is_empty() {
             StarCatalog::with_bright_stars()
         } else {
-            StarCatalog::from_binary(catalog_bytes)
-                .map_err(|e| JsError::new(e))?
+            StarCatalog::from_binary(catalog_bytes).map_err(|e| JsError::new(e))?
         };
 
         let star_count = catalog.len();
@@ -364,7 +369,9 @@ impl SkyEngine {
     /// Returns the number of new stars added (duplicates are skipped).
     /// Call recompute() after this to refresh position buffers.
     pub fn add_stars(&mut self, additional_bytes: &[u8]) -> Result<usize, JsError> {
-        let added = self.catalog.extend(additional_bytes)
+        let added = self
+            .catalog
+            .extend(additional_bytes)
             .map_err(|e| JsError::new(e))?;
 
         if added > 0 {
@@ -601,7 +608,10 @@ impl SkyEngine {
     /// Get angular diameter for a specific body by index (0-8).
     /// Returns angular diameter in radians.
     pub fn body_angular_diameter(&self, index: usize) -> f32 {
-        self.bodies_angular_diameters.get(index).copied().unwrap_or(0.0)
+        self.bodies_angular_diameters
+            .get(index)
+            .copied()
+            .unwrap_or(0.0)
     }
 
     /// Get celestial body name by index (0-8).
@@ -611,9 +621,10 @@ impl SkyEngine {
 
     /// Get Moon's angular diameter in radians.
     pub fn moon_angular_diameter(&self) -> f32 {
-        self.bodies_angular_diameters.get(1).copied().unwrap_or(
-            compute_moon_position_full(&self.time).angular_diameter_rad as f32
-        )
+        self.bodies_angular_diameters
+            .get(1)
+            .copied()
+            .unwrap_or(compute_moon_position_full(&self.time).angular_diameter_rad as f32)
     }
 
     // --- Planetary moons buffer accessors ---
@@ -730,22 +741,23 @@ impl SkyEngine {
     pub fn load_satellite_ephemeris(&mut self, index: usize, data: &[u8]) -> Result<(), JsError> {
         let id = SatelliteId::from_index(index)
             .ok_or_else(|| JsError::new(&format!("Invalid satellite index: {}", index)))?;
-        let ephemeris = SatelliteEphemeris::from_binary(id, data)
-            .map_err(|e| JsError::new(e))?;
+        let ephemeris = SatelliteEphemeris::from_binary(id, data).map_err(|e| JsError::new(e))?;
         self.satellite_ephemerides[index] = Some(ephemeris);
         Ok(())
     }
 
     /// Check if satellite ephemeris is loaded by index.
     pub fn has_satellite_ephemeris(&self, index: usize) -> bool {
-        self.satellite_ephemerides.get(index)
+        self.satellite_ephemerides
+            .get(index)
             .map(|opt| opt.is_some())
             .unwrap_or(false)
     }
 
     /// Check if current time is within satellite ephemeris coverage.
     pub fn satellite_in_range(&self, index: usize) -> bool {
-        self.satellite_ephemerides.get(index)
+        self.satellite_ephemerides
+            .get(index)
             .and_then(|opt| opt.as_ref())
             .map(|e| e.covers(self.time.julian_date_tdb()))
             .unwrap_or(false)
@@ -771,19 +783,28 @@ impl SkyEngine {
     /// [`Self::satellite_shadow_depth`] for the continuous shading value.
     pub fn satellite_illuminated(&self, index: usize) -> bool {
         let base_idx = index * SATELLITE_FLOATS;
-        self.satellites_pos.get(base_idx + 3).map(|v| *v > 0.5).unwrap_or(false)
+        self.satellites_pos
+            .get(base_idx + 3)
+            .map(|v| *v > 0.5)
+            .unwrap_or(false)
     }
 
     /// Check if a satellite is currently above the observer's horizon.
     pub fn satellite_above_horizon(&self, index: usize) -> bool {
         let base_idx = index * SATELLITE_FLOATS;
-        self.satellites_pos.get(base_idx + 4).map(|v| *v > 0.5).unwrap_or(false)
+        self.satellites_pos
+            .get(base_idx + 4)
+            .map(|v| *v > 0.5)
+            .unwrap_or(false)
     }
 
     /// Get the distance to a satellite in kilometers.
     pub fn satellite_distance_km(&self, index: usize) -> f32 {
         let base_idx = index * SATELLITE_FLOATS;
-        self.satellites_pos.get(base_idx + 5).copied().unwrap_or(0.0)
+        self.satellites_pos
+            .get(base_idx + 5)
+            .copied()
+            .unwrap_or(0.0)
     }
 
     /// How deeply a satellite sits in Earth's shadow, as a continuous value:
@@ -796,7 +817,10 @@ impl SkyEngine {
     /// boundary — i.e. where this value reaches `1.0`.
     pub fn satellite_shadow_depth(&self, index: usize) -> f32 {
         let base_idx = index * SATELLITE_FLOATS;
-        self.satellites_pos.get(base_idx + 6).copied().unwrap_or(0.0)
+        self.satellites_pos
+            .get(base_idx + 6)
+            .copied()
+            .unwrap_or(0.0)
     }
 
     /// Check if a satellite is visible (both illuminated and above horizon).
@@ -1005,8 +1029,13 @@ impl SkyEngine {
                         refine_threshold,
                     );
 
-                    let (max_jd, max_alt, max_az) =
-                        self.max_altitude(ephemeris, rise_jd, set_jd, sun_alt_limit_deg, sample_step);
+                    let (max_jd, max_alt, max_az) = self.max_altitude(
+                        ephemeris,
+                        rise_jd,
+                        set_jd,
+                        sun_alt_limit_deg,
+                        sample_step,
+                    );
 
                     if max_alt >= min_alt_deg {
                         let (_, _, rise_az) = self
@@ -1062,7 +1091,11 @@ impl SkyEngine {
         const MIN_DIST: f64 = 400.0;
         const MAX_DIST: f64 = 2300.0;
         let alt_fraction = ((MAX_DIST - pos.distance_km) / (MAX_DIST - MIN_DIST)).clamp(0.0, 1.0);
-        let altitude = if pos.above_horizon { alt_fraction * 90.0 } else { -10.0 };
+        let altitude = if pos.above_horizon {
+            alt_fraction * 90.0
+        } else {
+            -10.0
+        };
 
         Some((pos.above_horizon, altitude, pos.azimuth_deg))
     }
@@ -1195,7 +1228,11 @@ impl SkyEngine {
             }
         }
 
-        if find_rise { bracket.hi_jd } else { bracket.lo_jd }
+        if find_rise {
+            bracket.hi_jd
+        } else {
+            bracket.lo_jd
+        }
     }
 
     /// Locate the umbra crossing inside a shadow-limited `bracket` by root-finding
@@ -1453,7 +1490,9 @@ impl SkyEngine {
     /// Get planet name by index (0-4) (legacy - use body_name).
     pub fn planet_name(&self, index: usize) -> Option<String> {
         // Map 0-4 to Mercury(2), Venus(3), Mars(4), Jupiter(5), Saturn(6)
-        CelestialBody::ALL.get(index + 2).map(|b| b.name().to_string())
+        CelestialBody::ALL
+            .get(index + 2)
+            .map(|b| b.name().to_string())
     }
 }
 
@@ -1491,18 +1530,9 @@ mod tests {
 
                 let (ex, ey, ez) = full[body_index].direction.to_f32();
 
-                assert_eq!(
-                    track[0], ex,
-                    "x mismatch for body {body_index} at jd {jd}"
-                );
-                assert_eq!(
-                    track[1], ey,
-                    "y mismatch for body {body_index} at jd {jd}"
-                );
-                assert_eq!(
-                    track[2], ez,
-                    "z mismatch for body {body_index} at jd {jd}"
-                );
+                assert_eq!(track[0], ex, "x mismatch for body {body_index} at jd {jd}");
+                assert_eq!(track[1], ey, "y mismatch for body {body_index} at jd {jd}");
+                assert_eq!(track[2], ez, "z mismatch for body {body_index} at jd {jd}");
             }
         }
     }
@@ -1536,7 +1566,10 @@ mod tests {
         for bad in [0usize, 1, 9, 100] {
             let track = engine.fill_planet_track(bad, 2451545.0, 1.0, 5);
             assert_eq!(track.len(), 15);
-            assert!(track.iter().all(|&v| v == 0.0), "index {bad} should be zero");
+            assert!(
+                track.iter().all(|&v| v == 0.0),
+                "index {bad} should be zero"
+            );
         }
     }
 
@@ -1738,7 +1771,9 @@ mod tests {
         ] {
             let mut engine = engine_with_iss();
             engine.set_observer_location(lat, lon);
-            let range = engine.satellite_ephemeris_range(0).expect("ephemeris range");
+            let range = engine
+                .satellite_ephemeris_range(0)
+                .expect("ephemeris range");
             let (start_jd, end_jd) = (range[0], range[1]);
             let ephemeris = engine.satellite_ephemerides[0]
                 .as_ref()
@@ -1827,7 +1862,9 @@ mod tests {
 
         let mut engine = engine_with_iss();
         engine.set_observer_location(51.5074, -0.1278);
-        let range = engine.satellite_ephemeris_range(0).expect("ephemeris range");
+        let range = engine
+            .satellite_ephemeris_range(0)
+            .expect("ephemeris range");
         let (start_jd, end_jd) = (range[0], range[1]);
         let ephemeris = engine.satellite_ephemerides[0]
             .as_ref()
@@ -1912,7 +1949,13 @@ mod tests {
 
         // Reference passes via the mutate-and-recompute path.
         let reference = ref_scan(
-            &mut engine, start_jd, end_jd, step, min_alt, sun_limit, max_passes,
+            &mut engine,
+            start_jd,
+            end_jd,
+            step,
+            min_alt,
+            sun_limit,
+            max_passes,
         );
 
         // New immutable path.
@@ -1926,7 +1969,11 @@ mod tests {
             "find_passes must not mutate the shared engine time"
         );
 
-        assert_eq!(buf.len() % PASS_RECORD_LEN, 0, "buffer must be whole records");
+        assert_eq!(
+            buf.len() % PASS_RECORD_LEN,
+            0,
+            "buffer must be whole records"
+        );
         let found = buf.len() / PASS_RECORD_LEN;
 
         // Sanity: the reference window must actually contain passes, otherwise the test
@@ -1981,8 +2028,7 @@ mod tests {
         STAR_SCAN_COUNT.with(|c| assert_eq!(c.get(), 1, "constructor should scan stars once"));
 
         let visible_before = engine.visible_stars();
-        let buf_before: Vec<f32> =
-            engine.stars_pos[..visible_before * 3].to_vec();
+        let buf_before: Vec<f32> = engine.stars_pos[..visible_before * 3].to_vec();
 
         // Time-only change: several recomputes must NOT rescan the catalog.
         STAR_SCAN_COUNT.with(|c| c.set(0));
@@ -1991,9 +2037,17 @@ mod tests {
             engine.recompute();
         }
         STAR_SCAN_COUNT.with(|c| {
-            assert_eq!(c.get(), 0, "time-only recompute must not rescan the star catalog")
+            assert_eq!(
+                c.get(),
+                0,
+                "time-only recompute must not rescan the star catalog"
+            )
         });
-        assert_eq!(engine.visible_stars(), visible_before, "visible count unchanged");
+        assert_eq!(
+            engine.visible_stars(),
+            visible_before,
+            "visible count unchanged"
+        );
         assert_eq!(
             &engine.stars_pos[..visible_before * 3],
             &buf_before[..],
@@ -2006,7 +2060,11 @@ mod tests {
         engine.set_mag_limit(2.0);
         engine.recompute();
         STAR_SCAN_COUNT.with(|c| {
-            assert_eq!(c.get(), 1, "mag-limit change must trigger exactly one rescan")
+            assert_eq!(
+                c.get(),
+                1,
+                "mag-limit change must trigger exactly one rescan"
+            )
         });
         assert!(
             engine.visible_stars() <= visible_before,
@@ -2017,9 +2075,8 @@ mod tests {
         STAR_SCAN_COUNT.with(|c| c.set(0));
         engine.set_mag_limit(2.0);
         engine.recompute();
-        STAR_SCAN_COUNT.with(|c| {
-            assert_eq!(c.get(), 0, "re-setting the same mag limit must not rescan")
-        });
+        STAR_SCAN_COUNT
+            .with(|c| assert_eq!(c.get(), 0, "re-setting the same mag limit must not rescan"));
     }
 
     #[test]
@@ -2035,12 +2092,32 @@ mod tests {
         let engine = engine_with_iss();
         let s = engine.satellite_ephemeris_range(0).unwrap()[0];
         // Empty window (end <= start), non-positive step, and zero max_passes.
-        assert!(engine.find_passes(0, s, s, 10.0 / 1440.0, 10.0, -6.0, 10).is_empty());
-        assert!(engine.find_passes(0, s + 1.0, s, 10.0 / 1440.0, 10.0, -6.0, 10).is_empty());
-        assert!(engine.find_passes(0, s, s + 1.0, 0.0, 10.0, -6.0, 10).is_empty());
-        assert!(engine.find_passes(0, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 0).is_empty());
+        assert!(
+            engine
+                .find_passes(0, s, s, 10.0 / 1440.0, 10.0, -6.0, 10)
+                .is_empty()
+        );
+        assert!(
+            engine
+                .find_passes(0, s + 1.0, s, 10.0 / 1440.0, 10.0, -6.0, 10)
+                .is_empty()
+        );
+        assert!(
+            engine
+                .find_passes(0, s, s + 1.0, 0.0, 10.0, -6.0, 10)
+                .is_empty()
+        );
+        assert!(
+            engine
+                .find_passes(0, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 0)
+                .is_empty()
+        );
         // Out-of-range satellite index.
-        assert!(engine.find_passes(99, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 10).is_empty());
+        assert!(
+            engine
+                .find_passes(99, s, s + 1.0, 10.0 / 1440.0, 10.0, -6.0, 10)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -2116,7 +2193,9 @@ mod tests {
     fn satellite_shadow_depth_saturates_where_illuminated_flips() {
         let mut engine = engine_with_iss();
         engine.set_observer_location(40.0, -105.0);
-        let range = engine.satellite_ephemeris_range(0).expect("ephemeris range");
+        let range = engine
+            .satellite_ephemeris_range(0)
+            .expect("ephemeris range");
         let start_jd = range[0];
 
         let step = 60.0 / 86400.0; // 1-minute coarse sweep
@@ -2187,10 +2266,17 @@ mod tests {
         engine.set_observer_location(40.0, 0.0);
         let start = events_jd_utc(2026, 3, 20, 0, 0);
         // Out-of-range body index -> empty buffer / NaN altitude.
-        assert!(engine.find_body_events(99, start, start + 1.0, 10.0 / 1440.0, f64::NAN).is_empty());
+        assert!(
+            engine
+                .find_body_events(99, start, start + 1.0, 10.0 / 1440.0, f64::NAN)
+                .is_empty()
+        );
         assert!(engine.body_altitude_at(99, start).is_nan());
         // In-range altitude is finite and within [-90, 90].
         let alt = engine.body_altitude_at(0, start);
-        assert!(alt.is_finite() && (-90.0..=90.0).contains(&alt), "sun altitude: {alt}");
+        assert!(
+            alt.is_finite() && (-90.0..=90.0).contains(&alt),
+            "sun altitude: {alt}"
+        );
     }
 }

@@ -21,14 +21,14 @@
 
 use std::collections::HashSet;
 use std::env;
+use std::f64::consts::PI;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
-use std::f64::consts::PI;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
 struct Star {
-    id: u32,       // HR number (BSC) or HIP number (Hipparcos)
+    id: u32, // HR number (BSC) or HIP number (Hipparcos)
     ra_rad: f32,
     dec_rad: f32,
     vmag: f32,
@@ -69,7 +69,13 @@ fn parse_bsc_line(line: &str) -> Option<Star> {
     let vmag = parse_f64(&line[102..107])? as f32;
     let bv = parse_f64(&line[109..114]).unwrap_or(0.0) as f32;
 
-    Some(Star { id, ra_rad, dec_rad, vmag, bv })
+    Some(Star {
+        id,
+        ra_rad,
+        dec_rad,
+        vmag,
+        bv,
+    })
 }
 
 /// Parse Hipparcos pipe-delimited format
@@ -101,7 +107,13 @@ fn parse_hipparcos_line(line: &str) -> Option<Star> {
     // Field 37: B-V color index (may be empty)
     let bv = parse_f64(fields[37]).unwrap_or(0.65) as f32; // Default to G-type star color
 
-    Some(Star { id, ra_rad, dec_rad, vmag, bv })
+    Some(Star {
+        id,
+        ra_rad,
+        dec_rad,
+        vmag,
+        bv,
+    })
 }
 
 /// Detect catalog format from first line
@@ -131,7 +143,12 @@ fn write_binary(stars: &[Star], output_path: &str) {
     }
 
     let file_size = 4 + stars.len() * 20;
-    println!("Wrote {} stars ({:.1} KB) to {}", stars.len(), file_size as f64 / 1024.0, output_path);
+    println!(
+        "Wrote {} stars ({:.1} KB) to {}",
+        stars.len(),
+        file_size as f64 / 1024.0,
+        output_path
+    );
 }
 
 fn main() {
@@ -140,11 +157,16 @@ fn main() {
     if args.len() < 3 {
         eprintln!("Usage: {} <input.dat> <output.bin> [--hipparcos]", args[0]);
         eprintln!("       {} <input.dat> <output_dir/> --tiered", args[0]);
-        eprintln!("       {} <input.dat> <output.bin> --hr-list <comma-separated-ids>", args[0]);
+        eprintln!(
+            "       {} <input.dat> <output.bin> --hr-list <comma-separated-ids>",
+            args[0]
+        );
         eprintln!();
         eprintln!("Supported catalogs:");
         eprintln!("  Yale BSC (bsc5.dat):");
-        eprintln!("    curl -O http://tdc-www.harvard.edu/catalogs/bsc5.dat.gz && gunzip bsc5.dat.gz");
+        eprintln!(
+            "    curl -O http://tdc-www.harvard.edu/catalogs/bsc5.dat.gz && gunzip bsc5.dat.gz"
+        );
         eprintln!();
         eprintln!("  Hipparcos (hip_main.dat):");
         eprintln!("    curl -O https://cdsarc.cds.unistra.fr/ftp/cats/I/239/hip_main.dat");
@@ -157,7 +179,8 @@ fn main() {
     let tiered_mode = args.iter().any(|a| a == "--tiered");
 
     // Parse --hr-list argument
-    let hr_list: Option<HashSet<u32>> = args.iter()
+    let hr_list: Option<HashSet<u32>> = args
+        .iter()
         .position(|a| a == "--hr-list")
         .and_then(|pos| args.get(pos + 1))
         .map(|list| {
@@ -227,19 +250,18 @@ fn main() {
         let output_dir = Path::new(output_path);
 
         // Tier 1: mag < 3.0 (brightest, ~170 stars)
-        let tier1: Vec<Star> = stars.iter()
-            .filter(|s| s.vmag < 3.0)
-            .cloned()
-            .collect();
+        let tier1: Vec<Star> = stars.iter().filter(|s| s.vmag < 3.0).cloned().collect();
 
         // Tier 2: 3.0 <= mag < 5.0 (~1400 stars)
-        let tier2: Vec<Star> = stars.iter()
+        let tier2: Vec<Star> = stars
+            .iter()
             .filter(|s| s.vmag >= 3.0 && s.vmag < 5.0)
             .cloned()
             .collect();
 
         // Tier 3: 5.0 <= mag <= 6.5 (~7400 stars)
-        let tier3: Vec<Star> = stars.iter()
+        let tier3: Vec<Star> = stars
+            .iter()
             .filter(|s| s.vmag >= 5.0 && s.vmag <= 6.5)
             .cloned()
             .collect();
@@ -248,17 +270,20 @@ fn main() {
         write_binary(&tier1, output_dir.join("bsc5-tier1.bin").to_str().unwrap());
         write_binary(&tier2, output_dir.join("bsc5-tier2.bin").to_str().unwrap());
         write_binary(&tier3, output_dir.join("bsc5-tier3.bin").to_str().unwrap());
-
     } else if let Some(ref hr_set) = hr_list {
         // HR list filter mode
-        let filtered: Vec<Star> = stars.iter()
+        let filtered: Vec<Star> = stars
+            .iter()
             .filter(|s| hr_set.contains(&s.id))
             .cloned()
             .collect();
 
-        println!("\nFiltered by HR list ({} IDs requested, {} found):", hr_set.len(), filtered.len());
+        println!(
+            "\nFiltered by HR list ({} IDs requested, {} found):",
+            hr_set.len(),
+            filtered.len()
+        );
         write_binary(&filtered, output_path);
-
     } else {
         // Default: single output file
         write_binary(&stars, output_path);

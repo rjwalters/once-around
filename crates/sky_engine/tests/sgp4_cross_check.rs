@@ -211,11 +211,7 @@ fn equation_of_the_equinoxes(jd_tt: f64) -> f64 {
 /// Rotation of the coordinate frame about the z axis by `theta` (ERFA's `Rz`).
 fn rot_z(theta: f64) -> [[f64; 3]; 3] {
     let (sin_t, cos_t) = theta.sin_cos();
-    [
-        [cos_t, sin_t, 0.0],
-        [-sin_t, cos_t, 0.0],
-        [0.0, 0.0, 1.0],
-    ]
+    [[cos_t, sin_t, 0.0], [-sin_t, cos_t, 0.0], [0.0, 0.0, 1.0]]
 }
 
 fn transpose(m: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
@@ -287,7 +283,11 @@ fn horizons_samples() -> Vec<Sample> {
 fn iss_propagator() -> (sgp4::Constants, f64) {
     let tle = std::fs::read_to_string(TLE_PATH).expect("read pinned ISS TLE fixture");
     let mut elements = sgp4::parse_3les(&tle).expect("parse pinned ISS TLE fixture");
-    assert_eq!(elements.len(), 1, "TLE fixture must hold exactly one object");
+    assert_eq!(
+        elements.len(),
+        1,
+        "TLE fixture must hold exactly one object"
+    );
     let elements = elements.remove(0);
     assert_eq!(
         elements.norad_id, 25544,

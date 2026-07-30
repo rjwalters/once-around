@@ -10,19 +10,18 @@
 //! Purpose: produce a stable before/after number when tuning `opt-level`,
 //! `codegen-units`, and `wasm-opt` flags (issue #14).
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use sky_engine_core::coords::{compute_nutation, true_obliquity};
 use sky_engine_core::planets::{
-    compute_all_body_positions_full, compute_all_body_positions_with_ctx,
-    compute_planet_position_full, Planet,
-};
-use sky_engine_core::{
-    compute_all_comet_positions, compute_all_comet_positions_with_ctx,
-    compute_all_minor_body_positions, compute_all_minor_body_positions_with_ctx,
-    compute_all_planetary_moon_positions, compute_all_planetary_moon_positions_with_ctx,
-    TimeContext,
+    Planet, compute_all_body_positions_full, compute_all_body_positions_with_ctx,
+    compute_planet_position_full,
 };
 use sky_engine_core::time::SkyTime;
+use sky_engine_core::{
+    TimeContext, compute_all_comet_positions, compute_all_comet_positions_with_ctx,
+    compute_all_minor_body_positions, compute_all_minor_body_positions_with_ctx,
+    compute_all_planetary_moon_positions, compute_all_planetary_moon_positions_with_ctx,
+};
 
 fn bench_recompute(c: &mut Criterion) {
     // A representative observation time.

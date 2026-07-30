@@ -29,7 +29,7 @@
 //! (Apophis, Bennu), whose 2-body elements become meaningless across an Earth
 //! encounter. See the per-family tolerances and caveats in that test.
 
-use crate::coords::{ecliptic_to_equatorial, CartesianCoord};
+use crate::coords::{CartesianCoord, ecliptic_to_equatorial};
 use crate::planets::AU_TO_KM;
 use crate::time::SkyTime;
 use crate::time_context::TimeContext;
@@ -96,140 +96,132 @@ impl OrbitalElements {
 /// Orbital elements: JPL Horizons, epoch J2000.0
 pub const PLUTO: OrbitalElements = OrbitalElements::from_degrees(
     "Pluto",
-    39.48211675,        // Semi-major axis (AU)
-    0.2488273,          // Eccentricity
-    17.14175,           // Inclination (degrees)
-    110.30347,          // Longitude of ascending node (degrees)
-    113.76329,          // Argument of perihelion (degrees)
-    14.86205,           // Mean anomaly at J2000 (degrees)
-    247.94,             // Orbital period (years)
-    1188.3,             // Mean radius (km)
+    39.48211675, // Semi-major axis (AU)
+    0.2488273,   // Eccentricity
+    17.14175,    // Inclination (degrees)
+    110.30347,   // Longitude of ascending node (degrees)
+    113.76329,   // Argument of perihelion (degrees)
+    14.86205,    // Mean anomaly at J2000 (degrees)
+    247.94,      // Orbital period (years)
+    1188.3,      // Mean radius (km)
 );
 
 /// Ceres - largest object in asteroid belt, dwarf planet
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const CERES: OrbitalElements = OrbitalElements::from_degrees(
-    "Ceres",
-    2.7656038,          // Semi-major axis (AU)
-    0.0797027,          // Eccentricity
-    10.58798,           // Inclination (degrees)
-    80.24872,           // Longitude of ascending node (degrees)
-    73.28179,           // Argument of perihelion (degrees)
-    5.27378,            // Mean anomaly back-propagated to J2000 (degrees)
-    4.599315,           // Orbital period (years)
-    473.0,              // Mean radius (km)
+    "Ceres", 2.7656038, // Semi-major axis (AU)
+    0.0797027, // Eccentricity
+    10.58798,  // Inclination (degrees)
+    80.24872,  // Longitude of ascending node (degrees)
+    73.28179,  // Argument of perihelion (degrees)
+    5.27378,   // Mean anomaly back-propagated to J2000 (degrees)
+    4.599315,  // Orbital period (years)
+    473.0,     // Mean radius (km)
 );
 
 /// Eris - most massive known dwarf planet
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const ERIS: OrbitalElements = OrbitalElements::from_degrees(
-    "Eris",
-    67.9261588,         // Semi-major axis (AU)
-    0.4383756,          // Eccentricity
-    43.93307,           // Inclination (degrees)
-    36.00194,           // Longitude of ascending node (degrees)
-    150.80688,          // Argument of perihelion (degrees)
-    194.76178,          // Mean anomaly back-propagated to J2000 (degrees)
-    559.839821,         // Orbital period (years)
-    1163.0,             // Mean radius (km)
+    "Eris", 67.9261588, // Semi-major axis (AU)
+    0.4383756,  // Eccentricity
+    43.93307,   // Inclination (degrees)
+    36.00194,   // Longitude of ascending node (degrees)
+    150.80688,  // Argument of perihelion (degrees)
+    194.76178,  // Mean anomaly back-propagated to J2000 (degrees)
+    559.839821, // Orbital period (years)
+    1163.0,     // Mean radius (km)
 );
 
 /// Makemake - Kuiper belt dwarf planet
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const MAKEMAKE: OrbitalElements = OrbitalElements::from_degrees(
-    "Makemake",
-    45.5773481,         // Semi-major axis (AU)
-    0.1587202,          // Eccentricity
-    29.02704,           // Inclination (degrees)
-    79.29954,           // Longitude of ascending node (degrees)
-    297.08116,          // Argument of perihelion (degrees)
-    139.02243,          // Mean anomaly back-propagated to J2000 (degrees)
-    307.703036,         // Orbital period (years)
-    715.0,              // Mean radius (km)
+    "Makemake", 45.5773481, // Semi-major axis (AU)
+    0.1587202,  // Eccentricity
+    29.02704,   // Inclination (degrees)
+    79.29954,   // Longitude of ascending node (degrees)
+    297.08116,  // Argument of perihelion (degrees)
+    139.02243,  // Mean anomaly back-propagated to J2000 (degrees)
+    307.703036, // Orbital period (years)
+    715.0,      // Mean radius (km)
 );
 
 /// Haumea - elongated dwarf planet with ring
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const HAUMEA: OrbitalElements = OrbitalElements::from_degrees(
-    "Haumea",
-    43.0674631,         // Semi-major axis (AU)
-    0.1942906,          // Eccentricity
-    28.20847,           // Inclination (degrees)
-    121.78676,          // Longitude of ascending node (degrees)
-    240.65590,          // Argument of perihelion (degrees)
-    189.57440,          // Mean anomaly back-propagated to J2000 (degrees)
-    282.639032,         // Orbital period (years)
-    780.0,              // Mean radius (km) - average of ellipsoid
+    "Haumea", 43.0674631, // Semi-major axis (AU)
+    0.1942906,  // Eccentricity
+    28.20847,   // Inclination (degrees)
+    121.78676,  // Longitude of ascending node (degrees)
+    240.65590,  // Argument of perihelion (degrees)
+    189.57440,  // Mean anomaly back-propagated to J2000 (degrees)
+    282.639032, // Orbital period (years)
+    780.0,      // Mean radius (km) - average of ellipsoid
 );
 
 /// Sedna - extreme trans-Neptunian object
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const SEDNA: OrbitalElements = OrbitalElements::from_degrees(
     "Sedna",
-    542.6834267,        // Semi-major axis (AU)
-    0.8596223,          // Eccentricity
-    11.92523,           // Inclination (degrees)
-    144.50807,          // Longitude of ascending node (degrees)
-    311.11034,          // Argument of perihelion (degrees)
-    357.83832,          // Mean anomaly back-propagated to J2000 (degrees)
-    12642.356715,       // Orbital period (years)
-    497.5,              // Mean radius (km)
+    542.6834267,  // Semi-major axis (AU)
+    0.8596223,    // Eccentricity
+    11.92523,     // Inclination (degrees)
+    144.50807,    // Longitude of ascending node (degrees)
+    311.11034,    // Argument of perihelion (degrees)
+    357.83832,    // Mean anomaly back-propagated to J2000 (degrees)
+    12642.356715, // Orbital period (years)
+    497.5,        // Mean radius (km)
 );
 
 /// Quaoar - classical Kuiper belt object
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const QUAOAR: OrbitalElements = OrbitalElements::from_degrees(
-    "Quaoar",
-    43.1599534,         // Semi-major axis (AU)
-    0.0351532,          // Eccentricity
-    7.99161,            // Inclination (degrees)
-    188.91387,          // Longitude of ascending node (degrees)
-    163.02910,          // Argument of perihelion (degrees)
-    259.46163,          // Mean anomaly back-propagated to J2000 (degrees)
-    283.550001,         // Orbital period (years)
-    545.0,              // Mean radius (km)
+    "Quaoar", 43.1599534, // Semi-major axis (AU)
+    0.0351532,  // Eccentricity
+    7.99161,    // Inclination (degrees)
+    188.91387,  // Longitude of ascending node (degrees)
+    163.02910,  // Argument of perihelion (degrees)
+    259.46163,  // Mean anomaly back-propagated to J2000 (degrees)
+    283.550001, // Orbital period (years)
+    545.0,      // Mean radius (km)
 );
 
 /// Gonggong - scattered disc dwarf planet (225088)
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const GONGGONG: OrbitalElements = OrbitalElements::from_degrees(
-    "Gonggong",
-    66.8666228,         // Semi-major axis (AU)
-    0.5043570,          // Eccentricity
-    30.90152,           // Inclination (degrees)
-    336.83819,          // Longitude of ascending node (degrees)
-    206.62667,          // Argument of perihelion (degrees)
-    94.24058,           // Mean anomaly back-propagated to J2000 (degrees)
-    546.792168,         // Orbital period (years)
-    615.0,              // Mean radius (km)
+    "Gonggong", 66.8666228, // Semi-major axis (AU)
+    0.5043570,  // Eccentricity
+    30.90152,   // Inclination (degrees)
+    336.83819,  // Longitude of ascending node (degrees)
+    206.62667,  // Argument of perihelion (degrees)
+    94.24058,   // Mean anomaly back-propagated to J2000 (degrees)
+    546.792168, // Orbital period (years)
+    615.0,      // Mean radius (km)
 );
 
 /// Orcus - plutino (2:3 Neptune resonance)
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const ORCUS: OrbitalElements = OrbitalElements::from_degrees(
-    "Orcus",
-    39.3807142,         // Semi-major axis (AU)
-    0.2204170,          // Eccentricity
-    20.55710,           // Inclination (degrees)
-    268.40986,          // Longitude of ascending node (degrees)
-    73.54298,           // Argument of perihelion (degrees)
-    150.61964,          // Mean anomaly back-propagated to J2000 (degrees)
-    247.134618,         // Orbital period (years)
-    458.0,              // Mean radius (km)
+    "Orcus", 39.3807142, // Semi-major axis (AU)
+    0.2204170,  // Eccentricity
+    20.55710,   // Inclination (degrees)
+    268.40986,  // Longitude of ascending node (degrees)
+    73.54298,   // Argument of perihelion (degrees)
+    150.61964,  // Mean anomaly back-propagated to J2000 (degrees)
+    247.134618, // Orbital period (years)
+    458.0,      // Mean radius (km)
 );
 
 /// Varuna - large classical Kuiper belt object
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const VARUNA: OrbitalElements = OrbitalElements::from_degrees(
-    "Varuna",
-    43.2000868,         // Semi-major axis (AU)
-    0.0515255,          // Eccentricity
-    17.14123,           // Inclination (degrees)
-    97.21741,           // Longitude of ascending node (degrees)
-    273.31125,          // Argument of perihelion (degrees)
-    82.20969,           // Mean anomaly back-propagated to J2000 (degrees)
-    283.945592,         // Orbital period (years)
-    334.0,              // Mean radius (km)
+    "Varuna", 43.2000868, // Semi-major axis (AU)
+    0.0515255,  // Eccentricity
+    17.14123,   // Inclination (degrees)
+    97.21741,   // Longitude of ascending node (degrees)
+    273.31125,  // Argument of perihelion (degrees)
+    82.20969,   // Mean anomaly back-propagated to J2000 (degrees)
+    283.945592, // Orbital period (years)
+    334.0,      // Mean radius (km)
 );
 
 // =============================================================================
@@ -239,43 +231,40 @@ pub const VARUNA: OrbitalElements = OrbitalElements::from_degrees(
 /// Vesta (4) - second-largest asteroid, visited by Dawn spacecraft
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const VESTA: OrbitalElements = OrbitalElements::from_degrees(
-    "Vesta",
-    2.3613409,          // Semi-major axis (AU)
-    0.0902130,          // Eccentricity
-    7.14390,            // Inclination (degrees)
-    103.70085,          // Longitude of ascending node (degrees)
-    151.46181,          // Argument of perihelion (degrees)
-    338.54344,          // Mean anomaly back-propagated to J2000 (degrees)
-    3.628660,           // Orbital period (years)
-    262.7,              // Mean radius (km)
+    "Vesta", 2.3613409, // Semi-major axis (AU)
+    0.0902130, // Eccentricity
+    7.14390,   // Inclination (degrees)
+    103.70085, // Longitude of ascending node (degrees)
+    151.46181, // Argument of perihelion (degrees)
+    338.54344, // Mean anomaly back-propagated to J2000 (degrees)
+    3.628660,  // Orbital period (years)
+    262.7,     // Mean radius (km)
 );
 
 /// Pallas (2) - third-largest asteroid, highly inclined orbit
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const PALLAS: OrbitalElements = OrbitalElements::from_degrees(
-    "Pallas",
-    2.7695096,          // Semi-major axis (AU)
-    0.2306995,          // Eccentricity
-    34.93312,           // Inclination (degrees) - unusually high!
-    172.88666,          // Longitude of ascending node (degrees)
-    310.97467,          // Argument of perihelion (degrees)
-    349.46007,          // Mean anomaly back-propagated to J2000 (degrees)
-    4.609062,           // Orbital period (years)
-    256.0,              // Mean radius (km)
+    "Pallas", 2.7695096, // Semi-major axis (AU)
+    0.2306995, // Eccentricity
+    34.93312,  // Inclination (degrees) - unusually high!
+    172.88666, // Longitude of ascending node (degrees)
+    310.97467, // Argument of perihelion (degrees)
+    349.46007, // Mean anomaly back-propagated to J2000 (degrees)
+    4.609062,  // Orbital period (years)
+    256.0,     // Mean radius (km)
 );
 
 /// Hygiea (10) - fourth-largest asteroid, nearly spherical
 /// Osculating elements: JPL Horizons, epoch JDTDB 2461227.5 (2026-07-06)
 pub const HYGIEA: OrbitalElements = OrbitalElements::from_degrees(
-    "Hygiea",
-    3.1510652,          // Semi-major axis (AU)
-    0.1065427,          // Eccentricity
-    3.82870,            // Inclination (degrees)
-    283.11644,          // Longitude of ascending node (degrees)
-    312.43586,          // Argument of perihelion (degrees)
-    350.66100,          // Mean anomaly back-propagated to J2000 (degrees)
-    5.593637,           // Orbital period (years)
-    217.0,              // Mean radius (km)
+    "Hygiea", 3.1510652, // Semi-major axis (AU)
+    0.1065427, // Eccentricity
+    3.82870,   // Inclination (degrees)
+    283.11644, // Longitude of ascending node (degrees)
+    312.43586, // Argument of perihelion (degrees)
+    350.66100, // Mean anomaly back-propagated to J2000 (degrees)
+    5.593637,  // Orbital period (years)
+    217.0,     // Mean radius (km)
 );
 
 // =============================================================================
@@ -291,15 +280,14 @@ pub const HYGIEA: OrbitalElements = OrbitalElements::from_degrees(
 /// through 2028 but are meaningless after the 2029 approach. The accuracy test
 /// therefore validates Apophis only near the 2026 epoch, not at later epochs.
 pub const APOPHIS: OrbitalElements = OrbitalElements::from_degrees(
-    "Apophis",
-    0.9223491,          // Semi-major axis (AU) - crosses Earth's orbit!
-    0.1911621,          // Eccentricity
-    3.34104,            // Inclination (degrees)
-    203.89291,          // Longitude of ascending node (degrees)
-    126.68087,          // Argument of perihelion (degrees)
-    232.07492,          // Mean anomaly back-propagated to J2000 (degrees)
-    0.885832,           // Orbital period (years) - less than 1 year!
-    0.17,               // Mean radius (km) - ~340m diameter
+    "Apophis", 0.9223491, // Semi-major axis (AU) - crosses Earth's orbit!
+    0.1911621, // Eccentricity
+    3.34104,   // Inclination (degrees)
+    203.89291, // Longitude of ascending node (degrees)
+    126.68087, // Argument of perihelion (degrees)
+    232.07492, // Mean anomaly back-propagated to J2000 (degrees)
+    0.885832,  // Orbital period (years) - less than 1 year!
+    0.17,      // Mean radius (km) - ~340m diameter
 );
 
 /// Bennu (101955) - OSIRIS-REx sample return target
@@ -310,15 +298,14 @@ pub const APOPHIS: OrbitalElements = OrbitalElements::from_degrees(
 /// elements match Horizons to arcminutes near the 2026 epoch but drift over
 /// years; the accuracy test validates Bennu only near the 2026 epoch.
 pub const BENNU: OrbitalElements = OrbitalElements::from_degrees(
-    "Bennu",
-    1.1259345,          // Semi-major axis (AU)
-    0.2036775,          // Eccentricity
-    6.03299,            // Inclination (degrees)
-    1.96654,            // Longitude of ascending node (degrees)
-    66.40679,           // Argument of perihelion (degrees)
-    27.02727,           // Mean anomaly back-propagated to J2000 (degrees)
-    1.194752,           // Orbital period (years)
-    0.245,              // Mean radius (km) - ~490m diameter
+    "Bennu", 1.1259345, // Semi-major axis (AU)
+    0.2036775, // Eccentricity
+    6.03299,   // Inclination (degrees)
+    1.96654,   // Longitude of ascending node (degrees)
+    66.40679,  // Argument of perihelion (degrees)
+    27.02727,  // Mean anomaly back-propagated to J2000 (degrees)
+    1.194752,  // Orbital period (years)
+    0.245,     // Mean radius (km) - ~490m diameter
 );
 
 /// Minor body identifier
@@ -441,8 +428,7 @@ fn compute_heliocentric_ecliptic(elem: &OrbitalElements, jde: f64) -> (f64, f64,
     // True anomaly
     let cos_e = e_anomaly.cos();
     let e = elem.eccentricity;
-    let true_anomaly = 2.0 * ((1.0 + e).sqrt() * (e_anomaly / 2.0).tan())
-        .atan2((1.0 - e).sqrt());
+    let true_anomaly = 2.0 * ((1.0 + e).sqrt() * (e_anomaly / 2.0).tan()).atan2((1.0 - e).sqrt());
 
     // Distance from Sun (in AU)
     let r = elem.semi_major_axis_au * (1.0 - e * cos_e);
@@ -453,8 +439,8 @@ fn compute_heliocentric_ecliptic(elem: &OrbitalElements, jde: f64) -> (f64, f64,
 
     // Orbital elements
     let i = elem.inclination_rad;
-    let omega = elem.ascending_node_rad;  // Longitude of ascending node
-    let w = elem.arg_perihelion_rad;      // Argument of perihelion
+    let omega = elem.ascending_node_rad; // Longitude of ascending node
+    let w = elem.arg_perihelion_rad; // Argument of perihelion
 
     // Rotation from orbital plane to ecliptic coordinates
     // Using standard orbital mechanics transformation
@@ -550,9 +536,7 @@ pub fn compute_all_minor_body_positions(time: &SkyTime) -> [MinorBodyPosition; 1
 }
 
 /// Compute positions for all minor bodies using a shared [`TimeContext`].
-pub fn compute_all_minor_body_positions_with_ctx(
-    ctx: &TimeContext,
-) -> [MinorBodyPosition; 15] {
+pub fn compute_all_minor_body_positions_with_ctx(ctx: &TimeContext) -> [MinorBodyPosition; 15] {
     std::array::from_fn(|i| compute_minor_body_position_with_ctx(MinorBody::ALL[i], ctx))
 }
 
@@ -566,7 +550,8 @@ mod tests {
         let pos = compute_minor_body_position(MinorBody::Pluto, &time);
 
         // Direction should be a unit vector
-        let len = (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2)).sqrt();
+        let len =
+            (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2)).sqrt();
         assert!(
             (len - 1.0).abs() < 0.001,
             "Pluto direction should be unit vector, got len={}",
@@ -621,11 +606,17 @@ mod tests {
         // Test with known values
         // For circular orbit (e=0), E should equal M
         let e_circular = solve_kepler(1.0, 0.0);
-        assert!((e_circular - 1.0).abs() < 1e-10, "Circular orbit: E should equal M");
+        assert!(
+            (e_circular - 1.0).abs() < 1e-10,
+            "Circular orbit: E should equal M"
+        );
 
         // For eccentric orbit, E should be between M and M + e*sin(M) roughly
         let e_eccentric = solve_kepler(1.0, 0.25);
-        assert!(e_eccentric > 1.0 && e_eccentric < 1.3, "Eccentric orbit: E should be reasonable");
+        assert!(
+            e_eccentric > 1.0 && e_eccentric < 1.3,
+            "Eccentric orbit: E should be reasonable"
+        );
     }
 
     #[test]
@@ -636,11 +627,13 @@ mod tests {
             let pos = compute_minor_body_position(*body, &time);
 
             // Direction should be a unit vector
-            let len = (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2)).sqrt();
+            let len = (pos.direction.x.powi(2) + pos.direction.y.powi(2) + pos.direction.z.powi(2))
+                .sqrt();
             assert!(
                 (len - 1.0).abs() < 0.001,
                 "{} direction should be unit vector, got len={}",
-                body.name(), len
+                body.name(),
+                len
             );
 
             // Distance should be positive and reasonable (NEOs can be < 1 AU, TNOs up to ~1000 AU)
@@ -648,7 +641,8 @@ mod tests {
             assert!(
                 distance_au > 0.01 && distance_au < 1000.0,
                 "{} distance should be 0.01-1000 AU from Earth, got {} AU",
-                body.name(), distance_au
+                body.name(),
+                distance_au
             );
 
             // Heliocentric distance should be consistent with semi-major axis
@@ -659,10 +653,18 @@ mod tests {
             assert!(
                 helio_au > min_r && helio_au < max_r,
                 "{} heliocentric distance {} AU outside expected range {}-{} AU",
-                body.name(), helio_au, min_r, max_r
+                body.name(),
+                helio_au,
+                min_r,
+                max_r
             );
 
-            eprintln!("{}: Earth dist={:.2} AU, Sun dist={:.2} AU", body.name(), distance_au, helio_au);
+            eprintln!(
+                "{}: Earth dist={:.2} AU, Sun dist={:.2} AU",
+                body.name(),
+                distance_au,
+                helio_au
+            );
         }
     }
 

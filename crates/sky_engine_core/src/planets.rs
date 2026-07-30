@@ -1,5 +1,5 @@
 use crate::coords::{
-    compute_aberration, compute_sun_aberration, ecliptic_to_equatorial, CartesianCoord,
+    CartesianCoord, compute_aberration, compute_sun_aberration, ecliptic_to_equatorial,
 };
 use crate::time::SkyTime;
 use crate::time_context::TimeContext;
@@ -351,9 +351,7 @@ pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
     );
 
     // Sun's mean anomaly (degrees)
-    let m = normalize_degrees(
-        357.5291092 + 35999.0502909 * t - 0.0001536 * t2 + t3 / 24490000.0,
-    );
+    let m = normalize_degrees(357.5291092 + 35999.0502909 * t - 0.0001536 * t2 + t3 / 24490000.0);
 
     // Moon's mean anomaly (degrees)
     let m_prime = normalize_degrees(
@@ -386,8 +384,7 @@ pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
 
     // Longitude perturbations (Meeus Table 47.A - expanded with E corrections)
     // Format: coefficient, D, M, M', F (M terms multiplied by E or E²)
-    let sum_l =
-        6288774.0 * (m_prime_r).sin()
+    let sum_l = 6288774.0 * (m_prime_r).sin()
         + 1274027.0 * (2.0 * d_r - m_prime_r).sin()
         + 658314.0 * (2.0 * d_r).sin()
         + 213618.0 * (2.0 * m_prime_r).sin()
@@ -448,14 +445,10 @@ pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
         + 294.0 * (2.0 * d_r + 3.0 * m_prime_r).sin();
 
     // Additional additive terms for longitude
-    let sum_l = sum_l
-        + 3958.0 * a1_r.sin()
-        + 1962.0 * (l_prime_r - f_r).sin()
-        + 318.0 * a2_r.sin();
+    let sum_l = sum_l + 3958.0 * a1_r.sin() + 1962.0 * (l_prime_r - f_r).sin() + 318.0 * a2_r.sin();
 
     // Latitude perturbations (Meeus Table 47.B - expanded with E corrections)
-    let sum_b =
-        5128122.0 * (f_r).sin()
+    let sum_b = 5128122.0 * (f_r).sin()
         + 280602.0 * (m_prime_r + f_r).sin()
         + 277693.0 * (m_prime_r - f_r).sin()
         + 173237.0 * (2.0 * d_r - f_r).sin()
@@ -509,8 +502,7 @@ pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
         + 181.0 * e * (2.0 * d_r - m_r - 2.0 * m_prime_r + f_r).sin();
 
     // Additional additive terms for latitude
-    let sum_b = sum_b
-        - 2235.0 * l_prime_r.sin()
+    let sum_b = sum_b - 2235.0 * l_prime_r.sin()
         + 382.0 * a3_r.sin()
         + 175.0 * (a1_r - f_r).sin()
         + 175.0 * (a1_r + f_r).sin()
@@ -518,8 +510,7 @@ pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
         - 115.0 * (l_prime_r + m_prime_r).sin();
 
     // Distance perturbations (Meeus Table 47.A - cos terms, expanded with E corrections)
-    let sum_r =
-        -20905355.0 * (m_prime_r).cos()
+    let sum_r = -20905355.0 * (m_prime_r).cos()
         - 3699111.0 * (2.0 * d_r - m_prime_r).cos()
         - 2955968.0 * (2.0 * d_r).cos()
         - 569925.0 * (2.0 * m_prime_r).cos()
