@@ -114,8 +114,8 @@ once-around/
 └── tests/                 # Playwright end-to-end tests
 ```
 
-The `scripts/` directory holds three distinct kinds of tooling, which differ in
-how (and how often) they actually run:
+The `scripts/` directory mixes tooling with very different lifecycles, which
+differ in how (and how often) they actually run:
 
 - **On-demand catalog pipeline** — run manually whenever new videos are
   published on the channel; there is no schedule or CI job behind it, so it sits
@@ -125,10 +125,23 @@ how (and how often) they actually run:
   `data/catalog.json` / `data/final_placements.json` and re-running
   `generate-videos-json.js` (produces `apps/web/public/videos.json`) and
   `generate_table.js` (produces `data/catalog.csv`).
-- **Automated satellite ephemeris generation** (`generate_satellite_ephemeris.py`)
-  — the one piece of this directory that genuinely is on a schedule: refreshed
-  weekly by GitHub Actions
-  (`.github/workflows/refresh-satellite-ephemeris.yml`).
+- **Scheduled data refreshes** — the two generators that GitHub Actions runs on
+  a cron. `generate_satellite_ephemeris.py` refreshes the ISS/Hubble ephemerides
+  weekly (`.github/workflows/refresh-satellite-ephemeris.yml`), and
+  `generate_minor_body_elements.py` refreshes the minor-body orbital elements
+  quarterly (`.github/workflows/refresh-minor-body-elements.yml`, which opens a
+  PR for human review rather than committing directly).
+- **Engine-support tooling** — run by hand when the data or fixtures they feed
+  need to change. `preprocess_stars` (a Rust workspace member) converts the Yale
+  Bright Star / Hipparcos catalogs into the packed binaries under
+  `apps/web/public/data/stars/`; `fetch_horizons_reference.py` regenerates the
+  checked-in JPL Horizons CSV that keeps
+  `crates/sky_engine_core/tests/horizons_accuracy.rs` offline (the quarterly
+  refresh PR asks a maintainer to re-run it by hand); and
+  `test_generate_minor_body_elements.py` is a network-free unit test for the
+  back-propagation math inside `generate_minor_body_elements.py`, run manually
+  (`python3 scripts/test_generate_minor_body_elements.py`) when that generator
+  changes.
 - **One-time catalog-bootstrap chain** — `create_placement_data.js` (stage 1) →
   `create_final_placements.js` (stage 2) originally produced the initial
   `data/final_placements.json` / `data/video_placements.json`. It is superseded

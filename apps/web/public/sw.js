@@ -25,7 +25,6 @@ const CACHE_FIRST_PATTERNS = [
   /\.svg$/,
   /\.wasm$/,
   /\/data\/stars\//,
-  /\/data\/orbits\./,
   /\/deep-fields\//,
   /\/messier\//,
 ];
