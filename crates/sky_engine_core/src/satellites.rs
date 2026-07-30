@@ -253,6 +253,15 @@ pub struct SatellitePosition {
     /// remains the authoritative umbra-boundary boolean used for pass timing.
     /// See [`earth_shadow_depth`].
     pub shadow_depth: f64,
+    /// Signed distance (km) to Earth's umbra boundary: `> 0.0` inside the umbra,
+    /// `<= 0.0` outside it, so `illuminated == (umbra_signed_distance_km <= 0.0)`
+    /// by construction.
+    ///
+    /// Unlike [`Self::shadow_depth`] this is unclamped, so it keeps a usable
+    /// gradient right through the umbra interior. Pass prediction root-finds on
+    /// it to locate shadow-limited rise/set edges. See
+    /// [`umbra_signed_distance_km`].
+    pub umbra_signed_distance_km: f64,
     /// Whether satellite is above the horizon (only valid if topocentric)
     pub above_horizon: bool,
 }
@@ -354,6 +363,69 @@ fn shadow_axis_geometry(
     })
 }
 
+/// Value [`umbra_signed_distance_km`] reports on the Sun-facing side of Earth,
+/// where [`shadow_axis_geometry`] yields no shadow geometry at all.
+///
+/// Only the **sign** of this sentinel is meaningful: it must be strictly
+/// negative so the Sun-facing side reads as "definitely not eclipsed",
+/// consistent with [`is_in_earth_shadow`] returning `false` and
+/// [`earth_shadow_depth`] returning `0.0` there. The magnitude is arbitrary
+/// (one Earth radius, chosen to be the same order as the real distances the
+/// function returns) — a bracket that happens to span the Sun-facing
+/// transition therefore cannot produce a spurious sign flip.
+pub const SUNLIT_SIDE_UMBRA_DISTANCE_KM: f64 = -EARTH_RADIUS_KM;
+
+/// Signed distance (km) from a satellite to the boundary of Earth's umbra cone.
+///
+/// This is the *unclamped, continuous, signed* form of the comparison
+/// [`is_in_earth_shadow`] makes — `umbra_r - perp_dist`, using the cone radii
+/// from [`earth_shadow_radii`]:
+///
+/// ```text
+///  > 0.0   inside the umbra (eclipsed); grows with depth, no upper bound
+/// == 0.0   exactly on the umbra boundary -> NOT eclipsed, because the boolean
+///          comparison `perp_dist < umbra_r` is strict
+///  < 0.0   outside the umbra (illuminated), including the whole penumbra
+/// ```
+///
+/// [`is_in_earth_shadow`] is *defined* as `umbra_signed_distance_km(..) > 0.0`,
+/// so the boolean and this scalar can never drift apart: the sign change happens
+/// at exactly the instant the boolean flips, with no epsilon anywhere.
+///
+/// # Why not `earth_shadow_depth(..) - 1.0`?
+///
+/// [`earth_shadow_depth`] is **clamped** to `0.0..=1.0`, so it pins at exactly
+/// `1.0` across the entire umbra interior rather than continuing to rise.
+/// `depth(t) - 1.0` is therefore negative outside the umbra and identically
+/// *zero* from the boundary inward — one-sided zero contact, not a sign change.
+/// It can never satisfy the `f(a) * f(b) < 0` bracket precondition that
+/// bisection / regula falsi / Brent require, and its zero slope on one side
+/// breaks the fast-converging methods outright. This function is the
+/// well-conditioned root-finding target instead: smooth (both `perp_dist` and
+/// `umbra_r` vary smoothly along a LEO orbit) and genuinely sign-changing.
+/// `sky_engine`'s pass-prediction refinement roots-finds on it to locate
+/// shadow-limited rise/set edges instead of bisecting the boolean step function.
+///
+/// # Arguments
+/// * `sat_eci` - Satellite position in ECI coordinates (km)
+/// * `sun_eci` - Sun position in ECI coordinates (km, from Earth center)
+pub fn umbra_signed_distance_km(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> f64 {
+    let Some(geom) = shadow_axis_geometry(sat_eci, sun_eci) else {
+        return SUNLIT_SIDE_UMBRA_DISTANCE_KM; // Satellite is on the Sun-facing side
+    };
+
+    // Satellite is eclipsed only inside the umbra cone. The penumbra radius is
+    // computed alongside it to document the model (and is asserted in tests),
+    // but a partially-shaded satellite still counts as illuminated.
+    //
+    // Past the umbra apex `earth_shadow_radii` clamps `umbra_r` to 0, so this
+    // degrades to `-perp_dist` (<= 0, i.e. never eclipsed) — matching the
+    // boolean's `perp_dist < 0` there.
+    let (umbra_r, _penumbra_r) = earth_shadow_radii(geom.axial_dist, geom.sun_dist);
+
+    umbra_r - geom.perp_dist
+}
+
 /// Check if a satellite is in Earth's shadow.
 ///
 /// Uses a conical umbra model:
@@ -372,20 +444,17 @@ fn shadow_axis_geometry(
 /// = 6506 km) that was ~159 km wider than the umbra at ISS altitude, which
 /// began eclipses ~60 s early and ended them ~60 s late.
 ///
+/// Expressed in terms of [`umbra_signed_distance_km`] so the boolean used for
+/// pass timing and the scalar used to root-find the same crossing are one
+/// definition rather than two copies of `perp_dist` vs `umbra_r`. The strict
+/// `>` mirrors the original strict `perp_dist < umbra_r`: a satellite exactly on
+/// the umbra radius is *not* eclipsed.
+///
 /// # Arguments
 /// * `sat_eci` - Satellite position in ECI coordinates (km)
 /// * `sun_eci` - Sun position in ECI coordinates (km, from Earth center)
 fn is_in_earth_shadow(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> bool {
-    let Some(geom) = shadow_axis_geometry(sat_eci, sun_eci) else {
-        return false; // Satellite is on the Sun-facing side
-    };
-
-    // Satellite is eclipsed only inside the umbra cone. The penumbra radius is
-    // computed alongside it to document the model (and is asserted in tests),
-    // but a partially-shaded satellite still counts as illuminated.
-    let (umbra_r, _penumbra_r) = earth_shadow_radii(geom.axial_dist, geom.sun_dist);
-
-    geom.perp_dist < umbra_r
+    umbra_signed_distance_km(sat_eci, sun_eci) > 0.0
 }
 
 /// How deeply a satellite sits inside Earth's shadow, as a continuous `0.0..=1.0` value.
@@ -411,8 +480,8 @@ fn is_in_earth_shadow(sat_eci: (f64, f64, f64), sun_eci: (f64, f64, f64)) -> boo
 /// `1.0` but is *not* eclipsed (`perp_dist < umbra_r` is strict).
 ///
 /// This value is presentation-only: it drives the renderer's marker fade. The
-/// pass-timing path ([`is_in_earth_shadow`] via `satellite_visible_at`) keeps
-/// its umbra-boundary boolean semantics untouched.
+/// pass-timing path ([`is_in_earth_shadow`] via `sky_engine`'s `visibility_at`)
+/// keeps its umbra-boundary boolean semantics untouched.
 ///
 /// # Arguments
 /// * `sat_eci` - Satellite position in ECI coordinates (km)
@@ -555,6 +624,11 @@ pub fn compute_satellite_position(
 
     let illuminated = !is_in_earth_shadow(sat_eci, sun_eci);
     let shadow_depth = earth_shadow_depth(sat_eci, sun_eci);
+    // `is_in_earth_shadow` is *defined* as `umbra_signed_distance_km(..) > 0.0`
+    // (see that function), so `illuminated == (umbra_signed_distance_km <= 0.0)`
+    // holds by construction — the boolean cannot disagree with the scalar the
+    // pass refinement roots-finds on.
+    let umbra_signed_distance_km = umbra_signed_distance_km(sat_eci, sun_eci);
     let above_horizon = altitude_deg > 0.0;
 
     Some(SatellitePosition {
@@ -565,6 +639,7 @@ pub fn compute_satellite_position(
         azimuth_deg,
         illuminated,
         shadow_depth,
+        umbra_signed_distance_km,
         above_horizon,
     })
 }
@@ -925,6 +1000,80 @@ mod tests {
             earth_shadow_depth((-2.0 * l_umbra, penumbra_past_apex * 1.1, 0.0), TEST_SUN),
             0.0
         );
+    }
+
+    /// The signed umbra distance is the continuous, *unclamped* form of the
+    /// eclipse boolean: it changes sign exactly where `is_in_earth_shadow` flips,
+    /// and unlike `earth_shadow_depth` it keeps growing inside the umbra instead
+    /// of pinning at 1.0 — which is what makes it a valid root-finding target.
+    #[test]
+    fn test_umbra_signed_distance_brackets_the_umbra_crossing() {
+        let (umbra_r, penumbra_r) = earth_shadow_radii(ISS_RADIUS_KM, TEST_SUN.0);
+
+        // Sign convention across the boundary.
+        assert!(umbra_signed_distance_km((-ISS_RADIUS_KM, umbra_r * 0.5, 0.0), TEST_SUN) > 0.0);
+        assert!(umbra_signed_distance_km((-ISS_RADIUS_KM, umbra_r * 1.5, 0.0), TEST_SUN) < 0.0);
+
+        // Exactly on the boundary: zero, and *not* eclipsed — the boolean's
+        // `perp_dist < umbra_r` is strict, so the root belongs to the lit side.
+        let at_boundary = umbra_signed_distance_km((-ISS_RADIUS_KM, umbra_r, 0.0), TEST_SUN);
+        assert!(
+            at_boundary.abs() < 1e-6,
+            "expected ~0 on the umbra boundary, got {at_boundary}"
+        );
+        assert!(!is_in_earth_shadow((-ISS_RADIUS_KM, umbra_r, 0.0), TEST_SUN));
+
+        // A genuine sign change brackets the crossing, which is the precondition
+        // bisection / regula falsi / Brent all require. `depth - 1.0` cannot do
+        // this: it is zero throughout the umbra interior, not positive.
+        let inside = umbra_signed_distance_km((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN);
+        let outside = umbra_signed_distance_km((-ISS_RADIUS_KM, penumbra_r, 0.0), TEST_SUN);
+        assert!(inside * outside < 0.0, "must straddle: {inside} / {outside}");
+        assert_eq!(earth_shadow_depth((-ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN) - 1.0, 0.0);
+        assert_eq!(
+            earth_shadow_depth((-ISS_RADIUS_KM, umbra_r * 0.5, 0.0), TEST_SUN) - 1.0,
+            0.0,
+            "clamped depth is flat across the umbra interior, hence unusable as a root function"
+        );
+
+        // Deeper inside the umbra means a strictly larger signed distance — the
+        // gradient the clamped depth throws away.
+        assert!(inside > umbra_signed_distance_km((-ISS_RADIUS_KM, umbra_r * 0.5, 0.0), TEST_SUN));
+
+        // The boolean is *defined* as this sign test; sweep the boundary to pin
+        // the agreement, including the exact-boundary case.
+        for i in -50..=50 {
+            let perp = umbra_r + (i as f64) * 0.5;
+            let sat = (-ISS_RADIUS_KM, perp, 0.0);
+            assert_eq!(
+                umbra_signed_distance_km(sat, TEST_SUN) > 0.0,
+                is_in_earth_shadow(sat, TEST_SUN),
+                "sign disagrees with the eclipse boolean at perp_dist {perp}"
+            );
+        }
+    }
+
+    /// Degenerate geometries must stay finite and strictly negative, so a bracket
+    /// spanning one of them can never produce a spurious sign flip.
+    #[test]
+    fn test_umbra_signed_distance_degenerate_geometry() {
+        // Sun-facing side: no shadow geometry at all, so the documented sentinel.
+        let sunlit = umbra_signed_distance_km((ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN);
+        assert_eq!(sunlit, SUNLIT_SIDE_UMBRA_DISTANCE_KM);
+        assert!(sunlit < 0.0, "the sentinel must read as 'not eclipsed'");
+        assert!(!is_in_earth_shadow((ISS_RADIUS_KM, 0.0, 0.0), TEST_SUN));
+
+        // Past the umbra apex `umbra_r` clamps to 0, so the signed distance
+        // degrades to `-perp_dist`: never positive, hence never eclipsed.
+        let l_umbra = EARTH_RADIUS_KM * TEST_SUN.0 / (SUN_RADIUS_KM - EARTH_RADIUS_KM);
+        let on_axis = umbra_signed_distance_km((-2.0 * l_umbra, 0.0, 0.0), TEST_SUN);
+        assert!(on_axis.is_finite());
+        assert_eq!(on_axis, 0.0);
+        assert!(!is_in_earth_shadow((-2.0 * l_umbra, 0.0, 0.0), TEST_SUN));
+
+        let off_axis = umbra_signed_distance_km((-2.0 * l_umbra, 1000.0, 0.0), TEST_SUN);
+        assert_eq!(off_axis, -1000.0);
+        assert!(!is_in_earth_shadow((-2.0 * l_umbra, 1000.0, 0.0), TEST_SUN));
     }
 
     /// The pre-#89 cylindrical shadow model, kept here only as a reference

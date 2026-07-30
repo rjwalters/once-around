@@ -44,6 +44,6 @@ pub use iss::{compute_iss_position, IssEphemeris, IssEphemerisPoint, IssPosition
 
 // New satellite exports
 pub use satellites::{
-    compute_satellite_position, SatelliteEphemeris, SatelliteEphemerisPoint,
-    SatelliteId, SatellitePosition,
+    compute_satellite_position, umbra_signed_distance_km, SatelliteEphemeris,
+    SatelliteEphemerisPoint, SatelliteId, SatellitePosition, SUNLIT_SIDE_UMBRA_DISTANCE_KM,
 };

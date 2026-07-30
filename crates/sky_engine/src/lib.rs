@@ -77,11 +77,106 @@ pub struct SkyEngine {
     stars_dirty: bool,
 }
 
+/// Everything one satellite evaluation says about visibility at an instant.
+///
+/// Satellite visibility is a three-way conjunction — `above_horizon &&
+/// illuminated && sun_below` — whose conjuncts are governed by entirely
+/// different physics (the satellite crossing the observer's horizon, the
+/// satellite crossing Earth's umbra, the Sun crossing the twilight limit). The
+/// coarse pass scan only ever sees the composite boolean flip; keeping the
+/// conjuncts apart lets `find_passes` tell *which* event bracketed an edge and
+/// pick a refinement method suited to it (see [`SkyEngine::refine_edge`]).
+///
+/// The signed umbra distance rides along because it falls out of the very same
+/// `compute_satellite_position` call, so the shadow root-find never has to pay
+/// to re-evaluate an instant the scan or the bisection already visited.
+#[derive(Clone, Copy, Debug)]
+struct VisibilitySample {
+    above_horizon: bool,
+    illuminated: bool,
+    sun_below: bool,
+    /// Signed distance (km) to Earth's umbra boundary, `> 0.0` eclipsed. Related
+    /// to the boolean above by `illuminated == (umbra_signed_distance_km <= 0.0)`,
+    /// definitionally — see `sky_engine_core::satellites::umbra_signed_distance_km`.
+    umbra_signed_distance_km: f64,
+}
+
+impl VisibilitySample {
+    /// The composite visibility predicate.
+    fn visible(self) -> bool {
+        self.above_horizon && self.illuminated && self.sun_below
+    }
+
+    /// Whether the satellite is inside the umbra, as the root-find's sign test
+    /// sees it. Strict `>`, mirroring `is_in_earth_shadow`'s `perp_dist < umbra_r`.
+    fn eclipsed(self) -> bool {
+        self.umbra_signed_distance_km > 0.0
+    }
+
+    /// Whether the edge between `self` and `other` is caused by the umbra alone —
+    /// the shadow conjunct flipped and the other two held. Only then does the
+    /// continuous shadow root-find apply; if the horizon or twilight state also
+    /// moved, `illuminated` may be flat (or already saturated) across the bracket
+    /// and root-finding on it would converge to a spurious instant.
+    fn shadow_limited_edge(self, other: Self) -> bool {
+        self.illuminated != other.illuminated
+            && self.above_horizon == other.above_horizon
+            && self.sun_below == other.sun_below
+    }
+}
+
+/// Anderson-Björck relaxation factor for a regula-falsi step.
+///
+/// Plain false position keeps one endpoint fixed forever when `f` is curved, so
+/// the bracket shrinks from one side only and convergence degrades to linear.
+/// The fix is to shrink the *retained* endpoint's stored function value after
+/// each step, which pulls the next secant back toward the root. Illinois always
+/// uses `0.5`; Anderson-Björck instead derives `1 - f_new / f_replaced` from the
+/// two most recent values, which adapts to the local curvature and typically
+/// converges in noticeably fewer samples. Non-positive or non-finite factors
+/// (the case where the estimate is useless) fall back to the Illinois `0.5`.
+///
+/// `f_new` is the freshly-sampled value, `f_replaced` the value at the endpoint
+/// the new sample displaced.
+fn anderson_bjorck_factor(f_new: f64, f_replaced: f64) -> f64 {
+    let factor = 1.0 - f_new / f_replaced;
+    if factor.is_finite() && factor > 0.0 {
+        factor
+    } else {
+        0.5
+    }
+}
+
+/// A visibility edge under refinement: the two bracketing instants together with
+/// the samples already evaluated there, or `None` for an instant outside the
+/// ephemeris window.
+///
+/// Carrying the samples costs nothing — the coarse scan and the bisection
+/// evaluated those instants anyway — and it is what makes the handoff to the
+/// continuous root-find free: no endpoint re-evaluation, and the returned
+/// instant arrives pre-verified.
+#[derive(Clone, Copy, Debug)]
+struct EdgeBracket {
+    lo_jd: f64,
+    lo: Option<VisibilitySample>,
+    hi_jd: f64,
+    hi: Option<VisibilitySample>,
+}
+
 // Test-only counter of `recompute_stars` full-catalog scans (vs. skips). Lets the
 // dirty-flag test assert that a time-only recompute does not rescan the catalog.
 #[cfg(test)]
 thread_local! {
     static STAR_SCAN_COUNT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+// Test-only counter of rise/set edges resolved by the continuous shadow
+// root-find rather than boolean bisection. Lets the pass tests assert that both
+// refinement paths are genuinely exercised by the pinned fixture, instead of
+// the shadow path being present but unreachable.
+#[cfg(test)]
+thread_local! {
+    static SHADOW_ROOT_FIND_COUNT: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
 #[wasm_bindgen]
@@ -866,18 +961,30 @@ impl SkyEngine {
         let sample_step = 30.0 / 86400.0;
 
         let mut current = start_jd;
-        let mut was_visible = false;
+        // The coarse scan keeps the whole sample rather than just the composite
+        // boolean — it is the same single position evaluation either way, and
+        // carrying the previous step's sample forward hands `refine_edge` a
+        // fully-evaluated bracket for free. The synthetic pre-window state is
+        // `None` (that instant was never sampled), which never classifies as
+        // shadow-limited, so a window opening mid-pass refines as it did before.
+        let mut was: Option<VisibilitySample> = None;
         let mut pass_start: Option<f64> = None;
 
         while current < end_jd && out.len() / PASS_RECORD_LEN < max_passes {
-            let now_visible = self.satellite_visible_at(ephemeris, current, sun_alt_limit_deg);
+            let now = self.visibility_at(ephemeris, current, sun_alt_limit_deg);
+            let was_visible = was.is_some_and(VisibilitySample::visible);
+            let now_visible = now.is_some_and(VisibilitySample::visible);
 
             if !was_visible && now_visible {
                 // Pass started: refine the rise time between the previous and current step.
-                pass_start = Some(self.refine_transition(
+                pass_start = Some(self.refine_edge(
                     ephemeris,
-                    current - step_days,
-                    current,
+                    EdgeBracket {
+                        lo_jd: current - step_days,
+                        lo: was,
+                        hi_jd: current,
+                        hi: now,
+                    },
                     sun_alt_limit_deg,
                     true,
                     refine_threshold,
@@ -885,10 +992,14 @@ impl SkyEngine {
             } else if was_visible && !now_visible {
                 if let Some(rise_jd) = pass_start {
                     // Pass ended: refine the set time.
-                    let set_jd = self.refine_transition(
+                    let set_jd = self.refine_edge(
                         ephemeris,
-                        current - step_days,
-                        current,
+                        EdgeBracket {
+                            lo_jd: current - step_days,
+                            lo: was,
+                            hi_jd: current,
+                            hi: now,
+                        },
                         sun_alt_limit_deg,
                         false,
                         refine_threshold,
@@ -918,7 +1029,7 @@ impl SkyEngine {
                 }
             }
 
-            was_visible = now_visible;
+            was = now;
             current += step_days;
         }
 
@@ -958,52 +1069,256 @@ impl SkyEngine {
 
     /// Whether the satellite is visible at `jd`: above the horizon, sunlit, and the observer's
     /// sky is dark (Sun below `sun_alt_limit_deg`). Mirrors the old JS `isVisible` predicate.
+    ///
+    /// Production code samples `visibility_at` instead — it needs the individual
+    /// conjuncts, and this composite discards them. Retained for the tests, which
+    /// bisect it as the reference predicate `find_passes` must agree with.
+    #[cfg(test)]
     fn satellite_visible_at(
         &self,
         ephemeris: &SatelliteEphemeris,
         jd: f64,
         sun_alt_limit_deg: f64,
     ) -> bool {
+        self.visibility_at(ephemeris, jd, sun_alt_limit_deg)
+            .is_some_and(VisibilitySample::visible)
+    }
+
+    /// Evaluate the satellite once at `jd` and return everything that bears on
+    /// visibility there: the three conjuncts plus the signed umbra distance.
+    ///
+    /// This is the single sampling primitive for the whole pass-prediction path,
+    /// so the coarse scan, the bisection and the shadow root-find all cost
+    /// exactly one of these per instant and can hand results to each other.
+    /// `None` outside the ephemeris window, where the composite predicate
+    /// reports `false` exactly as before.
+    fn visibility_at(
+        &self,
+        ephemeris: &SatelliteEphemeris,
+        jd: f64,
+        sun_alt_limit_deg: f64,
+    ) -> Option<VisibilitySample> {
         let time = SkyTime::from_jd(jd);
-        let pos = match compute_satellite_position(
+        let pos = compute_satellite_position(
             ephemeris,
             &time,
             self.observer_lat_rad,
             self.observer_lon_rad,
             0.0,
-        ) {
-            Some(p) => p,
-            None => return false,
-        };
-        let sun_below = self.sun_altitude_at(&time) < sun_alt_limit_deg;
-        pos.above_horizon && pos.illuminated && sun_below
+        )?;
+        Some(VisibilitySample {
+            above_horizon: pos.above_horizon,
+            illuminated: pos.illuminated,
+            sun_below: self.sun_altitude_at(&time) < sun_alt_limit_deg,
+            umbra_signed_distance_km: pos.umbra_signed_distance_km,
+        })
     }
 
-    /// Binary-search the visibility transition between `lo_jd` and `hi_jd`, refining until the
-    /// bracket is narrower than `threshold_days`. `find_rise = true` locates a not-visible →
-    /// visible edge (returning the upper bound); `false` locates visible → not-visible
-    /// (returning the lower bound). Matches the old JS `binarySearchTransition`.
-    fn refine_transition(
+    /// Refine a visibility transition, switching from bisecting the boolean to
+    /// root-finding the continuous shadow geometry as soon as the edge is known
+    /// to be a pure umbra crossing.
+    ///
+    /// Satellite visibility is a three-way conjunction — `above_horizon &&
+    /// illuminated && sun_below` — so a bracket flagged by the coarse scan may be
+    /// a horizon crossing, an umbra crossing, or (for a pass spanning dusk/dawn)
+    /// the Sun crossing `sun_alt_limit_deg`. Continuous root-finding only pays off
+    /// for the umbra case; there is nothing to root-find on for the others
+    /// (`illuminated` can be flat, or already saturated, right across the
+    /// bracket), so applying it blindly would converge to a spurious instant.
+    ///
+    /// **Classification cannot be done once, on the coarse bracket.** With the
+    /// production 10-minute scan step and ~6-minute ISS passes, the horizon and
+    /// the shadow conjunct routinely differ *together* between the coarse
+    /// endpoints — measured on the pinned fixture, **zero** of the 24 rise/set
+    /// edges isolate to a single conjunct at that width (the count asserted by
+    /// `refine_edge_routes_shadow_edges_to_the_root_find_and_matches_bisection`
+    /// across its three observers). So this bisects the
+    /// composite boolean exactly as before while carrying the full sample at each
+    /// endpoint, and re-tests after every halving. The moment the bracket holds
+    /// only the `illuminated` flip, [`Self::refine_shadow_transition`] takes over.
+    ///
+    /// The handoff is *free and verified*: free because the endpoint samples the
+    /// root-find needs were already evaluated by the bisection that produced the
+    /// bracket, verified because those samples carry the other two conjuncts, so
+    /// the returned instant is checked to be genuinely visible before it is
+    /// accepted. The root-find only tracks the shadow conjunct, so if a horizon or
+    /// twilight flip is hiding inside the narrowed bracket the candidate is
+    /// discarded and bisection finishes the job — preserving the invariant that
+    /// the returned edge time is always an instant where the full conjunction
+    /// holds.
+    ///
+    /// Termination and return value are unchanged: the bracket is narrowed to
+    /// `threshold_days` and the visible endpoint is returned (upper for a rise,
+    /// lower for a set), so the 30 s refinement contract still holds.
+    fn refine_edge(
         &self,
         ephemeris: &SatelliteEphemeris,
-        lo_jd: f64,
-        hi_jd: f64,
+        bracket: EdgeBracket,
         sun_alt_limit_deg: f64,
         find_rise: bool,
         threshold_days: f64,
     ) -> f64 {
-        let mut lo = lo_jd;
-        let mut hi = hi_jd;
-        while hi - lo > threshold_days {
-            let mid = (lo + hi) / 2.0;
-            let visible = self.satellite_visible_at(ephemeris, mid, sun_alt_limit_deg);
-            if find_rise == visible {
-                hi = mid;
+        let mut bracket = bracket;
+        // Cleared once the continuous path has been tried and rejected, so a
+        // pathological bracket cannot re-attempt it after every halving.
+        let mut shadow_path_available = true;
+
+        while bracket.hi_jd - bracket.lo_jd > threshold_days {
+            if shadow_path_available
+                && let (Some(lo), Some(hi)) = (bracket.lo, bracket.hi)
+                && lo.shadow_limited_edge(hi)
+            {
+                match self.refine_shadow_transition(
+                    ephemeris,
+                    bracket,
+                    sun_alt_limit_deg,
+                    find_rise,
+                    threshold_days,
+                ) {
+                    Some(jd) => {
+                        #[cfg(test)]
+                        SHADOW_ROOT_FIND_COUNT.with(|c| c.set(c.get() + 1));
+                        return jd;
+                    }
+                    None => shadow_path_available = false,
+                }
+            }
+
+            let mid_jd = (bracket.lo_jd + bracket.hi_jd) / 2.0;
+            let mid = self.visibility_at(ephemeris, mid_jd, sun_alt_limit_deg);
+            if find_rise == mid.is_some_and(VisibilitySample::visible) {
+                bracket.hi_jd = mid_jd;
+                bracket.hi = mid;
             } else {
-                lo = mid;
+                bracket.lo_jd = mid_jd;
+                bracket.lo = mid;
             }
         }
-        if find_rise { hi } else { lo }
+
+        if find_rise { bracket.hi_jd } else { bracket.lo_jd }
+    }
+
+    /// Locate the umbra crossing inside a shadow-limited `bracket` by root-finding
+    /// on the continuous signed distance to the umbra boundary.
+    ///
+    /// **Root function**: `f(t) = umbra_signed_distance_km(t)` — positive inside
+    /// the umbra, negative outside, zero exactly on the boundary. The crossing it
+    /// locates is by construction the same instant `is_in_earth_shadow`
+    /// (`perp_dist < umbra_r`, strict) flips, so umbra-boundary visibility
+    /// semantics are untouched: this changes *conditioning*, not *meaning*. No
+    /// epsilon is introduced anywhere — a sample landing exactly on `f == 0.0`
+    /// joins the illuminated side of the bracket, matching the strict `<`.
+    ///
+    /// **Method**: regula falsi with the Anderson-Björck modification (see
+    /// [`anderson_bjorck_factor`]). Each step takes the secant root through the
+    /// bracket endpoints and then relaxes the retained endpoint's stored value,
+    /// which breaks the stagnation that makes plain false position crawl in from
+    /// one side on a curved `f` — and `f` is curved here, since the satellite
+    /// sweeps ~20° of orbit across a 300 s bracket. The bracket is maintained
+    /// throughout (the endpoints always straddle the root), so the method stays as
+    /// robust as bisection while converging superlinearly. Plain bisection on `f`
+    /// would have been the smaller diff but buys nothing: it halves the interval
+    /// per sample whatever the function looks like, so it would need exactly as
+    /// many samples as the boolean search it replaces and return exactly as loose
+    /// a bracket — no measurable win, and this issue demands a measured one.
+    ///
+    /// **Tolerance**: the root-find is *not* stopped at `threshold_days`. Because
+    /// it is superlinear, the samples that bisection would have spent grinding out
+    /// one bit each instead buy several orders of magnitude, so it runs to
+    /// `threshold_days * ROOT_TOLERANCE_FRACTION` while consuming no more samples
+    /// than the bisection it replaced. The 30 s contract is a *ceiling* on the
+    /// returned bracket, and it is still honoured — comfortably.
+    ///
+    /// Returns the endpoint on the illuminated side of the final bracket (upper
+    /// for a rise, lower for a set), matching the boolean bisection it takes over
+    /// from, and only after confirming that endpoint's sample is genuinely
+    /// visible. Returns `None` — deferring to the boolean bisection — when the
+    /// bracket does not straddle the boundary, when a sample falls outside the
+    /// ephemeris, when the iteration cap is hit without reaching `threshold_days`,
+    /// or when the located instant is not visible after all.
+    fn refine_shadow_transition(
+        &self,
+        ephemeris: &SatelliteEphemeris,
+        bracket: EdgeBracket,
+        sun_alt_limit_deg: f64,
+        find_rise: bool,
+        threshold_days: f64,
+    ) -> Option<f64> {
+        /// Hard cap on samples. Regula falsi needs a handful; hitting it means the
+        /// function is not behaving as assumed, so we hand back to bisection.
+        const MAX_ITERATIONS: usize = 32;
+        /// Fraction of the caller's refinement threshold the root-find actually
+        /// targets. Superlinear convergence makes the extra digits nearly free.
+        const ROOT_TOLERANCE_FRACTION: f64 = 1e-3;
+        /// Minimum interior margin (as a fraction of the current bracket) that a
+        /// secant step must respect. Purely a guard against a step that rounds
+        /// onto an endpoint and stalls the loop; small enough never to interfere
+        /// with genuine superlinear convergence.
+        const INTERIOR_MARGIN_FRACTION: f64 = 1e-9;
+
+        let tolerance_days = threshold_days * ROOT_TOLERANCE_FRACTION;
+
+        let mut a_jd = bracket.lo_jd;
+        let mut b_jd = bracket.hi_jd;
+        let mut a = bracket.lo?;
+        let mut b = bracket.hi?;
+        let mut fa = a.umbra_signed_distance_km;
+        let mut fb = b.umbra_signed_distance_km;
+
+        // Bracket precondition: exactly one endpoint eclipsed.
+        if a.eclipsed() == b.eclipsed() {
+            return None;
+        }
+
+        let mut converged = false;
+
+        for _ in 0..MAX_ITERATIONS {
+            if b_jd - a_jd <= tolerance_days {
+                converged = true;
+                break;
+            }
+
+            let denom = fb - fa;
+            let mut c_jd = if denom.is_finite() && denom != 0.0 {
+                b_jd - fb * (b_jd - a_jd) / denom
+            } else {
+                0.5 * (a_jd + b_jd)
+            };
+            let margin = INTERIOR_MARGIN_FRACTION * (b_jd - a_jd);
+            if !(c_jd > a_jd + margin && c_jd < b_jd - margin) {
+                c_jd = 0.5 * (a_jd + b_jd);
+            }
+
+            let c = self.visibility_at(ephemeris, c_jd, sun_alt_limit_deg)?;
+            let fc = c.umbra_signed_distance_km;
+
+            // `fc == 0.0` reads as not-eclipsed here, so an exact boundary sample
+            // joins the illuminated side — the strict `perp_dist < umbra_r`.
+            if c.eclipsed() == a.eclipsed() {
+                // The new point replaces the lower endpoint; relax the retained
+                // upper one so the secant stops leaning on a stale value.
+                fb *= anderson_bjorck_factor(fc, fa);
+                a_jd = c_jd;
+                a = c;
+                fa = fc;
+            } else {
+                fa *= anderson_bjorck_factor(fc, fb);
+                b_jd = c_jd;
+                b = c;
+                fb = fc;
+            }
+        }
+
+        // Never return a looser bracket than the caller's contract.
+        if !converged && b_jd - a_jd > threshold_days {
+            return None;
+        }
+
+        // The illuminated endpoint is the visible one: for a rise the satellite
+        // leaves the umbra, for a set it enters. Verified against the other two
+        // conjuncts, which the root-find did not track.
+        let (edge_jd, edge) = if find_rise { (b_jd, b) } else { (a_jd, a) };
+        edge.visible().then_some(edge_jd)
     }
 
     /// Sample the pass window `[start_jd, end_jd]` every `step_days` and return the
@@ -1366,6 +1681,217 @@ mod tests {
             cur += step;
         }
         passes
+    }
+
+    /// Pure boolean bisection of the visibility conjunction — the refinement
+    /// `refine_edge` performed before this change, kept here as the reference the
+    /// hybrid must still agree with.
+    fn reference_bisection(
+        engine: &SkyEngine,
+        ephemeris: &SatelliteEphemeris,
+        lo_jd: f64,
+        hi_jd: f64,
+        sun_limit: f64,
+        find_rise: bool,
+        threshold: f64,
+    ) -> f64 {
+        let mut lo = lo_jd;
+        let mut hi = hi_jd;
+        while hi - lo > threshold {
+            let mid = (lo + hi) / 2.0;
+            if find_rise == engine.satellite_visible_at(ephemeris, mid, sun_limit) {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        if find_rise { hi } else { lo }
+    }
+
+    /// Walk every rise/set edge the coarse scan finds in the pinned fixture and
+    /// check the refinement routing end to end:
+    ///
+    /// * both paths are exercised — some edges reach the continuous shadow
+    ///   root-find, others stay on boolean bisection (so neither is dead code);
+    /// * **no** edge isolates to a single conjunct at the coarse 10-minute
+    ///   bracket width, which is precisely why classification has to happen
+    ///   inside the bisection loop rather than once up front;
+    /// * every refined edge still lands within the 30 s refinement contract of
+    ///   the pure boolean bisection this replaced;
+    /// * every refined edge is an instant where the full conjunction holds.
+    #[test]
+    fn refine_edge_routes_shadow_edges_to_the_root_find_and_matches_bisection() {
+        let step = 10.0 / 1440.0; // production coarse scan step
+        let sun_limit = -6.0;
+        let threshold = 30.0 / 86400.0;
+
+        SHADOW_ROOT_FIND_COUNT.with(|c| c.set(0));
+        let mut total_edges = 0usize;
+        let mut coarse_isolated = 0usize;
+
+        // Spread of latitudes so the fixture yields both shadow-limited and
+        // horizon-limited edges.
+        for (lat, lon) in [
+            (37.7749, -122.4194), // San Francisco
+            (51.5074, -0.1278),   // London
+            (-33.87, 151.21),     // Sydney
+        ] {
+            let mut engine = engine_with_iss();
+            engine.set_observer_location(lat, lon);
+            let range = engine.satellite_ephemeris_range(0).expect("ephemeris range");
+            let (start_jd, end_jd) = (range[0], range[1]);
+            let ephemeris = engine.satellite_ephemerides[0]
+                .as_ref()
+                .expect("ISS ephemeris");
+
+            let mut current = start_jd;
+            let mut was: Option<VisibilitySample> = None;
+            while current < end_jd {
+                let now = engine.visibility_at(ephemeris, current, sun_limit);
+                let was_visible = was.is_some_and(VisibilitySample::visible);
+                let now_visible = now.is_some_and(VisibilitySample::visible);
+
+                if current > start_jd && was_visible != now_visible {
+                    total_edges += 1;
+                    let find_rise = now_visible;
+                    let bracket = EdgeBracket {
+                        lo_jd: current - step,
+                        lo: was,
+                        hi_jd: current,
+                        hi: now,
+                    };
+
+                    if let (Some(lo), Some(hi)) = (bracket.lo, bracket.hi)
+                        && lo.shadow_limited_edge(hi)
+                    {
+                        coarse_isolated += 1;
+                    }
+
+                    let refined =
+                        engine.refine_edge(ephemeris, bracket, sun_limit, find_rise, threshold);
+                    let reference = reference_bisection(
+                        &engine,
+                        ephemeris,
+                        bracket.lo_jd,
+                        bracket.hi_jd,
+                        sun_limit,
+                        find_rise,
+                        threshold,
+                    );
+
+                    assert!(
+                        (refined - reference).abs() <= threshold,
+                        "refined edge {refined} differs from boolean bisection {reference} by \
+                         {:.3} s, beyond the 30 s refinement contract",
+                        (refined - reference).abs() * 86400.0
+                    );
+                    assert!(
+                        engine.satellite_visible_at(ephemeris, refined, sun_limit),
+                        "refined edge {refined} must be an instant where the satellite is visible"
+                    );
+                }
+
+                was = now;
+                current += step;
+            }
+        }
+
+        let via_root_find = SHADOW_ROOT_FIND_COUNT.with(|c| c.get()) as usize;
+        assert!(total_edges > 0, "fixture must contain rise/set edges");
+        assert!(
+            via_root_find > 0,
+            "no edge reached the continuous shadow root-find — the new path is unreachable"
+        );
+        assert!(
+            via_root_find < total_edges,
+            "every edge took the shadow path ({via_root_find}/{total_edges}); the boolean \
+             bisection fallback is no longer exercised"
+        );
+        assert_eq!(
+            coarse_isolated, 0,
+            "an edge isolated to a single conjunct at the coarse bracket width; the in-loop \
+             classification in refine_edge could then be simplified to a single up-front test"
+        );
+    }
+
+    /// The continuous root-find must locate the *same* physical crossing the
+    /// umbra boolean flips at: the refined instant is illuminated, and one 30 s
+    /// contract-width earlier (for a set edge) or later (for a rise) the
+    /// satellite is eclipsed. This is the umbra-boundary semantics guarantee —
+    /// the change is conditioning only.
+    #[test]
+    fn shadow_refined_edges_straddle_the_umbra_boundary() {
+        let step = 10.0 / 1440.0;
+        let sun_limit = -6.0;
+        let threshold = 30.0 / 86400.0;
+
+        let mut engine = engine_with_iss();
+        engine.set_observer_location(51.5074, -0.1278);
+        let range = engine.satellite_ephemeris_range(0).expect("ephemeris range");
+        let (start_jd, end_jd) = (range[0], range[1]);
+        let ephemeris = engine.satellite_ephemerides[0]
+            .as_ref()
+            .expect("ISS ephemeris");
+
+        let mut checked = 0usize;
+        let mut current = start_jd;
+        let mut was: Option<VisibilitySample> = None;
+        while current < end_jd {
+            let now = engine.visibility_at(ephemeris, current, sun_limit);
+            let was_visible = was.is_some_and(VisibilitySample::visible);
+            let now_visible = now.is_some_and(VisibilitySample::visible);
+
+            if current > start_jd && was_visible != now_visible {
+                let find_rise = now_visible;
+                let before = SHADOW_ROOT_FIND_COUNT.with(|c| c.get());
+                let refined = engine.refine_edge(
+                    ephemeris,
+                    EdgeBracket {
+                        lo_jd: current - step,
+                        lo: was,
+                        hi_jd: current,
+                        hi: now,
+                    },
+                    sun_limit,
+                    find_rise,
+                    threshold,
+                );
+                let used_root_find = SHADOW_ROOT_FIND_COUNT.with(|c| c.get()) != before;
+
+                if used_root_find {
+                    checked += 1;
+                    let at_edge = engine
+                        .visibility_at(ephemeris, refined, sun_limit)
+                        .expect("sample at the refined edge");
+                    assert!(
+                        !at_edge.eclipsed(),
+                        "the refined edge must sit on the illuminated side of the umbra boundary"
+                    );
+                    // A contract-width step across the edge, into the eclipse.
+                    let across = if find_rise {
+                        refined - threshold
+                    } else {
+                        refined + threshold
+                    };
+                    let at_across = engine
+                        .visibility_at(ephemeris, across, sun_limit)
+                        .expect("sample across the refined edge");
+                    assert!(
+                        at_across.eclipsed(),
+                        "30 s across a shadow-limited edge the satellite must be eclipsed; \
+                         the root-find converged to something other than the umbra crossing"
+                    );
+                }
+            }
+
+            was = now;
+            current += step;
+        }
+
+        assert!(
+            checked > 0,
+            "expected at least one shadow-limited edge in the pinned fixture"
+        );
     }
 
     #[test]
