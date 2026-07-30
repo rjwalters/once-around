@@ -272,10 +272,17 @@ export class ISSPassesUI {
    * Deliberately understated — this is an accuracy caveat on data we *do*
    * have, not the "expired data" warning from `renderStale()`, which means we
    * have nothing to show at all. Returns an empty string for near-term passes.
+   *
+   * `role="img"` is what makes the `aria-label` count: an `aria-label` on a
+   * bare `<span>` (an element with no role) is not reliably exposed by screen
+   * readers, so the marker would either be announced as the raw "≈" glyph or
+   * skipped entirely. Naming it as an image gives assistive tech the same
+   * one-word cue sighted users get from the glyph, and `renderApproximateNote()`
+   * still carries the full explanation in visible text.
    */
   private approximateMarker(pass: ISSPass, nowMs: number): string {
     if (!isApproximatePass(pass, nowMs)) return '';
-    return `<span class="iss-pass-approx" title="More than ${APPROXIMATE_FORECAST_DAYS} days out — predicted timing may shift by a few seconds" aria-label="approximate">≈</span>`;
+    return `<span class="iss-pass-approx" role="img" title="More than ${APPROXIMATE_FORECAST_DAYS} days out — predicted timing may shift by a few seconds" aria-label="approximate">≈</span>`;
   }
 
   /** Footnote explaining the "≈" marker. Only rendered when one is shown. */
