@@ -23,6 +23,9 @@
   "license": "ISC",
   "type": "commonjs",
   "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=22.13"
+  },
   "devDependencies": {
     "@playwright/test": "^1.57.0"
   }
