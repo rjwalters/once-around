@@ -51,7 +51,11 @@
 //! start date is the TLE epoch's calendar date, update the dates/epoch quoted
 //! in this comment, and re-run `cargo test -p sky_engine`. Keep the two files
 //! in step — pairing a fresh TLE with a stale ephemeris window (or vice versa)
-//! silently inflates the deltas as the TLE ages.
+//! silently inflates the deltas as the TLE ages. Regenerating also re-dates the
+//! only hardcoded time-scale constant here: check [`TAI_MINUS_UTC_SECONDS`]
+//! still holds for the new window (a leap second introduced between the old and
+//! new fixture dates would make it stale, costing ~7.7 km of along-track error
+//! — enough to fail the 2 km bound, so it fails loudly rather than silently).
 //!
 //! # Tolerance
 //!
@@ -67,9 +71,11 @@
 //! Over this fixture's window the TLE age stays within (-0.12 d, +0.88 d), so
 //! the expected disagreement is tens of metres. The asserted bound is a
 //! deliberately generous `MAX_POSITION_DELTA_KM` = 2 km — roughly 40x the
-//! measured near-epoch ceiling, leaving room for interpolation slack and
-//! future TLE/ephemeris pairings that are a little less tightly synchronised,
-//! while still being far tighter than the failure modes it guards against.
+//! ~0.5 d near-epoch ceiling in the table above (49 m, from #88), and ~28x the
+//! 70.2 m actually measured on *this* fixture pair (reported below). Either way
+//! it leaves room for interpolation slack and future TLE/ephemeris pairings
+//! that are a little less tightly synchronised, while still being far tighter
+//! than the failure modes it guards against.
 //! Measured on this fixture pair: dropping the TEME->GCRS rotation moves the
 //! position by 44.1 km (precession since J2000 dominates), feeding the
 //! ephemeris' TDB tag to SGP4 as if it were UTC moves it by 530.4 km, and the
@@ -134,6 +140,16 @@ struct Sample {
 /// `(jd, x_km, y_km, z_km)` little-endian `f64` records. Only the time tags are
 /// taken from here; the positions are read back through the production
 /// `SatelliteEphemeris` path so this test also covers that parser.
+///
+/// **This deliberately re-implements the header/record layout instead of
+/// reading the times back off `SatelliteEphemeris`.** Duplicating a binary
+/// layout is normally a smell, but it is the point here: this file exists to
+/// give the Horizons pipeline a second, independent opinion, and a test that
+/// took both its times *and* its positions from `from_binary` could no longer
+/// notice that parser misreading the file — it would agree with itself. The
+/// count check below plus `assert_eq!(ephemeris.len(), sample_times.len())` in
+/// [`horizons_samples`] are the cross-check. If the on-disk format ever
+/// changes, this parser is *supposed* to fail until it is updated in step.
 fn read_sample_times(bytes: &[u8]) -> Vec<f64> {
     assert!(bytes.len() >= 4, "ephemeris fixture is truncated");
     let count = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
@@ -324,7 +340,11 @@ fn sgp4_matches_horizons_near_tle_epoch() {
 
     let mut max_delta_km: f64 = 0.0;
     let mut sum_delta_km = 0.0;
-    let mut worst_jd = f64::NAN;
+    // Seeded with a real sample time rather than NaN: `max_delta_km` starts at
+    // 0.0 and every delta is >= 0.0, so a run in which no sample ever strictly
+    // exceeds the running maximum (all deltas exactly zero) would otherwise
+    // print `NaN` for the worst JD instead of a valid sample.
+    let mut worst_jd = samples[0].jd_tdb;
 
     for sample in &samples {
         let sgp4_km = sgp4_gcrs_km(&constants, jd_epoch_utc, sample.jd_tdb);

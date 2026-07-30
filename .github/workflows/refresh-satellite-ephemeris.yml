@@ -66,9 +66,9 @@ jobs:
           HUBBLE_WINDOW="${{ github.event.inputs.window_days || '45' }}"
           ISS_END="$(date -u -d "+${ISS_WINDOW} days" +%Y-%m-%d)"
           HUBBLE_END="$(date -u -d "+${HUBBLE_WINDOW} days" +%Y-%m-%d)"
-          echo "iss_window=${ISS_WINDOW}" >> "$GITHUB_OUTPUT"
+          # Only the end dates are consumed downstream (generation + commit
+          # message); the window lengths are logged below, not exported.
           echo "iss_end=${ISS_END}" >> "$GITHUB_OUTPUT"
-          echo "hubble_window=${HUBBLE_WINDOW}" >> "$GITHUB_OUTPUT"
           echo "hubble_end=${HUBBLE_END}" >> "$GITHUB_OUTPUT"
           echo "ISS: ${ISS_WINDOW} days (through ${ISS_END})"
           echo "Hubble: ${HUBBLE_WINDOW} days (through ${HUBBLE_END})"
