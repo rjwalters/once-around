@@ -26,8 +26,50 @@ job — dormant between runs.
 | [`generate_table.js`](generate_table.js) | manual | `data/catalog.json`, `data/subtitles/` (filenames only, to set the `hasTranscript` flag) | `data/catalog.csv` (human-readable review table) + the same rows as JSON to stdout; progress line to stderr |
 
 Catalog changes themselves are applied by **hand-editing**
-`data/catalog.json` / `data/final_placements.json` and then re-running
+`data/videos_clean.json`, `data/catalog.json`, `data/once_around_catalog.json`,
+and `data/final_placements.json`, then re-running
 `generate-videos-json.js` and `generate_table.js`.
+
+### Refresh the channel inventory
+
+From the repository root, capture the current video listing and compare by ID
+(titles can change and different uploads can share a title):
+
+```sh
+yt-dlp --flat-playlist --dump-single-json \
+  'https://www.youtube.com/channel/UCXxPOVkemZxa9BKkfSgJKDg/videos' \
+  > /tmp/once-around-channel.json
+node <<'JS'
+const fs = require('fs');
+const known = new Set(require('./data/videos_clean.json').map(v => v.videoId));
+const channel = JSON.parse(fs.readFileSync('/tmp/once-around-channel.json', 'utf8'));
+const added = channel.entries.filter(v => !known.has(v.id));
+console.log(JSON.stringify(added.map(v => ({
+  title: v.title, videoId: v.id, url: `https://www.youtube.com/watch?v=${v.id}`,
+  availability: v.availability,
+})), null, 2));
+JS
+```
+
+Review each new ID before merging it into the four sources above. Use individual
+`yt-dlp --skip-download --dump-single-json '<video-url>'` metadata and, when
+needed, `--write-auto-subs --sub-langs en --sub-format vtt` to verify identities.
+Do not infer positions for conceptual/class videos or discard channel-listed
+members-only entries. Record coordinate sources, frame/epoch, and any parent-body
+approximation. Moving objects without a runtime model should stay unplaced with
+null app-catalog fallback coordinates. Preserve existing curated records; do not
+redirect the review-table JSON over `once_around_catalog.json` or rerun the frozen
+bootstrap chain.
+
+Regenerate just the two routine outputs:
+
+```sh
+node scripts/generate-videos-json.js
+node scripts/generate_table.js > /tmp/once-around-review.json
+```
+
+The [2026-09-22 sync record](../data/channel-sync-2026-09-22.md) documents the
+verified channel, new IDs, coordinate sources, and placement limitations.
 
 ## Scheduled data refreshes
 

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { BodyPositions } from "./body-positions";
-import { raDecToPosition } from "./geometry/coordinates";
+import { raDecToPosition, positionToRaDec } from "./geometry/coordinates";
 
 // Re-export for consumers that imported from here
 export type { BodyPositions };
@@ -55,7 +55,7 @@ const ARC_GAP = 0.08; // radians (~4.5 degrees) gap between pie slices
 
 // Match video object names to body names for moving objects
 // Returns the body name if matched, null otherwise
-function matchVideoToBody(objectName: string): string | null {
+export function matchVideoToBody(objectName: string): string | null {
   const lowerName = objectName.toLowerCase();
 
   // Exact matches (case-insensitive)
@@ -110,6 +110,10 @@ function matchVideoToBody(objectName: string): string | null {
     if (planet === "gonggong") return "Gonggong"; // Xiangliu
   }
 
+  // Surface and atmospheric features follow their parent planet.
+  if (lowerName === "the two hemispheres of mars" || lowerName === "olympus mons") return "Mars";
+  if (lowerName === "the great red spot") return "Jupiter";
+
   // Special cases for specific moons
   if (lowerName === "triton") return "Neptune"; // Triton is Neptune's moon
   if (lowerName === "janus and epimetheus") return "Saturn"; // Saturn's moons
@@ -119,6 +123,7 @@ function matchVideoToBody(objectName: string): string | null {
   if (lowerName === "mimas") return "Saturn";
   if (lowerName === "titan") return "Saturn";
   if (lowerName === "iapetus") return "Saturn";
+  if (lowerName === "phoebe") return "Saturn";
   // Jupiter moons
   if (lowerName === "amalthea") return "Jupiter";
   if (lowerName === "callisto") return "Jupiter";
@@ -283,19 +288,24 @@ function createArcHitGeometry(
   return geometry;
 }
 
+// Scratch vectors reused by grouped-label updates in the render loop.
+const groupedLabelRadial = new THREE.Vector3();
+const groupedLabelEast = new THREE.Vector3();
+const groupedLabelNorth = new THREE.Vector3();
+
 // Calculate label position for videos in a group, spreading them radially
 function calculateGroupedLabelPosition(
   markerPosition: THREE.Vector3,
   sliceIndex: number,
   totalSlices: number,
-  labelOffset: number
+  labelOffset: number,
+  out = new THREE.Vector3()
 ): THREE.Vector3 {
-  const radial = markerPosition.clone().normalize();
-  const worldUp = new THREE.Vector3(0, 1, 0);
+  const radial = groupedLabelRadial.copy(markerPosition).normalize();
 
   // Calculate tangent vectors on the sphere surface
-  const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
-  const north = new THREE.Vector3().crossVectors(radial, east).normalize();
+  const east = groupedLabelEast.set(0, 1, 0).cross(radial).normalize();
+  const north = groupedLabelNorth.crossVectors(radial, east).normalize();
 
   // Calculate arc center angle for this slice
   const totalGap = ARC_GAP * totalSlices;
@@ -305,14 +315,10 @@ function calculateGroupedLabelPosition(
   const arcCenter = thetaStart + arcLength / 2;
 
   // Direction from marker center toward arc center (on tangent plane)
-  const labelDir = east
-    .clone()
-    .multiplyScalar(Math.cos(arcCenter))
-    .add(north.clone().multiplyScalar(-Math.sin(arcCenter)));
-
-  // Offset position on the sphere
-  const labelPos = markerPosition.clone().add(labelDir.multiplyScalar(labelOffset));
-  return labelPos.normalize().multiplyScalar(markerPosition.length());
+  out.copy(markerPosition)
+    .addScaledVector(east, Math.cos(arcCenter) * labelOffset)
+    .addScaledVector(north, -Math.sin(arcCenter) * labelOffset);
+  return out.normalize().multiplyScalar(markerPosition.length());
 }
 
 // Create a text sprite using canvas
@@ -699,7 +705,13 @@ export function createVideoMarkersLayer(
 
     if (intersects.length > 0) {
       const videoId = intersects[0].object.userData.videoId;
-      return videoDataMap.get(videoId) || null;
+      const video = videoDataMap.get(videoId);
+      if (!video) return null;
+      // Clicks must navigate to the moving marker, not its catalog epoch.
+      if (video.moving && matchVideoToBody(video.object)) {
+        return { ...video, ...positionToRaDec(intersects[0].object.position) };
+      }
+      return video;
     }
     return null;
   }
@@ -711,7 +723,8 @@ export function createVideoMarkersLayer(
       const bodyPos = newBodyPositions.get(bodyName);
       if (!bodyPos) continue;
 
-      for (const { videoId, ringMesh, hitMesh } of videoMeshList) {
+      for (let sliceIndex = 0; sliceIndex < videoMeshList.length; sliceIndex++) {
+        const { videoId, ringMesh, hitMesh } = videoMeshList[sliceIndex];
         // Update mesh positions
         ringMesh.position.copy(bodyPos);
         ringMesh.lookAt(0, 0, 0);
@@ -719,20 +732,22 @@ export function createVideoMarkersLayer(
         hitMesh.lookAt(0, 0, 0);
 
         // Update stored marker position
-        markerPositions.set(videoId, bodyPos.clone());
+        markerPositions.get(videoId)!.copy(bodyPos);
 
         // Update label position relative to new marker position
         const label = labels.get(videoId);
         if (label) {
-          // Calculate label offset (down from marker)
-          const radial = bodyPos.clone().normalize();
-          const worldUp = new THREE.Vector3(0, 1, 0);
-          const east = new THREE.Vector3().crossVectors(worldUp, radial).normalize();
-          const down = new THREE.Vector3().crossVectors(radial, east).normalize();
-          const labelOffset = 1.5;
-          const newLabelPos = bodyPos.clone().add(down.multiplyScalar(labelOffset));
-          label.position.copy(newLabelPos);
-          labelPositions.set(videoId, newLabelPos);
+          const newLabelPos = label.position;
+          if (videoMeshList.length > 1) {
+            calculateGroupedLabelPosition(bodyPos, sliceIndex, videoMeshList.length, 2.0, newLabelPos);
+          } else {
+            // Single labels sit below the marker. Reuse the same scratch vectors.
+            const radial = groupedLabelRadial.copy(bodyPos).normalize();
+            const east = groupedLabelEast.set(0, 1, 0).cross(radial).normalize();
+            const down = groupedLabelNorth.crossVectors(radial, east).normalize();
+            newLabelPos.copy(bodyPos).addScaledVector(down, 1.5);
+          }
+          labelPositions.get(videoId)!.copy(newLabelPos);
 
           // Update flag line (marker to label)
           const flagIndex = videoFlagLineIndex.get(videoId);
