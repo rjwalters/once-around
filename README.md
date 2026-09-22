@@ -1,6 +1,6 @@
 # Once Around the Night Sky
 
-An interactive celestial visualizer for Paul Fellows' excellent [Once Around](https://www.youtube.com/@oncearound) series of astronomy YouTube videos.
+An interactive celestial visualizer for Paul Fellows' excellent [Once Around](https://www.youtube.com/@paulfellows5411) series of astronomy YouTube videos.
 
 <p align="center">
   <a href="https://once-around.pages.dev">
@@ -119,10 +119,11 @@ differ in how (and how often) they actually run:
 
 - **On-demand catalog pipeline** — run manually whenever new videos are
   published on the channel; there is no schedule or CI job behind it, so it sits
-  dormant between runs (last run 2026-07-05/06, adding 42 videos). Transcript
+  dormant between runs (last [sync on 2026-09-22](data/channel-sync-2026-09-22.md),
+  adding 15 videos to the inventory and 10 to the map). Transcript
   scraping (`get_transcripts.sh`, `scrape_transcripts.js`) and catalog building
   (`build_catalog.js`). Catalog changes are then applied by hand-editing
-  `data/catalog.json` / `data/final_placements.json` and re-running
+  the [four catalog sources](scripts/README.md#on-demand-catalog-pipeline) and re-running
   `generate-videos-json.js` (produces `apps/web/public/videos.json`) and
   `generate_table.js` (produces `data/catalog.csv`).
 - **Scheduled data refreshes** — the two generators that GitHub Actions runs on
@@ -188,7 +189,7 @@ pnpm deploy:prod
 
 ## Credits
 
-- [Paul Fellows / Once Around](https://www.youtube.com/@oncearound) for the inspiring video series
+- [Paul Fellows / Once Around](https://www.youtube.com/@paulfellows5411) for the inspiring video series
 - Yale Bright Star Catalog for star data
 - VSOP87 theory by Pierre Bretagnon and Gerard Francou
 - [NASA/JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) for ephemerides and reference data

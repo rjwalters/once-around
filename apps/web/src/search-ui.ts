@@ -4,6 +4,7 @@
 
 import { search, TYPE_COLORS, type SearchItem, type SearchResult } from "./search";
 import { showToast } from "./toast";
+import { matchVideoToBody } from "./videos";
 
 // Satellite name to index mapping (must match engine.ts SATELLITES order)
 const SATELLITE_NAME_TO_INDEX: Record<string, number> = {
@@ -138,6 +139,16 @@ export function createSearchUI(options: SearchUIOptions): SearchUI {
     // For planets and minor bodies, get current position (they move with time)
     if (result.type === 'planet' || result.type === 'minor_body') {
       const pos = getPlanetPosition(result.name);
+      if (pos) {
+        ra = pos.ra;
+        dec = pos.dec;
+      }
+    }
+
+    // Videos about modeled bodies/features use the same position as their markers.
+    if (result.type === "video") {
+      const bodyName = matchVideoToBody(result.name);
+      const pos = bodyName ? getPlanetPosition(bodyName) : null;
       if (pos) {
         ra = pos.ra;
         dec = pos.dec;
