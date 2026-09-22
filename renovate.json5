@@ -1,6 +1,5 @@
 // Renovate configuration for rjwalters/once-around
 // Docs: https://docs.renovatebot.com/configuration-options/
-// Pipeline docs: docs/ops/dependency-security-pipeline.md
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
@@ -31,7 +30,7 @@
   // Never auto-merge. Agents review, humans merge.
   "automerge": false,
 
-  // Create PRs as drafts — consistent with AGENTS.md PR policy
+  // Keep dependency updates as drafts for review.
   "draftPR": true,
 
   // --- Schedule ---
@@ -40,22 +39,20 @@
   // both this schedule and minimumReleaseAge (Renovate built-in behavior).
   // Ref: https://docs.renovatebot.com/key-concepts/minimum-release-age/
   // "Security updates bypass any minimumReleaseAge checks"
-  "schedule": ["before 10am on monday"],
+  "schedule": ["* 0-9 * * 1"],
   "timezone": "UTC",
 
-  // --- Python (uv) ---
-
-  // Update lockfile without widening pyproject.toml version ranges.
-  // Renovate detects uv.lock natively.
+  // Update pnpm and Cargo lockfiles within existing manifest ranges.
+  // Updates outside those ranges also update the manifests.
   "rangeStrategy": "update-lockfile",
 
-  // Refresh uv.lock even when no direct dependency range changes.
+  // Refresh supported lockfiles even when direct dependency ranges do not change.
   // This is how Renovate keeps transitive dependencies current.
   // Match the repo's Monday morning schedule explicitly; Renovate otherwise
   // applies a separate lock-file-maintenance default schedule.
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["before 10am on monday"]
+    "schedule": ["* 0-9 * * 1"]
   },
 
   // --- PR behavior ---
@@ -64,38 +61,32 @@
   "prConcurrentLimit": 5,
 
   // Add release notes and changelogs to PR body for agent review
-  "fetchReleaseNotes": true,
+  "fetchChangeLogs": "pr",
 
   // --- Package grouping ---
 
   "packageRules": [
-    // Group all non-major Python dependency updates into one PR
+    // Group minor/patch updates separately for each workspace ecosystem.
     {
-      "groupName": "python minor/patch dependencies",
-      "matchManagers": ["pep621", "uv"],
+      "groupName": "npm minor/patch dependencies",
+      "matchManagers": ["npm"],
       "matchUpdateTypes": ["minor", "patch"]
     },
 
-    // Python major updates get individual PRs (more risk, need individual review)
     {
-      "matchManagers": ["pep621", "uv"],
-      "matchUpdateTypes": ["major"]
+      "groupName": "cargo minor/patch dependencies",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"]
     },
 
-    // Group all GitHub Actions SHA updates into one PR
-    // AGENTS.md mandates SHA pinning with inline version comments (# vX.Y.Z)
-    // Renovate preserves these comments natively when updating digests
+    // Group GitHub Actions minor/patch and digest updates.
     {
       "groupName": "github-actions",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest"]
-    },
-
-    // GitHub Actions major updates get individual PRs
-    {
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["major"]
     }
+
+    // Major updates remain separate under config:recommended.
 
     // Note: security/vulnerability PRs bypass both schedule and
     // minimumReleaseAge by default (Renovate built-in behavior).
@@ -105,11 +96,16 @@
 
   // --- Ignored paths ---
 
-  // Don't touch vendored dependencies (submodules)
+  // Keep dependency/vendor trees, installed Loom tooling, and generated WASM
+  // package manifests outside the application update queue.
   "ignorePaths": [
-    "vendor/**",
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
     ".claude/**",
-    "infra/pulumi/**"
+    ".loom/**",
+    "apps/web/src/wasm/**",
+    "crates/sky_engine/pkg/**"
   ],
 
   // --- Vulnerability alerts ---
