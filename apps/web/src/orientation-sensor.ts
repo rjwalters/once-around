@@ -1,5 +1,11 @@
 /** North-referenced sensor sampling shared by AR and the standalone diagnostic.
  * No renderer, Three.js, or WASM dependencies belong in this module.
+ *
+ * Orientation events report significant changes, not a sensor heartbeat. An
+ * old sample can mean a stationary phone, a paused tab, or a sensor problem;
+ * its freshness cannot be established from silence alone. We conservatively
+ * expire samples for measurement and ask for slight motion to obtain a new
+ * reading. "Stale" is not a diagnosis of broken hardware or poor calibration.
  */
 export const ORIENTATION_MAX_AGE_MS = 3000;
 
@@ -136,8 +142,8 @@ export function createOrientationSensor(callbacks: {
     updateState({
       sensorStatus: latest ? "stale" : "unavailable",
       sensorMessage: latest
-        ? "Orientation readings stopped. Waiting for a fresh compass reading."
-        : "No north-referenced orientation is available. Check motion permissions and compass calibration.",
+        ? "Need a recent compass reading. Move the phone slightly to refresh."
+        : "No compass direction received. Move the phone slightly or check motion permissions.",
       headingReference: null,
       compassAccuracy: null,
     });
@@ -187,7 +193,7 @@ export function createOrientationSensor(callbacks: {
     latest = null;
     updateState({
       enabled: true, permissionGranted: true, sensorStatus: "pending",
-      sensorMessage: "Waiting for a north-referenced compass reading.",
+      sensorMessage: "Waiting for a compass direction. Move the phone slightly.",
       headingReference: null, compassAccuracy: null,
     });
     // Some browsers advertise an absolute event but only deliver usable data

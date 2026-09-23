@@ -32,6 +32,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
 
   let enabled = false;
   let statusMessage = "";
+  let sensorMessage = "";
 
   // Get DOM elements
   const arModeBtn = document.getElementById("ar-mode-btn");
@@ -46,12 +47,10 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
       }
     },
     onStateChange: (state) => {
-      if (arModeBtn) {
-        arModeBtn.classList.toggle("active", state.enabled);
-      }
-      if (arToggleMobile) {
-        arToggleMobile.classList.toggle("active", state.enabled);
-      }
+      // Keep sensor validity independent of clock/GPS status. In particular,
+      // a later GPS success must not erase a stale or unavailable compass.
+      sensorMessage = state.sensorMessage ?? "";
+      if (enabled) updateUI(true);
     },
   });
 
@@ -65,7 +64,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
       arToggleMobile.setAttribute("aria-pressed", String(isEnabled));
     }
     if (arModeStatus) {
-      const text = message ?? (isEnabled ? statusMessage : "");
+      const text = message ?? (isEnabled ? [sensorMessage, statusMessage].filter(Boolean).join(" ") : "");
       arModeStatus.textContent = text;
       arModeStatus.classList.toggle("visible", !!text);
     }
@@ -96,7 +95,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
     if (deviceOrientation.requiresPermission()) {
       const granted = await deviceOrientation.requestPermission();
       if (!granted) {
-        updateUI(false, "Permission denied");
+        updateUI(false, deviceOrientation.getState().sensorMessage ?? "Permission denied");
         return;
       }
     }

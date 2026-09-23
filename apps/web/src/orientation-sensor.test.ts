@@ -103,6 +103,7 @@ describe("sensor lifecycle", () => {
     dispatch(browser, { ...absolute, absolute: false });
     vi.advanceTimersByTime(ORIENTATION_MAX_AGE_MS);
     expect(sensor.getState().sensorStatus).toBe("unavailable");
+    expect(sensor.getState().sensorMessage).toContain("No compass direction received");
     expect(onSample).not.toHaveBeenCalled();
     dispatch(browser, absolute, "deviceorientation");
     expect(sensor.getState().sensorStatus).toBe("usable");
@@ -121,6 +122,24 @@ describe("sensor lifecycle", () => {
     vi.advanceTimersByTime(1);
     expect(sensor.getState()).toMatchObject({ sensorStatus: "stale", headingReference: null, compassAccuracy: null });
     expect(sensor.getSample()).toBeNull();
+    sensor.stop();
+  });
+
+  it("treats silence after a stationary pose as unverified freshness, not sensor failure", () => {
+    const browser = fakeBrowser();
+    const sensor = createOrientationSensor({ onSample: vi.fn(), onStateChange: vi.fn() });
+    sensor.start();
+    dispatch(browser);
+    // Browsers need not emit another event until the device moves significantly.
+    vi.advanceTimersByTime(ORIENTATION_MAX_AGE_MS);
+    expect(sensor.getState()).toMatchObject({ sensorStatus: "stale" });
+    expect(sensor.getState().sensorMessage).toContain("Need a recent compass reading");
+    expect(sensor.getState().sensorMessage).toContain("Move the phone slightly");
+    expect(sensor.getState().sensorMessage).not.toMatch(/stopped|failed|calibrat/i);
+    expect(sensor.getSample()).toBeNull();
+    dispatch(browser, { ...absolute, alpha: 0.2 });
+    expect(sensor.getState()).toMatchObject({ sensorStatus: "usable", sensorMessage: null });
+    expect(sensor.getSample()?.alpha).toBe(0.2);
     sensor.stop();
   });
 
