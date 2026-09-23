@@ -13,6 +13,7 @@ export interface ObserverLocation {
 
 export interface LocationManager {
   getLocation(): ObserverLocation;
+  getState(): LocationState;
   setLocation(location: ObserverLocation): void;
   setLocationFromCity(city: City): void;
   requestGeolocation(): Promise<ObserverLocation | null>;
@@ -21,6 +22,29 @@ export interface LocationManager {
 
 interface LocationCallbacks {
   onLocationChange: (location: ObserverLocation) => void;
+  onStateChange?: (state: LocationState) => void;
+}
+
+export interface LocationState {
+  location: ObserverLocation;
+  source: "selected" | "gps";
+  status: "idle" | "acquiring" | "ready" | "error";
+  accuracy: number | null;
+  timestamp: number | null;
+  error: string | null;
+}
+
+/** Always identify the site still in use, including when GPS fails. */
+export function formatObservingLocation(state: LocationState): string {
+  const site = `${state.location.name ?? "Custom"} (${formatLocationShort(state.location)})`;
+  const source = state.source === "gps" ? "GPS fix" : "Selected site";
+  const accuracy = state.source === "gps" && state.accuracy !== null
+    ? `, ±${Math.round(state.accuracy)} m` : "";
+  const when = state.timestamp !== null ? ` at ${new Date(state.timestamp).toLocaleTimeString()}` : "";
+  const location = `${source}: ${site}${accuracy}${when}`;
+  if (state.status === "acquiring") return `Getting current location…\nUsing ${location}`;
+  if (state.error) return `${state.error}\nUsing ${location}. Choose a site in Location if needed.`;
+  return location;
 }
 
 /**
@@ -75,6 +99,20 @@ export function createLocationManager(
     longitude: DEFAULT_LOCATION.lon,
     name: DEFAULT_LOCATION.name,
   };
+  // Persisted coordinates are a selected site, never proof of a fresh GPS fix.
+  let state: LocationState = {
+    location: currentLocation, source: "selected", status: "idle",
+    accuracy: null, timestamp: null, error: null,
+  };
+  let requestId = 0;
+
+  function getState(): LocationState {
+    return { ...state, location: getLocation() };
+  }
+
+  function notify(): void {
+    callbacks.onStateChange?.(getState());
+  }
 
   function getLocation(): ObserverLocation {
     return { ...currentLocation };
@@ -91,13 +129,18 @@ export function createLocationManager(
       return;
     }
 
+    // A manual choice supersedes any in-flight GPS request.
+    requestId++;
     currentLocation = {
       latitude: location.latitude,
       longitude: location.longitude,
       name: location.name ?? "Custom",
     };
 
-    callbacks.onLocationChange(currentLocation);
+    state = { location: currentLocation, source: "selected", status: "ready",
+      accuracy: null, timestamp: null, error: null };
+    callbacks.onLocationChange(getLocation());
+    notify();
   }
 
   function setLocationFromCity(city: City): void {
@@ -109,37 +152,62 @@ export function createLocationManager(
   }
 
   async function requestGeolocation(): Promise<ObserverLocation | null> {
-    if (!("geolocation" in navigator)) {
-      console.warn("Geolocation not supported");
+    const id = ++requestId;
+    state = { ...state, status: "acquiring", error: null };
+    notify();
+
+    function fail(message: string): null {
+      if (id === requestId) {
+        state = { ...state, status: "error", error: message };
+        notify();
+      }
       return null;
     }
 
+    if (!navigator.geolocation) return fail("Location is unavailable in this browser.");
+
     return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location: ObserverLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            name: "My Location",
-          };
-          setLocation(location);
-          resolve(location);
-        },
-        (error) => {
-          console.warn("Geolocation error:", error.message);
-          resolve(null);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 10000,
-          maximumAge: 300000, // Cache for 5 minutes
-        }
-      );
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (id !== requestId) { resolve(null); return; }
+            if (!isValidLatitude(position.coords.latitude) || !isValidLongitude(position.coords.longitude)) {
+              resolve(fail("Location returned invalid coordinates."));
+              return;
+            }
+            const location: ObserverLocation = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              name: "My Location",
+            };
+            currentLocation = location;
+            state = { location, source: "gps", status: "ready",
+              accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+              timestamp: position.timestamp, error: null };
+            callbacks.onLocationChange(getLocation());
+            notify();
+            resolve(getLocation());
+          },
+          (error) => {
+            const message = error.code === 1 ? "Location permission denied."
+              : error.code === 3 ? "Location request timed out." : "Current location is unavailable.";
+            resolve(fail(message));
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0,
+          }
+        );
+      } catch {
+        resolve(fail("Current location is unavailable."));
+      }
     });
   }
 
   return {
     getLocation,
+    getState,
     setLocation,
     setLocationFromCity,
     requestGeolocation,
