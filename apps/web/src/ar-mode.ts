@@ -13,12 +13,14 @@ export interface ARModeOptions {
   }) => void;
   setControlsEnabled: (enabled: boolean) => void;
   onModeChange: (enabled: boolean) => void;
+  onBeforeEnable?: () => void;
 }
 
 export interface ARModeManager {
   isEnabled: () => boolean;
   toggle: () => Promise<void>;
   disable: () => void;
+  setStatusMessage: (message: string) => void;
   setupEventListeners: () => void;
 }
 
@@ -29,6 +31,7 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
   const { onOrientationChange, setControlsEnabled, onModeChange } = options;
 
   let enabled = false;
+  let statusMessage = "";
 
   // Get DOM elements
   const arModeBtn = document.getElementById("ar-mode-btn");
@@ -62,8 +65,9 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
       arToggleMobile.setAttribute("aria-pressed", String(isEnabled));
     }
     if (arModeStatus) {
-      arModeStatus.textContent = message ?? "";
-      arModeStatus.classList.toggle("visible", !!message);
+      const text = message ?? (isEnabled ? statusMessage : "");
+      arModeStatus.textContent = text;
+      arModeStatus.classList.toggle("visible", !!text);
     }
   }
 
@@ -79,7 +83,6 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
   async function toggle(): Promise<void> {
     if (!deviceOrientation.isSupported()) {
       updateUI(false, "Not supported on this device");
-      setTimeout(() => updateUI(false), 3000);
       return;
     }
 
@@ -94,11 +97,11 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
       const granted = await deviceOrientation.requestPermission();
       if (!granted) {
         updateUI(false, "Permission denied");
-        setTimeout(() => updateUI(false), 3000);
         return;
       }
     }
 
+    options.onBeforeEnable?.();
     deviceOrientation.start();
     setControlsEnabled(false);
     enabled = true;
@@ -138,6 +141,10 @@ export function createARModeManager(options: ARModeOptions): ARModeManager {
     isEnabled: () => enabled,
     toggle,
     disable,
+    setStatusMessage: (message) => {
+      statusMessage = message;
+      if (enabled) updateUI(true);
+    },
     setupEventListeners,
   };
 }

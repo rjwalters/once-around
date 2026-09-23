@@ -173,7 +173,7 @@
       <div class="control-group">
         <label>Date & Time (Local)</label>
         <div class="datetime-row">
-          <input type="datetime-local" id="datetime" />
+          <input type="datetime-local" id="datetime" step="1" />
           <button id="time-now" class="time-now-btn" title="Jump to current time (N)">NOW</button>
         </div>
         <div class="time-step-controls">
@@ -603,7 +603,7 @@
       </div>
     </div>
 
-    <div id="ar-mode-status" class="ar-mode-status"></div>
+    <div id="ar-mode-status" class="ar-mode-status" role="status" aria-live="polite"></div>
 
     <div id="eclipse-banner" class="eclipse-banner hidden">
       <div class="eclipse-banner-main">
