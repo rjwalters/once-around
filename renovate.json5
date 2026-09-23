@@ -1,0 +1,116 @@
+// Renovate configuration for rjwalters/once-around
+// Docs: https://docs.renovatebot.com/configuration-options/
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Extend recommended defaults, plus security-focused presets
+  "extends": [
+    "config:recommended",
+    "security:openssf-scorecard",
+    ":dependencyDashboard"
+  ],
+
+  // Override Mend-hosted "silent" default (applied when app is installed on
+  // "All repositories").  "full" lets Renovate create branches, PRs, and the
+  // Dependency Dashboard issue.
+  "mode": "full",
+
+  // --- Supply chain security ---
+
+  // 14-day quarantine: do not propose updates until 14 days after release.
+  // This lets registries catch and yank malicious packages before we see them.
+  // Ref: https://docs.renovatebot.com/key-concepts/minimum-release-age/
+  "minimumReleaseAge": "14 days",
+
+  // Flag known vulnerabilities from the OSV database
+  "osvVulnerabilityAlerts": true,
+
+  // --- Merge policy ---
+
+  // Never auto-merge. Agents review, humans merge.
+  "automerge": false,
+
+  // Keep dependency updates as drafts for review.
+  "draftPR": true,
+
+  // --- Schedule ---
+
+  // Weekly on Monday mornings (UTC). Security/vulnerability PRs bypass
+  // both this schedule and minimumReleaseAge (Renovate built-in behavior).
+  // Ref: https://docs.renovatebot.com/key-concepts/minimum-release-age/
+  // "Security updates bypass any minimumReleaseAge checks"
+  "schedule": ["* 0-9 * * 1"],
+  "timezone": "UTC",
+
+  // Update pnpm and Cargo lockfiles within existing manifest ranges.
+  // Updates outside those ranges also update the manifests.
+  "rangeStrategy": "update-lockfile",
+
+  // Refresh supported lockfiles even when direct dependency ranges do not change.
+  // This is how Renovate keeps transitive dependencies current.
+  // Match the repo's Monday morning schedule explicitly; Renovate otherwise
+  // applies a separate lock-file-maintenance default schedule.
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* 0-9 * * 1"]
+  },
+
+  // --- PR behavior ---
+
+  // Limit concurrent PRs to keep review queue manageable
+  "prConcurrentLimit": 5,
+
+  // Add release notes and changelogs to PR body for agent review
+  "fetchChangeLogs": "pr",
+
+  // --- Package grouping ---
+
+  "packageRules": [
+    // Group minor/patch updates separately for each workspace ecosystem.
+    {
+      "groupName": "npm minor/patch dependencies",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+
+    {
+      "groupName": "cargo minor/patch dependencies",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+
+    // Group GitHub Actions minor/patch and digest updates.
+    {
+      "groupName": "github-actions",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest"]
+    }
+
+    // Major updates remain separate under config:recommended.
+
+    // Note: security/vulnerability PRs bypass both schedule and
+    // minimumReleaseAge by default (Renovate built-in behavior).
+    // Ref: https://docs.renovatebot.com/key-concepts/minimum-release-age/
+    // No packageRule needed — vulnerabilityAlerts config below handles it.
+  ],
+
+  // --- Ignored paths ---
+
+  // Keep dependency/vendor trees, installed Loom tooling, and generated WASM
+  // package manifests outside the application update queue.
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    ".claude/**",
+    ".loom/**",
+    "apps/web/src/wasm/**",
+    "crates/sky_engine/pkg/**"
+  ],
+
+  // --- Vulnerability alerts ---
+
+  "vulnerabilityAlerts": {
+    "enabled": true
+  }
+}
