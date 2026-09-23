@@ -18,20 +18,12 @@
 //!
 //! # Reference-frame matching (read before touching tolerances)
 //!
-//! The engine mixes reference frames by construction, so each body is compared
-//! to the Horizons column that its algorithm actually targets:
-//!
-//! | Engine family                         | Frame produced            | Compared to      |
-//! |---------------------------------------|---------------------------|------------------|
-//! | Sun, planets (VSOP87A)                | ~J2000 (+ of-date nutation)| astrometric ICRF |
-//! | Pluto, comets (J2000 orbital elements)| ~J2000                    | astrometric ICRF |
-//! | Moon (Meeus, equinox-of-date)         | apparent of date          | apparent         |
-//!
-//! The engine deliberately omits precession on its VSOP87/element bodies, so
-//! comparing those against Horizons *apparent* (which includes ~0.36 deg of
-//! accumulated precession by 2026) would be meaningless; astrometric ICRF is the
-//! correct, tight reference for them. The Meeus Moon is the opposite case: its
-//! mean arguments already carry precession, so it matches *apparent*.
+//! All engine directions now use fixed J2000 equatorial axes. Sun, planets,
+//! minor bodies and comets are checked against the same astrometric ICRF column
+//! as before. Moon directions are precessed back to mean-of-date for comparison
+//! against Horizons apparent-of-date. Nutation is omitted consistently, so this
+//! comparison honestly includes that small residual. Independent *horizontal*
+//! apparent checks at several sites live in sky_engine/tests/observed_positions.rs.
 //!
 //! # Tolerances
 //!
@@ -43,6 +35,7 @@
 //! before loosening.
 
 use sky_engine_core::coords::{apply_topocentric_correction, cartesian_to_ra_dec};
+use sky_engine_core::frames::j2000_to_mean_of_date;
 use sky_engine_core::planets::{AU_TO_KM, compute_all_body_positions_full};
 use sky_engine_core::{
     CartesianCoord, SkyTime, TimeContext, compute_all_comet_positions,
@@ -59,10 +52,10 @@ const CSV: &str = include_str!("data/horizons_reference.csv");
 // up with margin. The `print_horizons_residuals` helper (ignored, at the bottom)
 // prints the live residuals used to justify these.
 
-/// Sun + planets vs astrometric ICRF. Residuals come from the engine adding
-/// of-date nutation / true obliquity to otherwise-J2000 positions and omitting
-/// planetary light-time (both bounded, ~arcminute). Measured worst case across
-/// the fixture is 0.80' (Mercury, 2030); 3' leaves ~4x margin for un-sampled
+/// Sun + planets vs astrometric ICRF. Residuals include omitted planetary
+/// light-time and the Sun's approximate aberration. Measured worst case across
+/// the fixture after #119 is 0.52' (Mercury, 2030); the unchanged 3' bound leaves
+/// margin for un-sampled
 /// epochs/phases while still catching real regressions.
 const TOL_PLANET_DEG: f64 = 3.0 / 60.0;
 
@@ -70,7 +63,7 @@ const TOL_PLANET_DEG: f64 = 3.0 / 60.0;
 /// astrometric ICRF. Each body uses real JPL Horizons osculating elements at the
 /// common epoch JDTDB 2461227.5 (2026-07-06); Pluto keeps its fixed J2000
 /// elements. Every body is validated at that 2026 epoch, where two-body
-/// propagation is essentially exact -- measured worst case is Pluto at 0.88', all
+/// propagation is essentially exact -- measured worst case is Pluto at 0.86', all
 /// others < 0.4'. The slow outer bodies are also validated at 2030 (worst 0.53');
 /// see `fetch_horizons_reference.py` for why the main-belt and NEO bodies are
 /// validated only near the element epoch. 3' leaves ~3x margin over the worst
@@ -79,7 +72,7 @@ const TOL_MINORBODY_DEG: f64 = 3.0 / 60.0;
 
 /// Geocentric Moon vs apparent. The engine uses a *truncated* subset of the
 /// Meeus lunar series (~60 of the longitude terms). Measured worst case is only
-/// 0.33'; 2.5' leaves generous margin for perigee/apogee phases not sampled.
+/// 0.13'; 2.5' leaves generous margin for perigee/apogee phases not sampled.
 const TOL_MOON_DEG: f64 = 2.5 / 60.0;
 
 /// Topocentric Moon vs apparent, from one observer site. Layers the engine's
@@ -187,7 +180,14 @@ fn engine_dir_dist(r: &Ref) -> Option<(CartesianCoord, f64)> {
                 "Neptune" => 8,
                 other => panic!("unknown body {other}"),
             };
-            Some((bodies[idx].direction, bodies[idx].distance_km))
+            Some((
+                if r.kind == "moon" {
+                    j2000_to_mean_of_date(bodies[idx].direction, time.julian_date_tdb())
+                } else {
+                    bodies[idx].direction
+                },
+                bodies[idx].distance_km,
+            ))
         }
         "minorbody" => {
             let minor = compute_all_minor_body_positions(&time);
@@ -311,9 +311,9 @@ fn topocentric_moon_matches_horizons() {
     let time = epoch_to_time(&r.epoch_utc);
     let ctx = TimeContext::new(&time);
 
-    // Engine geocentric apparent Moon -> RA/Dec.
+    // Engine J2000 Moon -> mean-of-date RA/Dec, consistent with GMST.
     let moon = compute_moon_position_full(&time);
-    let (geo_ra, geo_dec) = cartesian_to_ra_dec(&moon.direction);
+    let (geo_ra, geo_dec) = cartesian_to_ra_dec(&j2000_to_mean_of_date(moon.direction, ctx.jde));
 
     // Apply topocentric (parallax) correction for the observer site.
     let (topo_ra, topo_dec) = apply_topocentric_correction(
@@ -347,7 +347,7 @@ fn topocentric_moon_matches_horizons() {
 
     // Sanity: parallax actually moved the Moon (geocentric vs topocentric differ
     // by up to ~1 deg), so this is a real topocentric check, not a no-op.
-    let geo_dir = moon.direction;
+    let geo_dir = j2000_to_mean_of_date(moon.direction, ctx.jde);
     let shift = sep_deg(&geo_dir, &engine_dir);
     assert!(
         shift > 5.0 / 60.0,

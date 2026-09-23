@@ -5,6 +5,7 @@
 //! Includes Earth shadow calculations for visibility determination.
 
 use crate::coords::{CartesianCoord, compute_gmst};
+use crate::frames::{j2000_to_mean_of_date, mean_of_date_to_j2000};
 use crate::planets::{AU_TO_KM, Planet, SUN_RADIUS_KM, heliocentric_position};
 use crate::time::SkyTime;
 use std::f64::consts::PI;
@@ -562,8 +563,11 @@ fn eci_to_topocentric(
     observer_lon_rad: f64,
     gmst: f64,
     observer_height_km: f64,
+    jd: f64,
 ) -> (CartesianCoord, f64, f64, f64) {
-    let (x, y, z) = eci;
+    // Horizons ECI vectors are J2000; GMST and the local ENU basis are of date.
+    let of_date = j2000_to_mean_of_date(CartesianCoord::new(eci.0, eci.1, eci.2), jd);
+    let (x, y, z) = (of_date.x, of_date.y, of_date.z);
 
     // Observer position in ECEF (Earth-Centered Earth-Fixed)
     let cos_lat = observer_lat_rad.cos();
@@ -620,7 +624,12 @@ fn eci_to_topocentric(
         z: dz / distance,
     };
 
-    (direction, distance, altitude_deg, azimuth_deg)
+    (
+        mean_of_date_to_j2000(direction, jd),
+        distance,
+        altitude_deg,
+        azimuth_deg,
+    )
 }
 
 /// Compute a satellite's position as seen from an observer.
@@ -654,6 +663,7 @@ pub fn compute_satellite_position(
         observer_lon_rad,
         gmst,
         observer_height_km,
+        jd,
     );
 
     // Get Sun position for shadow calculation
@@ -767,6 +777,39 @@ pub fn compute_iss_position(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn satellite_observer_and_render_direction_share_j2000_axes() {
+        // Independent ERFA t_pmat76 reference, J2000 -> MJD 50123.9999.
+        // Construct a satellite directly above a sea-level equatorial observer
+        // in those reference axes. Incorrect of-date subtraction moves it off
+        // the zenith; returning of-date XYZ misaligns it with the fixed sky map.
+        let jd = 2_400_000.5 + 50_123.999_9;
+        let gmst = 0.0;
+        let equatorial_zenith_j2000 = CartesianCoord::new(
+            0.999_999_550_432_835_1,
+            0.000_869_663_220_948_096_1,
+            0.000_377_915_347_495_988_85,
+        );
+        let r = EARTH_RADIUS_KM + 400.0;
+        let (dir, distance, alt, _) = eci_to_topocentric(
+            (
+                r * equatorial_zenith_j2000.x,
+                r * equatorial_zenith_j2000.y,
+                r * equatorial_zenith_j2000.z,
+            ),
+            0.0,
+            0.0,
+            gmst,
+            0.0,
+            jd,
+        );
+        assert!((distance - 400.0).abs() < 1e-8);
+        assert!((alt - 90.0).abs() < 1e-6);
+        assert!((dir.x - equatorial_zenith_j2000.x).abs() < 1e-12);
+        assert!((dir.y - equatorial_zenith_j2000.y).abs() < 1e-12);
+        assert!((dir.z - equatorial_zenith_j2000.z).abs() < 1e-12);
+    }
 
     #[test]
     fn test_ephemeris_binary_format() {

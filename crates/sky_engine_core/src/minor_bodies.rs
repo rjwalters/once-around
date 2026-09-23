@@ -29,6 +29,7 @@
 //! (Apophis, Bennu), whose 2-body elements become meaningless across an Earth
 //! encounter. See the per-family tolerances and caveats in that test.
 
+use crate::coords::OBLIQUITY_J2000;
 use crate::coords::{CartesianCoord, ecliptic_to_equatorial};
 use crate::planets::AU_TO_KM;
 use crate::time::SkyTime;
@@ -479,7 +480,7 @@ pub fn compute_minor_body_position(body: MinorBody, time: &SkyTime) -> MinorBody
 /// Compute a minor body's position using a shared [`TimeContext`].
 ///
 /// Bit-identical to [`compute_minor_body_position`]: shares Earth's heliocentric
-/// vector and the true obliquity, which would otherwise be recomputed identically.
+/// vector and the epoch. Directions use fixed J2000 obliquity.
 pub fn compute_minor_body_position_with_ctx(
     body: MinorBody,
     ctx: &TimeContext,
@@ -510,8 +511,8 @@ pub fn compute_minor_body_position_with_ctx(
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Convert to equatorial coordinates using true obliquity
-    let obliquity = ctx.true_obliquity_rad;
+    // Orbital elements and VSOP87A Earth are in the fixed J2000 ecliptic.
+    let obliquity = OBLIQUITY_J2000;
     let direction = ecliptic_to_equatorial(lon, lat, obliquity).normalize();
 
     // Angular diameter

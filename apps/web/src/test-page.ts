@@ -19,6 +19,8 @@
  * DeviceOrientationManager.
  */
 
+import { julianDate } from "./geometry/precession";
+
 import init, { SkyEngine } from "./wasm/sky_engine";
 import {
   angularSeparation,
@@ -132,7 +134,7 @@ function ephemerisAltAz(
   const { ra, dec } = positionToRaDec({ x: -rustX, y: rustZ, z: rustY });
 
   const lst = computeLST(when, lon);
-  const { altitude, azimuth } = equatorialToHorizontal(ra, dec, lst, lat);
+  const { altitude, azimuth } = equatorialToHorizontal(ra, dec, lst, lat, julianDate(when));
   return { altitude, azimuth, ra, dec };
 }
 

@@ -1,6 +1,8 @@
 use crate::coords::{
     CartesianCoord, compute_aberration, compute_sun_aberration, ecliptic_to_equatorial,
 };
+use crate::coords::{OBLIQUITY_J2000, mean_obliquity};
+use crate::frames::mean_of_date_to_j2000;
 use crate::time::SkyTime;
 use crate::time_context::TimeContext;
 use std::f64::consts::PI;
@@ -147,14 +149,14 @@ pub fn heliocentric_position(planet: Planet, jde: f64) -> (f64, f64, f64) {
     (coords.x, coords.y, coords.z)
 }
 
-/// Compute the apparent direction to a planet as seen from Earth.
+/// Compute the geometric geocentric direction to a planet (no light-time).
 /// Returns a unit vector in equatorial coordinates (J2000).
 pub fn compute_planet_position(planet: Planet, time: &SkyTime) -> CartesianCoord {
     compute_planet_position_full(planet, time).direction
 }
 
 /// Compute the full position data for a planet (direction, distance, angular diameter).
-/// Returns apparent position including nutation corrections for improved accuracy.
+/// Returns a direction in fixed J2000 equatorial axes (no nutation).
 ///
 /// Thin wrapper that constructs its own [`TimeContext`]; retained for standalone
 /// callers. Inside `recompute()` use [`compute_planet_position_with_ctx`] with a
@@ -167,8 +169,7 @@ pub fn compute_planet_position_full(planet: Planet, time: &SkyTime) -> PlanetPos
 /// Compute the full position data for a planet using a shared [`TimeContext`].
 ///
 /// Bit-identical to [`compute_planet_position_full`]: the only shared values used
-/// (Earth's heliocentric vector, nutation Δψ, and true obliquity) are precomputed
-/// with the same functions and would otherwise be recomputed here identically.
+/// (Earth's heliocentric vector and epoch) are precomputed in the context.
 pub fn compute_planet_position_with_ctx(planet: Planet, ctx: &TimeContext) -> PlanetPosition {
     let jde = ctx.jde;
 
@@ -189,11 +190,11 @@ pub fn compute_planet_position_with_ctx(planet: Planet, ctx: &TimeContext) -> Pl
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Apply nutation in longitude to get apparent ecliptic longitude
-    let apparent_lon = lon + ctx.nutation.delta_psi;
+    // VSOP87A is referred to the fixed J2000 ecliptic, not the ecliptic of date.
+    let apparent_lon = lon;
 
-    // Convert to equatorial coordinates using true obliquity (includes nutation)
-    let obliquity = ctx.true_obliquity_rad;
+    // Keep every render direction in the same fixed J2000 equatorial axes.
+    let obliquity = OBLIQUITY_J2000;
     let direction = ecliptic_to_equatorial(apparent_lon, lat, obliquity).normalize();
 
     // Angular diameter: 2 * atan(radius / distance)
@@ -219,7 +220,7 @@ pub fn compute_sun_position(time: &SkyTime) -> CartesianCoord {
 }
 
 /// Compute the full position data for the Sun (direction, distance, angular diameter).
-/// Returns apparent position including nutation corrections for improved accuracy.
+/// Returns a direction in fixed J2000 equatorial axes (no nutation).
 ///
 /// Thin wrapper that constructs its own [`TimeContext`]; retained for standalone
 /// callers. Inside `recompute()` use [`compute_sun_position_with_ctx`].
@@ -250,15 +251,15 @@ pub fn compute_sun_position_with_ctx(ctx: &TimeContext) -> SunPosition {
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Apply nutation in longitude to get apparent ecliptic longitude
-    let apparent_lon = lon + ctx.nutation.delta_psi;
+    // VSOP87A is referred to the fixed J2000 ecliptic, not the ecliptic of date.
+    let apparent_lon = lon;
 
     // Apply aberration correction (~20.5 arcseconds)
     let aberration = compute_sun_aberration(jde);
     let apparent_lon = apparent_lon + aberration;
 
-    // Convert to equatorial coordinates using true obliquity (includes nutation)
-    let obliquity = ctx.true_obliquity_rad;
+    // Keep every render direction in the same fixed J2000 equatorial axes.
+    let obliquity = OBLIQUITY_J2000;
     let direction = ecliptic_to_equatorial(apparent_lon, lat, obliquity).normalize();
 
     // Angular diameter: 2 * atan(radius / distance)
@@ -326,11 +327,12 @@ pub fn compute_moon_position_full(time: &SkyTime) -> MoonPosition {
     compute_moon_position_with_ctx(&ctx)
 }
 
-/// Compute the Moon's apparent position using a shared [`TimeContext`].
+/// Compute the Moon's direction in J2000 equatorial axes using a shared [`TimeContext`].
 ///
 /// Bit-identical to [`compute_moon_position_full`]. The Meeus lunar series itself
 /// is unchanged; only the shared Earth heliocentric vector (used for the aberration
-/// Sun longitude), nutation Δψ, and true obliquity are taken from `ctx`.
+/// Sun longitude) and the epoch are taken from `ctx`. The output axes are J2000;
+/// nutation is deliberately omitted to match the mean-frame observer geometry.
 pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
     let jde = ctx.jde;
 
@@ -563,11 +565,9 @@ pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
     let lon = l_prime_r + sum_l / 1000000.0 * PI / 180.0;
     let lat = sum_b / 1000000.0 * PI / 180.0;
 
-    // Get nutation values (shared)
-    let nutation = ctx.nutation;
-
-    // Apply nutation in longitude to get apparent ecliptic longitude
-    let apparent_lon = lon + nutation.delta_psi;
+    // Meeus lunar arguments are already mean equinox-of-date. Do not precess
+    // them forward again or add nutation to an otherwise mean-frame map.
+    let apparent_lon = lon;
 
     // Compute Sun's ecliptic longitude for aberration calculation
     let earth_pos = ctx.earth_helio;
@@ -582,10 +582,9 @@ pub fn compute_moon_position_with_ctx(ctx: &TimeContext) -> MoonPosition {
     // Angular diameter: 2 * atan(radius / distance)
     let angular_diameter_rad = 2.0 * (MOON_RADIUS_KM / distance_km).atan();
 
-    // Convert to equatorial coordinates using true obliquity (includes nutation)
-    // This gives apparent position rather than mean position
-    let obliquity = ctx.true_obliquity_rad;
-    let direction = ecliptic_to_equatorial(apparent_lon, apparent_lat, obliquity).normalize();
+    // Convert of-date lunar coordinates to the canonical J2000 map frame.
+    let of_date = ecliptic_to_equatorial(apparent_lon, apparent_lat, mean_obliquity(jde));
+    let direction = mean_of_date_to_j2000(of_date, jde).normalize();
 
     MoonPosition {
         direction,

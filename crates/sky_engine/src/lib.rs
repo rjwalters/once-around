@@ -1,3 +1,4 @@
+use sky_engine_core::frames::{j2000_to_mean_of_date, mean_of_date_to_j2000};
 use sky_engine_core::{
     catalog::StarCatalog,
     comets::{Comet, compute_all_comet_positions_with_ctx},
@@ -43,6 +44,7 @@ const SATELLITE_FLOATS: usize = 7;
 
 /// The main sky engine exposed to JavaScript.
 /// Computes star and planet positions, maintaining buffers for efficient WebGL rendering.
+/// Every direction buffer uses fixed J2000 equatorial axes; see `sky_engine_core::frames`.
 #[wasm_bindgen]
 pub struct SkyEngine {
     catalog: StarCatalog,
@@ -443,7 +445,8 @@ impl SkyEngine {
             let direction = if i == 1 {
                 // Moon (index 1): Apply topocentric parallax correction
                 // This can shift the Moon's position by up to ~1° depending on observer location
-                let (ra, dec) = cartesian_to_ra_dec(&body_pos.direction);
+                let (ra, dec) =
+                    cartesian_to_ra_dec(&j2000_to_mean_of_date(body_pos.direction, ctx.jde));
 
                 // Moon distance is already in positions[1] (this element) — no need to
                 // re-run the ~180-term Meeus lunar series a second time.
@@ -456,7 +459,7 @@ impl SkyEngine {
                     gmst,
                 );
 
-                ra_dec_to_cartesian(topo_ra, topo_dec)
+                mean_of_date_to_j2000(ra_dec_to_cartesian(topo_ra, topo_dec), ctx.jde)
             } else {
                 // Other bodies: use geocentric position (parallax is negligible)
                 body_pos.direction
@@ -894,7 +897,8 @@ impl SkyEngine {
     fn sun_altitude_at(&self, time: &SkyTime) -> f64 {
         // Get Sun's geocentric position
         let sun_dir = compute_sun_position(time);
-        let (ra, dec) = cartesian_to_ra_dec(&sun_dir);
+        let (ra, dec) =
+            cartesian_to_ra_dec(&j2000_to_mean_of_date(sun_dir, time.julian_date_tdb()));
 
         // Compute GMST and LST
         let jd_ut1 = time.julian_date_utc();

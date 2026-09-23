@@ -59,7 +59,7 @@ export interface CelestialControls {
   // Topocentric mode methods
   setViewMode(mode: ViewMode): void;
   getViewMode(): ViewMode;
-  setTopocentricParams(latitudeRad: number, lstRad: number): void;
+  setTopocentricParams(latitudeRad: number, lstRad: number, jd?: number): void;
   getAltAz(): { altitude: number; azimuth: number } | null;
   animateToAltAz(altitude: number, azimuth: number, durationMs?: number): void;
   onFovChange?: (fov: number) => void;

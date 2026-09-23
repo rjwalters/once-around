@@ -757,7 +757,7 @@ async function main(): Promise<void> {
       }
     },
     setControlsViewMode: (mode) => controls.setViewMode(mode),
-    setTopocentricParams: (latRad, lstRad) => controls.setTopocentricParams(latRad, lstRad),
+    setTopocentricParams: (latRad, lstRad, jd) => controls.setTopocentricParams(latRad, lstRad, jd),
     animateToAltAz: (alt, az, duration) => controls.animateToAltAz(alt, az, duration),
     // Space telescope mode callbacks
     onHubbleModeChange: (enabled) => {

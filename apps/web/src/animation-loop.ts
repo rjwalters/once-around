@@ -1,3 +1,4 @@
+import { horizontalDirectionInto, julianDate } from "./geometry/precession";
 import * as THREE from "three";
 import { computeGMST } from "./geometry/time";
 import { SKY_RADIUS, type BodyPositions } from "./body-positions";
@@ -24,7 +25,7 @@ export interface AnimationLoopDependencies {
     /** A label fade is mid-animation (always-render gate). */
     hasFadesInProgress: () => boolean;
     updateGroundPlaneForTime: (date: Date) => void;
-    updateScintillation: (latitude: number, lst: number) => void;
+    updateScintillation: (latitude: number, lst: number, jd: number) => void;
     updateHorizonZenith: (zenith: THREE.Vector3) => void;
     updateDeepFields: (fov: number) => void;
     updateJWST: (
@@ -141,19 +142,10 @@ export function createAnimationLoop(deps: AnimationLoopDependencies): () => void
       const gmst = computeGMST(currentDate);
       let lst = gmst + location.longitude; // LST in degrees
       lst = ((lst % 360) + 360) % 360; // Normalize to 0-360
-      renderer.updateScintillation(location.latitude, lst);
+      renderer.updateScintillation(location.latitude, lst, julianDate(currentDate));
 
-      // Update horizon zenith direction for proper horizon culling
-      // Zenith in equatorial coords: RA = LST, Dec = latitude
-      const latRad = (location.latitude * Math.PI) / 180;
-      const lstRad = (lst * Math.PI) / 180;
-      const cosLat = Math.cos(latRad);
-      const sinLat = Math.sin(latRad);
-      const cosLst = Math.cos(lstRad);
-      const sinLst = Math.sin(lstRad);
-      // Equatorial coords (Z-up): eqX = cosLat*cosLst, eqY = cosLat*sinLst, eqZ = sinLat
-      // Convert to Three.js (Y-up): (-eqX, eqZ, eqY)
-      zenith.set(-cosLat * cosLst, sinLat, cosLat * sinLst);
+      // The observer's of-date zenith must share the fixed J2000 map frame.
+      horizontalDirectionInto(zenith, 90, 0, lst, location.latitude, julianDate(currentDate));
       renderer.updateHorizonZenith(zenith);
     }
 

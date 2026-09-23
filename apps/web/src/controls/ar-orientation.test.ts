@@ -7,7 +7,9 @@ afterEach(() => vi.unstubAllGlobals());
 
 it("preserves AR roll through time/location updates and releases it for manual controls", () => {
   vi.stubGlobal("window", new EventTarget());
-  const element = Object.assign(new EventTarget(), { style: { cursor: "" } }) as unknown as HTMLElement;
+  const element = Object.assign(new EventTarget(), {
+    style: { cursor: "" },
+  }) as unknown as HTMLElement;
   const camera = new PerspectiveCamera();
   const controls = createCelestialControls(camera, element);
   controls.setEnabled(false);
@@ -17,16 +19,51 @@ it("preserves AR roll through time/location updates and releases it for manual c
   const initial = camera.quaternion.clone();
   controls.setTopocentricParams(0, 0);
   expect(camera.quaternion.angleTo(initial)).toBeLessThan(1e-7);
-  expect(camera.getWorldDirection(new Vector3()).distanceTo(new Vector3(0, 1, 0))).toBeLessThan(1e-12);
+  expect(
+    camera.getWorldDirection(new Vector3()).distanceTo(new Vector3(0, 1, 0)),
+  ).toBeLessThan(1e-12);
   expect(camera.up.distanceTo(new Vector3(0, 0, 1))).toBeLessThan(1e-12);
 
   // Six sidereal hours later, east rotates from world +Z to +X.
   controls.setTopocentricParams(0, Math.PI / 2);
-  expect(camera.getWorldDirection(new Vector3()).distanceTo(new Vector3(0, 1, 0))).toBeLessThan(1e-12);
+  expect(
+    camera.getWorldDirection(new Vector3()).distanceTo(new Vector3(0, 1, 0)),
+  ).toBeLessThan(1e-12);
   expect(camera.up.distanceTo(new Vector3(1, 0, 0))).toBeLessThan(1e-12);
   controls.setTopocentricParams(Math.PI / 4, Math.PI / 2);
-  expect(camera.getWorldDirection(new Vector3()).distanceTo(new Vector3(0, Math.SQRT1_2, -Math.SQRT1_2))).toBeLessThan(1e-12);
+  expect(
+    camera
+      .getWorldDirection(new Vector3())
+      .distanceTo(new Vector3(0, Math.SQRT1_2, -Math.SQRT1_2)),
+  ).toBeLessThan(1e-12);
   expect(camera.up.distanceTo(new Vector3(1, 0, 0))).toBeLessThan(1e-12);
+
+  // An epoch update must rotate both the pointing direction and the retained
+  // rolled-up vector into J2000. Independent ERFA t_pmat76 reference at
+  // MJD 50123.9999: transpose its north/east rows, then map XYZ -> (-X, Z, Y).
+  // This catches either losing the epoch argument or resetting AR roll while
+  // reapplying the time/location basis after a live-clock tick.
+  controls.setTopocentricParams(0, 0, 2400000.5 + 50123.9999);
+  expect(
+    camera
+      .getWorldDirection(new Vector3())
+      .distanceTo(
+        new Vector3(
+          0.0003779153474950335,
+          0.999999928589979,
+          -0.0000001643306746147367,
+        ),
+      ),
+  ).toBeLessThan(1e-12);
+  expect(
+    camera.up.distanceTo(
+      new Vector3(
+        0.0008696632209485112,
+        -0.0000001643284776111886,
+        0.9999996218428561,
+      ),
+    ),
+  ).toBeLessThan(1e-12);
 
   controls.setEnabled(true);
   controls.setTopocentricParams(0, 0);

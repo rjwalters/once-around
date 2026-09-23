@@ -1,5 +1,5 @@
 /**
- * Body position utilities - converts engine data to Three.js positions.
+ * Body position utilities - converts fixed J2000 engine directions to Three.js positions.
  */
 
 import * as THREE from "three";

@@ -2,6 +2,8 @@
  * View mode management (Geocentric, Topocentric, Hubble, and JWST).
  */
 
+import { julianDate } from "./geometry/precession";
+
 import type { ViewMode } from "./settings";
 import { computeGMST } from "./geometry/time";
 
@@ -13,7 +15,7 @@ export interface ViewModeManagerOptions {
   onHorizonChange: (visible: boolean) => void;
   onLSTChange: (lstDeg: number) => void;
   setControlsViewMode: (mode: ViewMode) => void;
-  setTopocentricParams: (latRad: number, lstRad: number) => void;
+  setTopocentricParams: (latRad: number, lstRad: number, jd: number) => void;
   animateToAltAz: (alt: number, az: number, duration: number) => void;
   // Space telescope mode callbacks
   onHubbleModeChange?: (enabled: boolean) => void;
@@ -90,7 +92,7 @@ export function createViewModeManager(options: ViewModeManagerOptions): ViewMode
     lst = ((lst % 360) + 360) % 360; // Normalize to 0-360
     const latRad = (location.latitude * Math.PI) / 180;
     const lstRad = (lst * Math.PI) / 180;
-    setTopocentricParams(latRad, lstRad);
+    setTopocentricParams(latRad, lstRad, julianDate(date));
     onLSTChange(lst);
   }
 

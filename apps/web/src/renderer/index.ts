@@ -54,7 +54,7 @@ export interface SkyRenderer {
   clearStarOverrides(): void;
   setScintillationEnabled(enabled: boolean): void;
   setScintillationIntensity(intensity: number): void;
-  updateScintillation(latitude: number, lst: number): void;
+  updateScintillation(latitude: number, lst: number, jd: number): void;
   setSatellitesVisible(visible: boolean): void;
   getSatellitePosition(index: number, engine: SkyEngine): { x: number; y: number; z: number } | null;
   isSatelliteVisible(index: number): boolean;
@@ -321,9 +321,9 @@ export function createRenderer(
     bodiesLayer.setScintillationIntensity(intensity);
   }
 
-  function updateScintillation(latitude: number, lst: number): void {
-    starsLayer.updateScintillation(latitude, lst);
-    bodiesLayer.updateScintillation(latitude, lst);
+  function updateScintillation(latitude: number, lst: number, jd: number): void {
+    starsLayer.updateScintillation(latitude, lst, jd);
+    bodiesLayer.updateScintillation(latitude, lst, jd);
   }
 
   function setSatellitesVisible(visible: boolean): void {

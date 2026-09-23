@@ -1,3 +1,4 @@
+
 /**
  * Coordinate Conversion Functions
  *
@@ -14,6 +15,8 @@
  * raDecToQuaternion) live in `coordinates-three.ts` and are re-exported below so
  * existing import sites keep working unchanged.
  */
+
+import { J2000, precessRaDec } from "./precession";
 
 // Re-export the Three.js-dependent helpers for backward compatibility. Because
 // these are re-exports (not local definitions), importers that only use the
@@ -53,16 +56,21 @@ export function positionToRaDec(pos: { x: number; y: number; z: number }): {
 // Equatorial ↔ Horizontal
 // ---------------------------------------------------------------------------
 
+const ofDateRaDec = { ra: 0, dec: 0 };
+
 /**
  * Convert equatorial (RA/Dec) to horizontal (Alt/Az) coordinates.
- * All inputs and outputs in degrees.
+ * Map RA/Dec are J2000; LST is mean sidereal time of date. Angles in degrees.
+ * Supply the observation JD to include precession (default J2000 for pure-frame callers).
  */
 export function equatorialToHorizontal(
   raDeg: number,
   decDeg: number,
   lstDeg: number,
-  latDeg: number
+  latDeg: number,
+  jd: number = J2000
 ): { altitude: number; azimuth: number } {
+  ({ ra: raDeg, dec: decDeg } = precessRaDec(raDeg, decDeg, jd, false, ofDateRaDec));
   const raRad = (raDeg * Math.PI) / 180;
   const decRad = (decDeg * Math.PI) / 180;
   const lstRad = (lstDeg * Math.PI) / 180;
@@ -95,13 +103,15 @@ export function equatorialToHorizontal(
 
 /**
  * Convert horizontal (Alt/Az) to equatorial (RA/Dec) coordinates.
- * All inputs and outputs in degrees.
+ * Map RA/Dec are J2000; LST is mean sidereal time of date. Angles in degrees.
+ * Supply the observation JD to include precession (default J2000 for pure-frame callers).
  */
 export function horizontalToEquatorial(
   azDeg: number,
   altDeg: number,
   lstDeg: number,
-  latDeg: number
+  latDeg: number,
+  jd: number = J2000
 ): { ra: number; dec: number } {
   const azRad = (azDeg * Math.PI) / 180;
   const altRad = (altDeg * Math.PI) / 180;
@@ -114,7 +124,7 @@ export function horizontalToEquatorial(
 
   const cosDec = Math.cos(dec);
   if (Math.abs(cosDec) < 1e-10 || Math.abs(Math.cos(latRad)) < 1e-10) {
-    return { ra: lstDeg, dec: (dec * 180) / Math.PI };
+    return precessRaDec(lstDeg, (dec * 180) / Math.PI, jd, true);
   }
 
   const cosHA =
@@ -127,7 +137,7 @@ export function horizontalToEquatorial(
   if (ra < 0) ra += 360;
   if (ra >= 360) ra -= 360;
 
-  return { ra, dec: (dec * 180) / Math.PI };
+  return precessRaDec(ra, (dec * 180) / Math.PI, jd, true);
 }
 
 /**
