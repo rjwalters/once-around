@@ -89,3 +89,8 @@ tests/screenshots/
 
 # Local coordination database
 /.squad/
+
+# Local Worker state and operator-specific deployment configuration
+.wrangler/
+.dev.vars*
+apps/report-worker/wrangler.preview.jsonc

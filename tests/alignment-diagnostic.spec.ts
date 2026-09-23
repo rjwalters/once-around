@@ -342,3 +342,122 @@ for (const viewport of [
     });
   });
 }
+
+const reportEndpoint = "https://reports.example.test/reports";
+const reportReceipt = {
+  receiptId: "e4e5a6f5-244f-46ab-a125-6152a03f05d6",
+  receivedAt: "2026-09-23T00:00:00.000Z",
+};
+
+test("reports wait for an explicit Send, omit coordinates by default and show a receipt", async ({
+  page,
+}) => {
+  const requests: { body: any; key: string | undefined }[] = [];
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route(reportEndpoint, async (route) => {
+    requests.push({
+      body: route.request().postDataJSON(),
+      key: route.request().headers()["idempotency-key"],
+    });
+    await pending;
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify(reportReceipt),
+    });
+  });
+  await mockDevices(page);
+  await expect(page.locator("#send-report")).toBeDisabled();
+  await start(page);
+  await page.locator("#capture").click();
+  await expect(page.locator("#send-report")).toBeEnabled();
+  await page.locator("#include-coordinates").check();
+  await page.locator("#copy").click();
+  expect(requests).toHaveLength(0);
+  await expect(page.locator("#send-coordinates")).not.toBeChecked();
+  await expect(page.locator("#send-disclosure")).toContainText("90 days");
+  await page.locator("#send-report").click();
+  await expect(page.locator("#send-status")).toContainText(
+    "Sending measurements",
+  );
+  await expect(page.locator("#send-report")).toBeDisabled();
+  await expect(page.locator("#send-coordinates")).toBeDisabled();
+  await expect.poll(() => requests.length).toBe(1);
+  expect(requests[0].body.coordinatesIncluded).toBe(false);
+  expect(requests[0].body.captures[0].gps).not.toHaveProperty("latitude");
+  expect(requests[0].body.captures[0].gps).not.toHaveProperty("longitude");
+  expect(requests[0].body.device).toEqual({
+    phone: "Unknown",
+    browser: expect.stringMatching(/^Chrome \d+$/),
+  });
+  expect(requests[0].body.build.commit).toMatch(/^[a-f0-9]{7,40}$/);
+  expect(requests[0].body.build.time).toMatch(/^20\d{2}-/);
+  expect(requests[0].body.captures[0]).toHaveProperty("rawMeasured");
+  expect(requests[0].body.captures[0]).toHaveProperty("errors");
+  finish();
+  await expect(page.locator("#send-status")).toContainText(
+    reportReceipt.receiptId,
+  );
+  await expect(page.locator("#history li")).toHaveCount(1);
+  await expect(page.locator("#copy")).toBeEnabled();
+  await expect(page.locator("#download")).toBeEnabled();
+});
+
+test("failed report retries reuse the payload/key, respect explicit consent and preserve exports", async ({
+  page,
+}) => {
+  const submissions: { body: string | null; key: string | undefined }[] = [];
+  await page.route(reportEndpoint, async (route) => {
+    submissions.push({
+      body: route.request().postData(),
+      key: route.request().headers()["idempotency-key"],
+    });
+    if (submissions.length === 1) await route.abort("failed");
+    else
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(reportReceipt),
+      });
+  });
+  await mockDevices(page);
+  await start(page);
+  await page.locator("#capture").click();
+  await page.locator("#phone-description").fill("Pixel 9");
+  await page.locator("#browser-description").fill("Chrome 130");
+  await page.locator("#send-coordinates").check();
+  await page.locator("#send-report").click();
+  await expect(page.locator("#send-status")).toContainText(
+    "Delivery could not be confirmed",
+  );
+  await expect(page.locator("#send-status")).toContainText(
+    "local captures are still available",
+  );
+  await expect(page.locator("#history li")).toHaveCount(1);
+  await page.locator("#copy").click();
+  const local = await page.evaluate(() =>
+    JSON.parse(window.diagnosticMock.copied),
+  );
+  expect(local.schema).toBe("once-around-alignment-v1");
+  expect(local.captures[0].gps).not.toHaveProperty("latitude");
+  await page.locator("#send-report").click();
+  await expect(page.locator("#send-status")).toContainText(
+    reportReceipt.receiptId,
+  );
+  expect(submissions).toHaveLength(2);
+  expect(submissions[1]).toEqual(submissions[0]);
+  const submitted = JSON.parse(submissions[0].body!);
+  expect(submitted.coordinatesIncluded).toBe(true);
+  expect(submitted.captures[0].gps.latitude).toBe(37.7749);
+  expect(submitted.captures[0].gps.longitude).toBe(-122.4194);
+  expect(submitted.device).toEqual({ phone: "Pixel 9", browser: "Chrome 130" });
+  const download = page.waitForEvent("download");
+  await page.locator("#download").click();
+  expect((await download).suggestedFilename()).toBe(
+    "once-around-alignment.json",
+  );
+  await expect(page.locator("#history li")).toHaveCount(1);
+});

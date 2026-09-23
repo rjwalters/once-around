@@ -45,6 +45,11 @@
         max-width: 1400px;
         margin: auto;
       }
+      #measurement {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+      }
       #preview {
         position: sticky;
         top: 0;
@@ -161,13 +166,32 @@
         display: block;
         padding: 8px 0;
       }
-      input {
+      input[type="checkbox"] {
         width: 18px;
         height: 18px;
         vertical-align: middle;
       }
+      fieldset {
+        border: 1px solid #394457;
+        border-radius: 8px;
+        margin: 16px 0;
+        padding: 12px;
+        min-width: 0;
+      }
+      input[type="text"] {
+        display: block;
+        width: 100%;
+        max-width: 440px;
+        min-height: 44px;
+        padding: 8px;
+        font: inherit;
+        color: inherit;
+        background: #080c17;
+        border: 1px solid #536177;
+        border-radius: 4px;
+      }
       @media (orientation: landscape) and (min-width: 600px) {
-        main {
+        #measurement {
           grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
         }
         #preview {
@@ -184,54 +208,56 @@
       <h1>AR alignment check</h1>
     </header>
     <main>
-      <section id="preview" aria-label="Rear camera aiming preview">
-        <video id="camera" muted playsinline aria-label="Rear camera"></video>
-        <div id="reticle" aria-hidden="true"></div>
-      </section>
-      <section id="controls" aria-label="Measurement controls">
-        <p>
-          Use the preview to center the selected target on the reticle. Gently
-          move the phone to refresh its direction, then align and capture.
-        </p>
-        <div class="buttons" role="group" aria-label="Target body">
-          <button id="target-moon" type="button" aria-pressed="true">
-            Moon
+      <div id="measurement">
+        <section id="preview" aria-label="Rear camera aiming preview">
+          <video id="camera" muted playsinline aria-label="Rear camera"></video>
+          <div id="reticle" aria-hidden="true"></div>
+        </section>
+        <section id="controls" aria-label="Measurement controls">
+          <p>
+            Use the preview to center the selected target on the reticle. Gently
+            move the phone to refresh its direction, then align and capture.
+          </p>
+          <div class="buttons" role="group" aria-label="Target body">
+            <button id="target-moon" type="button" aria-pressed="true">
+              Moon
+            </button>
+            <button id="target-sun" type="button" aria-pressed="false">
+              Sun
+            </button>
+          </div>
+          <p id="sun-instruction" hidden>
+            Use only the camera preview to aim. Do not look directly at the Sun.
+          </p>
+          <div class="buttons">
+            <button id="start" class="primary" type="button">
+              Start camera &amp; sensors
+            </button>
+            <button id="stop" type="button" disabled>Stop</button>
+          </div>
+          <p id="camera-status" class="detail">Camera is off.</p>
+          <p id="gps-status" class="detail">Location is off.</p>
+          <p id="orientation-status" class="detail">Motion sensor is off.</p>
+          <p id="target-status" class="detail">Loading target positions…</p>
+          <p id="status" role="status"></p>
+          <button id="capture" class="primary" type="button" disabled>
+            Capture alignment
           </button>
-          <button id="target-sun" type="button" aria-pressed="false">
-            Sun
-          </button>
-        </div>
-        <p id="sun-instruction" hidden>
-          Use only the camera preview to aim. Do not look directly at the Sun.
-        </p>
-        <div class="buttons">
-          <button id="start" class="primary" type="button">
-            Start camera &amp; sensors
-          </button>
-          <button id="stop" type="button" disabled>Stop</button>
-        </div>
-        <p id="camera-status" class="detail">Camera is off.</p>
-        <p id="gps-status" class="detail">Location is off.</p>
-        <p id="orientation-status" class="detail">Motion sensor is off.</p>
-        <p id="target-status" class="detail">Loading target positions…</p>
-        <p id="status" role="status"></p>
-        <button id="capture" class="primary" type="button" disabled>
-          Capture alignment
-        </button>
-        <p class="detail">
-          This measures alignment; it does not calibrate your phone or apply a
-          correction. Compass accuracy may be unknown. GPS must be less than 30
-          seconds old and accurate to 100 m or better; motion readings expire
-          after 3 seconds.
-        </p>
-      </section>
+          <p class="detail">
+            This measures alignment; it does not calibrate your phone or apply a
+            correction. Compass accuracy may be unknown. GPS must be less than
+            30 seconds old and accurate to 100 m or better; motion readings
+            expire after 3 seconds.
+          </p>
+        </section>
+      </div>
       <section id="results" aria-label="Capture history and export">
         <h2>Recent measurements</h2>
         <p id="history-count" class="detail"></p>
         <p class="detail">
           Differences are measured minus expected. Camera images stay on your
           device and are never saved. Measurements are held only in this page’s
-          memory; use Copy or Download to share them yourself.
+          memory until you copy, download, or explicitly send a report.
         </p>
         <label
           ><input type="checkbox" id="include-coordinates" /> Include GPS
@@ -242,6 +268,49 @@
           ><button id="download" type="button" disabled>Download JSON</button>
         </div>
         <p id="export-status" role="status"></p>
+        <fieldset id="send-fields">
+          <legend>Share an alignment report</legend>
+          <p class="detail" id="send-disclosure">
+            Send shares up to ten measurements, UTC times, raw sensor readings,
+            expected and measured directions, errors, accuracy, phone/browser
+            descriptions, and app build details with the Once Around maintainer.
+            No camera images are sent. Coordinates are optional; times and sky
+            directions can still reveal an approximate location. Reports are
+            private and deleted after 90 days during daily cleanup.
+          </p>
+          <label for="phone-description"
+            >Phone model (optional)
+            <input
+              id="phone-description"
+              type="text"
+              maxlength="80"
+              placeholder="e.g. Pixel 9"
+              autocomplete="off"
+            />
+          </label>
+          <label for="browser-description"
+            >Browser and version (optional; edit if needed)
+            <input
+              id="browser-description"
+              type="text"
+              maxlength="80"
+              autocomplete="off"
+            />
+          </label>
+          <label
+            ><input id="send-coordinates" type="checkbox" /> Include GPS
+            coordinates in this report</label
+          >
+          <button
+            id="send-report"
+            type="button"
+            disabled
+            aria-describedby="send-disclosure"
+          >
+            Send report
+          </button>
+        </fieldset>
+        <p id="send-status" class="detail" role="status" aria-live="polite"></p>
         <ol id="history"></ol>
       </section>
     </main>

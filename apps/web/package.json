@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run",
-    "deploy:preview": "pnpm build && wrangler pages deploy dist --project-name=once-around",
+    "deploy:preview": "VITE_ALIGNMENT_REPORT_ENDPOINT= pnpm build && wrangler pages deploy dist --project-name=once-around",
     "deploy:prod": "pnpm build && wrangler pages deploy dist --project-name=once-around --branch=main",
     "deploy:all": "pnpm build:all && wrangler pages deploy dist --project-name=once-around --branch=main"
   },
