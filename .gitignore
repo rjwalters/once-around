@@ -34,10 +34,13 @@ tests/screenshots/
 
 # Repo Skills machine-local install metadata (absolute source path + timestamp)
 .claude/skills/repo/.install-local.json
+# Loom worktree marker (written by worktree.sh into each issue worktree; not in the managed block yet)
 # >>> loom-managed (do not edit) >>>
 # Loom runtime state (don't commit these)
 .loom-in-use
 .loom-checkpoint
+.loom-managed
+.no-changes-needed
 .loom/.daemon.pid
 .loom/.daemon.log
 .loom/daemon.sock
@@ -45,16 +48,25 @@ tests/screenshots/
 .loom/daemon-metrics.json
 .loom/loom-source-path
 .loom/spawn-loop-state.json
+.loom/spawn-loop.pid
+.loom/stop-spawn-loop
 .loom/issue-failures.json
 .loom/interventions/
 .loom/worktrees/
+.loom/worktrees-local/
+.claude/worktrees/
 .loom/state.json
 .loom/mcp-command.json
 .loom/activity.db
 .loom/claims/
+.loom/locks/
 .loom/signals/
 .loom/status/
 .loom/retry-state/
+.loom/exit-codes/
+.loom/sweep-checkpoint/
+.loom/sweep-run/
+.loom/stats/
 .loom/diagnostics/
 .loom/guide-docs-state.json
 .loom/metrics_state.json
@@ -63,9 +75,17 @@ tests/screenshots/
 .loom/metrics/
 .loom/usage-cache.json
 .loom/claude-config/
+.loom/tokens/
+.loom/accounts.env
+.loom/account-health.json
+.loom/account-health.lock
+.loom/CANARY
 .loom/*.log
 .loom/*.sock
+.loom/*.tmp
+.loom/*.bak
 .loom/logs/
 # <<< loom-managed <<<
-# Loom worktree marker (written by worktree.sh into each issue worktree; not in the managed block yet)
-.loom-managed
+
+# Local coordination database
+/.squad/
