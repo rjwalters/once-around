@@ -76,13 +76,13 @@ export function deviceOrientationToAltAz(
 
 /**
  * Convert an iOS `webkitCompassHeading` (degrees clockwise from north of the
- * device-top direction) into the equivalent W3C alpha angle, so compass-true
+ * device-top direction) into the equivalent W3C alpha angle, so north-referenced
  * readings can be fed through the same rotation math as absolute alpha values.
  * Returns null if the heading is missing or invalid (Safari reports negative
  * values while the compass is uncalibrated).
  */
 export function compassHeadingToAlpha(heading: number | undefined): number | null {
-  if (typeof heading !== "number" || Number.isNaN(heading) || heading < 0) {
+  if (typeof heading !== "number" || !Number.isFinite(heading) || heading < 0 || heading >= 360) {
     return null;
   }
   return (360 - heading) % 360;
