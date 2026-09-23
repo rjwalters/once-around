@@ -304,8 +304,13 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await mockDevices(page);
     await start(page);
-    await page.locator("#capture").scrollIntoViewIfNeeded();
-    const geometry = await page.evaluate(() => {
+    // Chromium can treat a subpixel-clipped edge as fully visible and skip
+    // scrollIntoViewIfNeeded. Honor the control's scroll margin explicitly;
+    // keep the strict viewport, reticle and non-overlap assertions below.
+    await page
+      .locator("#capture")
+      .evaluate((button) => button.scrollIntoView({ block: "end" }));
+    const { bounds, ...geometry } = await page.evaluate(() => {
       const preview = document
         .querySelector("#preview")!
         .getBoundingClientRect();
@@ -329,9 +334,16 @@ for (const viewport of [
           capture.bottom <= preview.top ||
           capture.top >= preview.bottom,
         noHorizontalScroll: document.documentElement.scrollWidth <= innerWidth,
+        bounds: {
+          viewport: { width: innerWidth, height: innerHeight },
+          scrollY,
+          capture: capture.toJSON(),
+          preview: preview.toJSON(),
+          reticle: reticle.toJSON(),
+        },
       };
     });
-    expect(geometry).toEqual({
+    expect(geometry, JSON.stringify(bounds)).toEqual({
       centerX: 0,
       centerY: 0,
       reticleVisible: true,
