@@ -12,6 +12,21 @@
 
 import { Quaternion, Vector3 } from "three";
 
+/** Map display axes to ENU without changing the back-camera center direction.
+ * Screen rotation is clockwise, so display-up at angle 90 is device-right.
+ * Right-multiplication applies this local rotation before the device rotation.
+ * Magnetic declination remains an independent left-multiplication in ENU.
+ */
+export function applyScreenOrientation(
+  deviceQuaternion: Quaternion,
+  screenAngle: number,
+  target = new Quaternion()
+): Quaternion {
+  const halfAngle = (-screenAngle * Math.PI) / 360;
+  target.set(0, 0, Math.sin(halfAngle), Math.cos(halfAngle));
+  return target.premultiply(deviceQuaternion);
+}
+
 /**
  * Build the full device-to-Earth rotation as a quaternion.
  *

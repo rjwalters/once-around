@@ -21,6 +21,8 @@ const PLAY_INTERVAL_MS = 200; // Step every 200ms when playing
 export interface TimeControlsOptions {
   datetimeInput: HTMLInputElement;
   onJumpToNow?: () => void;
+  /** Leave live observation before any user-requested simulation change. */
+  onBeforeTimeChange?: () => void;
 }
 
 export interface TimeControls {
@@ -38,20 +40,21 @@ export interface TimeControls {
 /**
  * Format a Date to datetime-local input value format.
  */
-function formatDatetimeLocal(date: Date): string {
+export function formatDatetimeLocal(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
 
 /**
  * Create time controls for stepping through time.
  */
 export function createTimeControls(options: TimeControlsOptions): TimeControls {
-  const { datetimeInput, onJumpToNow } = options;
+  const { datetimeInput, onJumpToNow, onBeforeTimeChange } = options;
 
   let currentStepIndex = 0;
   let playing = false;
@@ -65,6 +68,7 @@ export function createTimeControls(options: TimeControlsOptions): TimeControls {
   const timeStepUnitBtn = document.getElementById("time-step-unit");
 
   function stepTime(direction: 1 | -1): void {
+    onBeforeTimeChange?.();
     const currentStep = TIME_STEP_UNITS[currentStepIndex];
     // Parse datetime-local value explicitly as local time
     const currentTime = datetimeInput.value
@@ -90,6 +94,7 @@ export function createTimeControls(options: TimeControlsOptions): TimeControls {
   }
 
   function jumpToNow(): void {
+    onBeforeTimeChange?.();
     stopPlayback();
 
     // Hide eclipse banner when jumping to now
@@ -106,6 +111,7 @@ export function createTimeControls(options: TimeControlsOptions): TimeControls {
 
   function startPlayback(): void {
     if (playing) return;
+    onBeforeTimeChange?.();
     playing = true;
     if (timePlayBtn) {
       timePlayBtn.textContent = "⏸";
@@ -155,7 +161,10 @@ export function createTimeControls(options: TimeControlsOptions): TimeControls {
     }
 
     // Stop playback when user manually changes the datetime input
-    datetimeInput.addEventListener("focus", stopPlayback);
+    datetimeInput.addEventListener("focus", () => {
+      onBeforeTimeChange?.();
+      stopPlayback();
+    });
   }
 
   return {

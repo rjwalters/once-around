@@ -2101,6 +2101,11 @@ canvas {
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 12px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  text-align: center;
+  white-space: pre-line;
   z-index: 200;
   opacity: 0;
   transition: opacity 0.3s;

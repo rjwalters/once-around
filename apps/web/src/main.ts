@@ -6,13 +6,14 @@ import { createCelestialControls } from "./controls";
 import { setupUI, applyTimeToEngine } from "./ui";
 import { createVideoMarkersLayer, createVideoPopup, type VideoPlacement } from "./videos";
 import { loadSettings, createSettingsSaver } from "./settings";
-import { createLocationManager, type ObserverLocation } from "./location";
+import { createLocationManager, formatObservingLocation, type ObserverLocation } from "./location";
 import type { SkyEngine } from "./wasm/sky_engine";
-import { createTimeControls } from "./time-controls";
+import { createTimeControls, formatDatetimeLocal } from "./time-controls";
+import { createARClock } from "./ar-clock";
 import { setupSimpleModal, setupModalClose } from "./modal-utils";
 import { createViewModeManager, type ViewIndicatorInfo } from "./view-mode";
 import { formatLST } from "./coordinate-utils";
-import { createARModeManager } from "./ar-mode";
+import { createARModeManager, type ARModeManager } from "./ar-mode";
 import { magneticDeclination } from "./geometry/magnetic-declination";
 import { createLocationUI } from "./location-ui";
 import { setupTourUI } from "./tour-ui";
@@ -156,6 +157,7 @@ async function main(): Promise<void> {
 
   // Track current date (set later after initialization)
   let currentDate = new Date();
+  let arModeManagerRef: ARModeManager | null = null;
 
   const { tourEngine, handleTourInterrupt } = setupTourSystem({
     engine,
@@ -177,7 +179,10 @@ async function main(): Promise<void> {
     // viewMode, so the view-mode-change release path never fires, and a lingering
     // lock would keep snapping the camera back onto the guide star during the
     // tour's keyframe dwells.
-    onTourStart: () => guideStarLockRef?.release(),
+    onTourStart: () => {
+      arModeManagerRef?.disable();
+      guideStarLockRef?.release();
+    },
   });
 
   // Add listeners for user interactions that should pause tour
@@ -259,12 +264,7 @@ async function main(): Promise<void> {
 
   // Set the datetime input to show the initial date in local time
   if (datetimeInput) {
-    const year = initialDate.getFullYear();
-    const month = String(initialDate.getMonth() + 1).padStart(2, "0");
-    const day = String(initialDate.getDate()).padStart(2, "0");
-    const hours = String(initialDate.getHours()).padStart(2, "0");
-    const minutes = String(initialDate.getMinutes()).padStart(2, "0");
-    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    datetimeInput.value = formatDatetimeLocal(initialDate);
   }
 
   // Apply the initial date to the engine
@@ -282,7 +282,10 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // Time step controls
   // ---------------------------------------------------------------------------
-  const timeControls = datetimeInput ? createTimeControls({ datetimeInput }) : null;
+  const timeControls = datetimeInput ? createTimeControls({
+    datetimeInput,
+    onBeforeTimeChange: () => arModeManagerRef?.disable(),
+  }) : null;
   timeControls?.setupEventListeners();
 
   // ---------------------------------------------------------------------------
@@ -291,7 +294,10 @@ async function main(): Promise<void> {
   const handleNextEclipseClick = createEclipseHandler({
     getDatetimeInputValue: () => datetimeInput?.value,
     setDatetimeInputValue: (value) => { if (datetimeInput) datetimeInput.value = value; },
-    stopTimePlayback: () => timeControls?.stopPlayback(),
+    stopTimePlayback: () => {
+      arModeManagerRef?.disable();
+      timeControls?.stopPlayback();
+    },
     applyTimeToEngine: (date) => applyTimeToEngine(engine, date),
     recomputeEngine: () => engine.recompute(),
     updateRenderer: () => {
@@ -381,45 +387,53 @@ async function main(): Promise<void> {
   // Orbit focus handler (set later, used by checkbox handler)
   let orbitFocus: { resetFocus: () => void } | null = null;
 
+  // Live observation and manual time changes share the same engine/sky update.
+  // Only manual changes persist a timestamp or update the share URL.
+  function updateObservationTime(date: Date, persist: boolean): void {
+    currentDate = date;
+    applyTimeToEngine(engine, date);
+    engine.recompute();
+    renderer.updateFromEngine(engine, renderer.camera.fov);
+    updateRenderedStars();
+    // Update topocentric parameters (LST changes with time)
+    viewModeManager.updateTopocentricParamsForTime(date);
+    // Recompute orbits if they are visible
+    if (orbitsCheckbox?.checked) {
+      void renderer.computeOrbits(engine, currentDate);
+    }
+    // Update moving video markers (planets)
+    const bodyPos = getBodyPositionsFromEngine(engine);
+    if (videoMarkersRef) {
+      videoMarkersRef.updateMovingPositions(bodyPos);
+    }
+    // Update meteor showers (radiant positions drift slightly, activity changes with date)
+    renderer.updateMeteorShowers(date);
+
+    const eclipseBanner = document.getElementById("eclipse-banner");
+    if (eclipseBanner) {
+      eclipseBanner.classList.add("hidden");
+    }
+
+    // Update eclipse rendering (corona visibility based on actual separation)
+    const sunMoonSep = calculateSunMoonSeparation(bodyPos);
+    if (sunMoonSep !== null) {
+      renderer.updateEclipse(sunMoonSep);
+    }
+    // Update rise/set times (recomputes only when the civil date changes,
+    // so scrubbing the time slider within a day does no extra work).
+    riseSetUI.setDate(date);
+    if (persist) {
+      settingsSaver.save({ datetime: date.toISOString() });
+      updateUrlState({ t: date.toISOString() });
+    }
+    requestRender();
+  }
+
   // Setup UI
   setupUI(engine, {
     onTimeChange: (date: Date) => {
-      currentDate = date;
-      applyTimeToEngine(engine, date);
-      engine.recompute();
-      renderer.updateFromEngine(engine, renderer.camera.fov);
-      updateRenderedStars();
-      // Update topocentric parameters (LST changes with time)
-      viewModeManager.updateTopocentricParamsForTime(date);
-      // Recompute orbits if they are visible
-      if (orbitsCheckbox?.checked) {
-        void renderer.computeOrbits(engine, currentDate);
-      }
-      // Update moving video markers (planets)
-      const bodyPos = getBodyPositionsFromEngine(engine);
-      if (videoMarkersRef) {
-        videoMarkersRef.updateMovingPositions(bodyPos);
-      }
-      // Update meteor showers (radiant positions drift slightly, activity changes with date)
-      renderer.updateMeteorShowers(date);
-
-      const eclipseBanner = document.getElementById("eclipse-banner");
-      if (eclipseBanner) {
-        eclipseBanner.classList.add("hidden");
-      }
-
-      // Update eclipse rendering (corona visibility based on actual separation)
-      const sunMoonSep = calculateSunMoonSeparation(bodyPos);
-      if (sunMoonSep !== null) {
-        renderer.updateEclipse(sunMoonSep);
-      }
-      // Update rise/set times (recomputes only when the civil date changes,
-      // so scrubbing the time slider within a day does no extra work).
-      riseSetUI.setDate(date);
-      settingsSaver.save({ datetime: date.toISOString() });
-      // Update URL with new time
-      updateUrlState({ t: date.toISOString() });
-      requestRender();
+      arModeManagerRef?.disable();
+      updateObservationTime(date, true);
     },
     onMagnitudeChange: (mag: number) => {
       engine.set_mag_limit(mag);
@@ -697,6 +711,7 @@ async function main(): Promise<void> {
     }),
     getCurrentDate: () => currentDate,
     onModeChange: (mode) => {
+      if (mode !== 'topocentric') arModeManagerRef?.disable();
       // Enable/disable scintillation based on view mode
       // Scintillation only makes sense in topocentric (surface observer) mode
       renderer.setScintillationEnabled(mode === 'topocentric');
@@ -846,6 +861,9 @@ async function main(): Promise<void> {
       name: settings.observerName,
     },
     {
+      onStateChange: (state) => {
+        arModeManagerRef?.setStatusMessage(`Live sky · updates every 5 seconds\n${formatObservingLocation(state)}`);
+      },
       onLocationChange: (location: ObserverLocation) => {
         // Keep the AR compass correction in sync with the observer
         observerDeclination = magneticDeclination(location.latitude, location.longitude, new Date());
@@ -853,6 +871,12 @@ async function main(): Promise<void> {
         locationUI.updateDisplay(location);
         // Update engine's observer location (for topocentric Moon correction)
         engine.set_observer_location(location.latitude, location.longitude);
+        engine.recompute();
+        renderer.updateFromEngine(engine, renderer.camera.fov);
+        const bodyPos = getBodyPositionsFromEngine(engine);
+        videoMarkersRef?.updateMovingPositions(bodyPos);
+        const sunMoonSep = calculateSunMoonSeparation(bodyPos);
+        if (sunMoonSep !== null) renderer.updateEclipse(sunMoonSep);
         // Update ground plane orientation for topocentric view
         renderer.updateGroundPlaneOrientation(location.latitude, location.longitude);
         // Update in-memory settings for topocentric calculations
@@ -902,7 +926,16 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // AR Mode (Device Orientation)
   // ---------------------------------------------------------------------------
+  const arClock = createARClock((date) => {
+    if (datetimeInput) datetimeInput.value = formatDatetimeLocal(date);
+    updateObservationTime(date, false);
+  });
   const arModeManager = createARModeManager({
+    onBeforeEnable: () => {
+      timeControls?.stopPlayback();
+      tourEngine.stop();
+      guideStarLockRef?.release();
+    },
     // Device compasses report magnetic north; rotate the device→ENU orientation
     // about the local up-axis by the declination so the view is true-north
     // referenced. Adding d degrees to a clockwise-from-north azimuth is a
@@ -924,12 +957,16 @@ async function main(): Promise<void> {
         if (viewModeManager.getMode() !== 'topocentric') {
           viewModeManager.setMode('topocentric');
         }
-        // ...and center it on the user's actual position. Falls back to the
-        // current observer location if geolocation is denied/unavailable.
+        arClock.start();
+        // Preserve a usable selected site while making GPS progress/failure explicit.
         void locationManager.requestGeolocation();
+      } else {
+        arClock.stop();
       }
     },
   });
+  arModeManagerRef = arModeManager;
+  arModeManager.setStatusMessage(`Live sky · updates every 5 seconds\n${formatObservingLocation(locationManager.getState())}`);
   arModeManager.setupEventListeners();
 
   // Re-apply URL camera position now that view mode and location are fully initialized.

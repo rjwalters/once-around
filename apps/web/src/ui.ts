@@ -36,9 +36,8 @@ export function setupUI(engine: SkyEngine, callbacks: UICallbacks): void {
     return;
   }
 
-  // Initialize datetime to current UTC time
-  const now = new Date();
-  datetimeInput.value = toLocalDatetimeString(now);
+  // Preserve a date already restored from settings or the URL.
+  if (!datetimeInput.value) datetimeInput.value = toLocalDatetimeString(new Date());
 
   // Set initial magnitude from slider (which has default in HTML)
   const initialMag = parseFloat(magnitudeInput.value);
