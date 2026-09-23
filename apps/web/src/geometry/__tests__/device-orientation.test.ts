@@ -13,6 +13,7 @@
  * alt/az as `deviceOrientationToAltAz`.
  */
 import * as THREE from "three";
+import { applyScreenOrientation } from "../device-orientation-three";
 import { describe, expect, it } from "vitest";
 import {
   compassHeadingToAlpha,
@@ -196,11 +197,46 @@ describe("compassHeadingToAlpha – edge cases", () => {
     expect(compassHeadingToAlpha(undefined)).toBeNull();
     expect(compassHeadingToAlpha(Number.NaN)).toBeNull();
     expect(compassHeadingToAlpha(-1)).toBeNull();
+    expect(compassHeadingToAlpha(Infinity)).toBeNull();
+    expect(compassHeadingToAlpha(360)).toBeNull();
   });
 
   it("maps valid headings via (360 - heading) % 360", () => {
     expect(compassHeadingToAlpha(0)).toBe(0);
     expect(compassHeadingToAlpha(180)).toBe(180);
     expect(compassHeadingToAlpha(359.9)).toBeCloseTo(0.1, 9);
+  });
+});
+
+describe("display axes in the device frame", () => {
+  // Explicit display basis vectors from a physical screen rotated clockwise.
+  const screens: { angle: number; up: Vec3; right: Vec3 }[] = [
+    { angle: 0, up: [0, 1, 0], right: [1, 0, 0] },
+    { angle: 90, up: [1, 0, 0], right: [0, -1, 0] },
+    { angle: 180, up: [0, -1, 0], right: [-1, 0, 0] },
+    { angle: 270, up: [-1, 0, 0], right: [0, 1, 0] },
+  ];
+
+  it.each(screens)("preserves the center and corrects both axes at $angle degrees", ({ angle, up, right }) => {
+    for (const [alpha, beta, gamma] of [[0, 90, 0], [180, -20, 70], [270, 170, -40]]) {
+      const matrix = matMul(matMul(rotZ(rad(alpha)), rotX(rad(beta))), rotY(rad(gamma)));
+      const pose = applyScreenOrientation(deviceOrientationToQuaternion(alpha, beta, gamma), angle);
+      const expected = [matVec(matrix, [0, 0, -1]), matVec(matrix, up), matVec(matrix, right)];
+      const actual = [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)];
+      actual.forEach((axis, index) => {
+        expect(axis.applyQuaternion(pose).distanceTo(new THREE.Vector3(...expected[index]))).toBeLessThan(1e-12);
+      });
+    }
+  });
+
+  it("keeps magnetic declination as an independent Earth-frame rotation", () => {
+    const device = deviceOrientationToQuaternion(123, 60, -30);
+    const correction = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), rad(-17));
+    const portrait = correction.clone().multiply(applyScreenOrientation(device, 0));
+    const landscape = correction.clone().multiply(applyScreenOrientation(device, 90));
+    const center = new THREE.Vector3(0, 0, -1).applyQuaternion(portrait);
+    expect(new THREE.Vector3(0, 0, -1).applyQuaternion(landscape).distanceTo(center)).toBeLessThan(1e-12);
+    expect(new THREE.Vector3(0, 1, 0).applyQuaternion(landscape)
+      .distanceTo(new THREE.Vector3(1, 0, 0).applyQuaternion(portrait))).toBeLessThan(1e-12);
   });
 });

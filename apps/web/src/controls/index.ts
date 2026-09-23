@@ -654,7 +654,7 @@ export function createCelestialControls(
   }
 
   /**
-   * Set the full topocentric camera orientation from a device→ENU quaternion
+   * Set the full topocentric camera orientation from a display→ENU quaternion
    * (X = east, Y = north, Z = up). Unlike `setAltAz`, this represents the
    * device's roll: the rendered horizon rotates with the phone instead of being
    * locked to screen level. Forces topocentric mode.
@@ -662,11 +662,12 @@ export function createCelestialControls(
   function setARQuaternion(quaternion: THREE.Quaternion): void {
     arQuaternion.copy(quaternion);
     hasARQuaternion = true;
+    isCorrectingRoll = false;
     if (viewMode !== "topocentric") {
       viewMode = "topocentric";
     }
 
-    // Back-of-phone (viewing direction) and top-of-phone (camera up) in ENU.
+    // Back-of-phone (viewing direction) and display-up in ENU.
     const backENU = new THREE.Vector3(0, 0, -1).applyQuaternion(quaternion);
     const upENU = new THREE.Vector3(0, 1, 0).applyQuaternion(quaternion);
 
