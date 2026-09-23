@@ -59,6 +59,8 @@ export function createCelestialControls(
   let topoLST = 0;
   let topoAzimuth = 0;
   let topoAltitude = (30 * Math.PI) / 180;
+  const arQuaternion = new THREE.Quaternion();
+  let hasARQuaternion = false;
 
   // Geocentric mode state (RA/Dec in radians to prevent roll accumulation)
 
@@ -658,6 +660,8 @@ export function createCelestialControls(
    * locked to screen level. Forces topocentric mode.
    */
   function setARQuaternion(quaternion: THREE.Quaternion): void {
+    arQuaternion.copy(quaternion);
+    hasARQuaternion = true;
     if (viewMode !== "topocentric") {
       viewMode = "topocentric";
     }
@@ -704,6 +708,7 @@ export function createCelestialControls(
 
   function setEnabled(enabled: boolean): void {
     inputEnabled = enabled;
+    if (enabled) hasARQuaternion = false;
     domElement.style.cursor = enabled ? "grab" : "default";
   }
 
@@ -752,7 +757,8 @@ export function createCelestialControls(
     topoLST = lstRad;
 
     if (viewMode === "topocentric") {
-      updateTopocentricCamera();
+      if (hasARQuaternion) setARQuaternion(arQuaternion);
+      else updateTopocentricCamera();
     }
   }
 
