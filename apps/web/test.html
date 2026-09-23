@@ -1,255 +1,250 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0a0a1a" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>AR Calibration Diagnostics</title>
+    <title>AR Alignment Check · Once Around</title>
     <style>
       :root {
         color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #080c17;
+        color: #e6edf7;
       }
       * {
         box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
       }
-      html,
       body {
         margin: 0;
-        padding: 0;
-        height: 100%;
+        line-height: 1.45;
       }
-      body {
-        background: #05060f;
-        color: #e6e8f0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 16px;
-        line-height: 1.4;
-        overscroll-behavior: none;
+      header {
+        padding: 12px max(16px, env(safe-area-inset-left));
       }
-      #app {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
+      h1 {
+        font-size: 1.2rem;
+        margin: 6px 0 0;
       }
-
-      /* Crosshairs overlay: fixed to the geometric center of the viewport so it
-         is centered in both portrait and landscape orientations. */
-      #crosshairs {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 120px;
-        height: 120px;
-        pointer-events: none;
+      h2 {
+        font-size: 1rem;
+        margin: 0 0 8px;
+      }
+      a {
+        color: #91caff;
+      }
+      p {
+        margin: 8px 0;
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        padding: 0 16px 24px;
+        max-width: 1400px;
+        margin: auto;
+      }
+      #preview {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        height: 43svh;
+        min-height: 200px;
+        overflow: hidden;
+        background: #000;
+        border: 1px solid #536177;
+        border-radius: 12px;
         z-index: 1;
-        opacity: 0.85;
       }
-      #crosshairs::before,
-      #crosshairs::after {
+      #camera {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        display: block;
+      }
+      #reticle {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 48px;
+        height: 48px;
+        border: 1px solid #fff;
+        border-radius: 50%;
+        filter: drop-shadow(0 0 2px #000);
+        pointer-events: none;
+      }
+      #reticle::before,
+      #reticle::after {
         content: "";
         position: absolute;
-        background: #6ad1ff;
-        box-shadow: 0 0 6px rgba(106, 209, 255, 0.6);
+        background: #fff;
       }
-      #crosshairs::before {
-        left: 50%;
-        top: 0;
-        width: 2px;
-        height: 100%;
-        transform: translateX(-50%);
+      #reticle::before {
+        height: 1px;
+        width: 64px;
+        top: 23px;
+        left: -9px;
       }
-      #crosshairs::after {
-        top: 50%;
-        left: 0;
-        height: 2px;
-        width: 100%;
-        transform: translateY(-50%);
+      #reticle::after {
+        width: 1px;
+        height: 64px;
+        left: 23px;
+        top: -9px;
       }
-      #crosshairs .dot {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 14px;
-        height: 14px;
-        border: 2px solid #6ad1ff;
-        border-radius: 50%;
-        transform: translate(-50%, -50%);
+      #controls {
+        min-width: 0;
       }
-
-      header {
-        padding: 16px 16px 8px;
-        z-index: 2;
-      }
-      header h1 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 600;
-      }
-      header p {
-        margin: 4px 0 0;
-        font-size: 13px;
-        color: #9aa0b4;
-      }
-
-      main {
-        position: relative;
-        z-index: 2;
-        flex: 1;
+      .buttons {
         display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        padding: 16px;
-        gap: 16px;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 10px 0;
       }
-
-      #status {
-        font-size: 14px;
-        padding: 12px 14px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-      }
-      #status.error {
-        background: rgba(255, 80, 80, 0.12);
-        border-color: rgba(255, 80, 80, 0.4);
-        color: #ffb4b4;
-      }
-      #status.ok {
-        background: rgba(80, 220, 140, 0.1);
-        border-color: rgba(80, 220, 140, 0.35);
-      }
-
-      .selector {
-        display: flex;
-        gap: 10px;
-      }
-      .selector button {
-        flex: 1;
-      }
-
       button {
         font: inherit;
-        color: #e6e8f0;
-        background: #1b2140;
-        border: 1px solid #2c355f;
-        border-radius: 12px;
-        padding: 16px;
-        min-height: 56px;
         font-weight: 600;
+        color: #eef5ff;
+        background: #182942;
+        border: 1px solid #496584;
+        border-radius: 8px;
+        min-height: 44px;
+        padding: 10px 14px;
         cursor: pointer;
         touch-action: manipulation;
       }
-      button:active {
-        background: #262e57;
-      }
+      button[aria-pressed="true"],
       button.primary {
-        background: #2a56d6;
-        border-color: #3a68ea;
-      }
-      button.primary:active {
-        background: #3a68ea;
-      }
-      button[aria-pressed="true"] {
-        background: #2a56d6;
-        border-color: #6ad1ff;
+        background: #2457b8;
       }
       button:disabled {
-        opacity: 0.5;
+        opacity: 0.45;
         cursor: default;
       }
-
       #capture {
-        font-size: 18px;
+        width: 100%;
       }
-
-      #snapshot {
-        display: none;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 13px;
-        background: rgba(0, 0, 0, 0.5);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        padding: 12px 14px;
+      #status {
+        border-left: 3px solid #91caff;
+        padding-left: 10px;
       }
-      #snapshot.visible {
+      .detail {
+        color: #bac6d8;
+        font-size: 0.85rem;
+        overflow-wrap: anywhere;
+      }
+      #sun-instruction {
+        color: #ffdb94;
+      }
+      #results {
+        grid-column: 1 / -1;
+        border-top: 1px solid #394457;
+        padding-top: 16px;
+      }
+      #history {
+        padding-left: 24px;
+      }
+      #history li {
+        padding: 12px 0;
+      }
+      #history pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        margin: 8px 0;
+        font:
+          0.85rem/1.6 ui-monospace,
+          monospace;
+      }
+      label {
         display: block;
+        padding: 8px 0;
       }
-      #snapshot .row {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 3px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      input {
+        width: 18px;
+        height: 18px;
+        vertical-align: middle;
       }
-      #snapshot .row:last-child {
-        border-bottom: none;
-      }
-      #snapshot .label {
-        color: #9aa0b4;
-        white-space: nowrap;
-      }
-      #snapshot .value {
-        text-align: right;
-        word-break: break-all;
-      }
-      #snapshot .error-big {
-        font-size: 20px;
-        font-weight: 700;
-      }
-      #snapshot .good {
-        color: #7ff0a8;
-      }
-      #snapshot .warn {
-        color: #ffd27f;
-      }
-      #snapshot .bad {
-        color: #ff9a9a;
-      }
-      .hint {
-        font-size: 12px;
-        color: #6f7590;
+      @media (orientation: landscape) and (min-width: 600px) {
+        main {
+          grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+        }
+        #preview {
+          height: calc(100svh - 90px);
+          min-height: 220px;
+          top: 12px;
+        }
       }
     </style>
   </head>
   <body>
-    <div id="app">
-      <div id="crosshairs" aria-hidden="true"><span class="dot"></span></div>
-      <header>
-        <h1>AR Calibration Diagnostics</h1>
+    <header>
+      <a href="/">← Return to sky map</a>
+      <h1>AR alignment check</h1>
+    </header>
+    <main>
+      <section id="preview" aria-label="Rear camera aiming preview">
+        <video id="camera" muted playsinline aria-label="Rear camera"></video>
+        <div id="reticle" aria-hidden="true"></div>
+      </section>
+      <section id="controls" aria-label="Measurement controls">
         <p>
-          Aim the back of your phone (camera) at the selected body so it sits on
-          the crosshairs, then tap capture.
+          Use the preview to center the selected target on the reticle. Gently
+          move the phone to refresh its direction, then align and capture.
         </p>
-      </header>
-      <main>
-        <div id="snapshot" aria-live="polite"></div>
-        <div id="status">Initializing…</div>
-        <button id="enable" class="primary" type="button" hidden>
-          Enable AR sensors
-        </button>
-        <div class="selector" role="group" aria-label="Target body">
-          <button id="target-sun" type="button" aria-pressed="true">☀︎ Sun</button>
-          <button id="target-moon" type="button" aria-pressed="false">☾ Moon</button>
+        <div class="buttons" role="group" aria-label="Target body">
+          <button id="target-moon" type="button" aria-pressed="true">
+            Moon
+          </button>
+          <button id="target-sun" type="button" aria-pressed="false">
+            Sun
+          </button>
         </div>
-        <button id="capture" class="primary" type="button" disabled>
-          On crosshairs
-        </button>
-        <p class="hint">
-          Angular error is the great-circle gap between where the phone reports
-          it is pointing and where the body actually is. A small error (&lt; ~5°)
-          means the pipeline is well calibrated.
+        <p id="sun-instruction" hidden>
+          Use only the camera preview to aim. Do not look directly at the Sun.
         </p>
-      </main>
-    </div>
+        <div class="buttons">
+          <button id="start" class="primary" type="button">
+            Start camera &amp; sensors
+          </button>
+          <button id="stop" type="button" disabled>Stop</button>
+        </div>
+        <p id="camera-status" class="detail">Camera is off.</p>
+        <p id="gps-status" class="detail">Location is off.</p>
+        <p id="orientation-status" class="detail">Motion sensor is off.</p>
+        <p id="target-status" class="detail">Loading target positions…</p>
+        <p id="status" role="status"></p>
+        <button id="capture" class="primary" type="button" disabled>
+          Capture alignment
+        </button>
+        <p class="detail">
+          This measures alignment; it does not calibrate your phone or apply a
+          correction. Compass accuracy may be unknown. GPS must be less than 30
+          seconds old and accurate to 100 m or better; motion readings expire
+          after 3 seconds.
+        </p>
+      </section>
+      <section id="results" aria-label="Capture history and export">
+        <h2>Recent measurements</h2>
+        <p id="history-count" class="detail"></p>
+        <p class="detail">
+          Differences are measured minus expected. Camera images stay on your
+          device and are never saved. Measurements are held only in this page’s
+          memory; use Copy or Download to share them yourself.
+        </p>
+        <label
+          ><input type="checkbox" id="include-coordinates" /> Include GPS
+          coordinates in copy/download</label
+        >
+        <div class="buttons">
+          <button id="copy" type="button" disabled>Copy JSON</button
+          ><button id="download" type="button" disabled>Download JSON</button>
+        </div>
+        <p id="export-status" role="status"></p>
+        <ol id="history"></ol>
+      </section>
+    </main>
     <script type="module" src="/src/test-page.ts"></script>
   </body>
 </html>
