@@ -35,6 +35,7 @@
 //!   the topocentric parallax without a per-sample topocentric correction.
 
 use crate::coords::{cartesian_to_ra_dec, compute_gmst, compute_lst};
+use crate::frames::j2000_to_mean_of_date;
 use crate::planets::{
     CelestialBody, Planet, compute_moon_position_full, compute_planet_position_full,
     compute_sun_position_full,
@@ -75,22 +76,25 @@ fn celestial_to_planet(body: CelestialBody) -> Planet {
     }
 }
 
-/// Geocentric apparent RA/Dec (radians) and geocentric distance (km) of a body.
+/// Geocentric mean-of-date RA/Dec (radians) and geocentric distance (km) of a body.
 fn ra_dec_dist(body: CelestialBody, time: &SkyTime) -> (f64, f64, f64) {
     match body {
         CelestialBody::Sun => {
             let p = compute_sun_position_full(time);
-            let (ra, dec) = cartesian_to_ra_dec(&p.direction);
+            let (ra, dec) =
+                cartesian_to_ra_dec(&j2000_to_mean_of_date(p.direction, time.julian_date_tdb()));
             (ra, dec, p.distance_km)
         }
         CelestialBody::Moon => {
             let p = compute_moon_position_full(time);
-            let (ra, dec) = cartesian_to_ra_dec(&p.direction);
+            let (ra, dec) =
+                cartesian_to_ra_dec(&j2000_to_mean_of_date(p.direction, time.julian_date_tdb()));
             (ra, dec, p.distance_km)
         }
         other => {
             let p = compute_planet_position_full(celestial_to_planet(other), time);
-            let (ra, dec) = cartesian_to_ra_dec(&p.direction);
+            let (ra, dec) =
+                cartesian_to_ra_dec(&j2000_to_mean_of_date(p.direction, time.julian_date_tdb()));
             (ra, dec, p.distance_km)
         }
     }
@@ -473,7 +477,10 @@ mod tests {
         for (jd, _az) in rises.iter().chain(sets.iter()) {
             let time = SkyTime::from_jd(*jd);
             let moon = compute_moon_position_full(&time);
-            let (ra, dec) = cartesian_to_ra_dec(&moon.direction);
+            let (ra, dec) = cartesian_to_ra_dec(&j2000_to_mean_of_date(
+                moon.direction,
+                time.julian_date_tdb(),
+            ));
             let gmst = compute_gmst(time.julian_date_utc());
             let (topo_ra, topo_dec) =
                 apply_topocentric_correction(ra, dec, moon.distance_km, lat, lon, gmst);

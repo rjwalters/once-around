@@ -97,7 +97,7 @@ pub fn ecliptic_to_equatorial(lon_rad: f64, lat_rad: f64, obliquity_rad: f64) ->
 }
 
 /// Mean obliquity of the ecliptic at J2000.0 in radians.
-pub const OBLIQUITY_J2000: f64 = 0.4090928042223415; // 23.439291111 degrees
+pub const OBLIQUITY_J2000: f64 = 84_381.448 * PI / (180.0 * 3600.0);
 
 /// Compute mean obliquity of the ecliptic for a given Julian Date.
 /// Uses the IAU 2006 precession model (Meeus, Astronomical Algorithms, eq. 22.3).
@@ -356,7 +356,7 @@ const EARTH_RADIUS_KM: f64 = 6378.137;
 ///
 /// Returns GMST in radians, normalized to [0, 2π).
 ///
-/// Based on the IAU 2006 precession model. The formula gives GMST in degrees,
+/// Uses the conventional mean sidereal-time polynomial. It gives GMST in degrees,
 /// which is then converted to radians.
 ///
 /// # Arguments
@@ -412,8 +412,8 @@ pub struct TopocentricCorrection {
 /// Based on Meeus, Astronomical Algorithms, Chapter 40.
 ///
 /// # Arguments
-/// * `ra_rad` - Geocentric Right Ascension in radians
-/// * `dec_rad` - Geocentric Declination in radians
+/// * `ra_rad` - Geocentric mean-of-date Right Ascension in radians (not J2000)
+/// * `dec_rad` - Geocentric mean-of-date Declination in radians
 /// * `distance_km` - Distance to the Moon in kilometers
 /// * `observer_lat_rad` - Observer's geodetic latitude in radians
 /// * `observer_lon_rad` - Observer's longitude in radians (positive = East)
@@ -471,8 +471,8 @@ pub fn compute_topocentric_correction(
 /// Apply topocentric correction to get corrected RA/Dec.
 ///
 /// # Arguments
-/// * `ra_rad` - Geocentric Right Ascension in radians
-/// * `dec_rad` - Geocentric Declination in radians
+/// * `ra_rad` - Geocentric mean-of-date Right Ascension in radians (not J2000)
+/// * `dec_rad` - Geocentric mean-of-date Declination in radians
 /// * `distance_km` - Distance to the Moon in kilometers
 /// * `observer_lat_rad` - Observer's geodetic latitude in radians
 /// * `observer_lon_rad` - Observer's longitude in radians (positive = East)

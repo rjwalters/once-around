@@ -8,6 +8,8 @@
  * Includes atmospheric scintillation (twinkling) for topocentric view mode.
  */
 
+import { horizontalDirectionInto } from "../../geometry/precession";
+
 import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { SkyEngine } from "../../wasm/sky_engine";
@@ -181,7 +183,7 @@ export interface StarsLayer {
   /** Set scintillation intensity (0-1, representing atmospheric turbulence) */
   setScintillationIntensity(intensity: number): void;
   /** Update scintillation for current frame (call each frame when enabled) */
-  updateScintillation(latitude: number, lst: number): void;
+  updateScintillation(latitude: number, lst: number, jd: number): void;
 }
 
 /**
@@ -722,22 +724,14 @@ export function createStarsLayer(scene: THREE.Scene, labelsGroup: THREE.Group): 
    * @param latitude - Observer latitude in degrees
    * @param lst - Local Sidereal Time in degrees
    */
-  function updateScintillation(latitude: number, lst: number): void {
+  function updateScintillation(latitude: number, lst: number, jd: number): void {
     if (!scintillationEnabled) return;
 
     // Update time (in seconds since scintillation started)
     const elapsed = (performance.now() - scintillationStartTime) / 1000;
     scintillationUniforms.time.value = elapsed;
 
-    // Compute zenith direction in Three.js coordinates, writing directly into
-    // the uniform to avoid a per-frame Vector3 allocation.
-    // Zenith is at RA=LST, Dec=latitude. Equivalent to raDecToPosition(lst, latitude, 1).
-    const raRad = (lst * Math.PI) / 180;
-    const decRad = (latitude * Math.PI) / 180;
-    const cosDec = Math.cos(decRad);
-    scintillationUniforms.zenith.value
-      .set(-cosDec * Math.cos(raRad), Math.sin(decRad), cosDec * Math.sin(raRad))
-      .normalize();
+    horizontalDirectionInto(scintillationUniforms.zenith.value, 90, 0, lst, latitude, jd);
   }
 
   return {

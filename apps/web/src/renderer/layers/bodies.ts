@@ -5,13 +5,15 @@
  * and labels. Includes Saturn's rings and Jupiter's texture.
  */
 
+import { horizontalDirectionInto } from "../../geometry/precession";
+
 import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { SkyEngine } from "../../wasm/sky_engine";
 import { getBodiesPositionBuffer, getBodiesAngularDiametersBuffer, getMinorBodiesBuffer } from "../../engine";
 import { SKY_RADIUS, BODY_COLORS, BODY_NAMES, LABEL_OFFSET, POINT_SOURCE_MIN_SIZE_PX, MINOR_BODY_NAMES, MINOR_BODY_COLORS, MINOR_BODY_COUNT } from "../constants";
 import { moonVertexShader, moonFragmentShader, texturedPlanetVertexShader, texturedPlanetFragmentShader } from "../shaders";
-import { readPositionFromBuffer, raDecToPosition } from "../utils/coordinates";
+import { readPositionFromBuffer } from "../utils/coordinates";
 import { calculateLabelOffsetInPlace } from "../utils/labels";
 import { smoothstep } from "../utils/math";
 import { createGlowSpriteMaterial, createTexturedPlanetMaterial } from "../utils/materials";
@@ -61,7 +63,7 @@ export interface BodiesLayer {
   /** Set scintillation intensity (0-1, representing atmospheric turbulence) */
   setScintillationIntensity(intensity: number): void;
   /** Update scintillation for current frame (call each frame when enabled) */
-  updateScintillation(latitude: number, lst: number): void;
+  updateScintillation(latitude: number, lst: number, jd: number): void;
   /** Enable/disable remote view mode (hides normal body renderings) */
   setRemoteViewActive(active: boolean): void;
 }
@@ -730,7 +732,9 @@ export function createBodiesLayer(
    * @param latitude - Observer latitude in degrees
    * @param lst - Local Sidereal Time in degrees
    */
-  function updateScintillation(latitude: number, lst: number): void {
+  const scintillationZenith = new THREE.Vector3();
+
+  function updateScintillation(latitude: number, lst: number, jd: number): void {
     if (!scintillationEnabled) return;
 
     // Update time (in seconds since scintillation started)
@@ -738,8 +742,8 @@ export function createBodiesLayer(
 
     // Compute zenith direction in Three.js coordinates
     // Zenith is at RA=LST, Dec=latitude
-    const zenith = raDecToPosition(lst, latitude, 1);
-    zenith.normalize();
+    const zenith = scintillationZenith;
+    horizontalDirectionInto(zenith, 90, 0, lst, latitude, jd);
 
     for (const material of planetMaterials) {
       material.uniforms.time.value = elapsed;

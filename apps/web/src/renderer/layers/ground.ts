@@ -5,6 +5,8 @@
  * including the horizon ring and cardinal direction labels.
  */
 
+import { horizontalDirectionInto, julianDate } from "../../geometry/precession";
+
 import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { SKY_RADIUS } from "../constants";
@@ -161,27 +163,12 @@ export function createGroundLayer(scene: THREE.Scene): GroundLayer {
     // Don't update until properly initialized with observer location
     if (!initialized || !group.visible) return;
 
-    const latRad = latitude * Math.PI / 180;
-
     // Compute Local Sidereal Time
     const gmst = computeGMST(date);
     let lst = gmst + longitude;
     lst = ((lst % 360) + 360) % 360; // Normalize to 0-360
-    const lstRad = (lst * Math.PI) / 180;
-
-    // Zenith direction: Dec = latitude, RA = LST
-    const cosLat = Math.cos(latRad);
-    const sinLat = Math.sin(latRad);
-    const cosLst = Math.cos(lstRad);
-    const sinLst = Math.sin(lstRad);
-
-    // Equatorial coords (Z-up)
-    const eqX = cosLat * cosLst;
-    const eqY = cosLat * sinLst;
-    const eqZ = sinLat;
-
-    // Convert to Three.js (Y-up): (-X, Z, Y)
-    _zenith.set(-eqX, eqZ, eqY).normalize();
+    const jd = julianDate(date);
+    horizontalDirectionInto(_zenith, 90, 0, lst, latitude, jd);
     _nadir.copy(_zenith).negate();
 
     // Create quaternion to rotate from default pole (-Y) to nadir
@@ -193,7 +180,8 @@ export function createGroundLayer(scene: THREE.Scene): GroundLayer {
 
     // Align cardinal labels so North points toward celestial north pole
     _inverseQuat.copy(_quaternion).invert();
-    _northInLocal.set(0, 1, 0).applyQuaternion(_inverseQuat);
+    horizontalDirectionInto(_northInLocal, 0, 0, lst, latitude, jd);
+    _northInLocal.applyQuaternion(_inverseQuat);
 
     // Project onto local horizon plane (XZ plane)
     _northInLocal.y = 0;

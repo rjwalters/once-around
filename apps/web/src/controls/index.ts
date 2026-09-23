@@ -10,11 +10,12 @@
  * - JWST: Observer on James Webb Space Telescope (L2), quaternion-based free navigation
  */
 
+import { J2000, horizontalDirectionInto } from "../geometry/precession";
+
 import * as THREE from "three";
 import type { CameraState, ViewMode, CelestialControls } from "./types";
 import { updateDebug } from "./debug";
 import {
-  raDecToDirection,
   raDecToQuaternion,
   equatorialToHorizontal,
   horizontalToEquatorial,
@@ -57,6 +58,7 @@ export function createCelestialControls(
   // Topocentric mode state
   let topoLatitude = 0;
   let topoLST = 0;
+  let topoJulianDate = J2000;
   let topoAzimuth = 0;
   let topoAltitude = (30 * Math.PI) / 180;
 
@@ -155,15 +157,12 @@ export function createCelestialControls(
   } {
     const lstDeg = (topoLST * 180) / Math.PI;
     const latDeg = (topoLatitude * 180) / Math.PI;
-    const zenith = raDecToDirection(lstDeg, latDeg);
-
-    const northPole = new THREE.Vector3(0, 1, 0);
-    const north = northPole
-      .clone()
-      .sub(zenith.clone().multiplyScalar(northPole.dot(zenith)))
-      .normalize();
-
-    const east = new THREE.Vector3().crossVectors(north, zenith).normalize();
+    const zenith = new THREE.Vector3();
+    const north = new THREE.Vector3();
+    const east = new THREE.Vector3();
+    horizontalDirectionInto(zenith, 90, 0, lstDeg, latDeg, topoJulianDate);
+    horizontalDirectionInto(north, 0, 0, lstDeg, latDeg, topoJulianDate);
+    horizontalDirectionInto(east, 0, 90, lstDeg, latDeg, topoJulianDate);
 
     return { zenith, north, east };
   }
@@ -522,7 +521,7 @@ export function createCelestialControls(
       // In topocentric mode, convert RA/Dec to Alt/Az to keep horizon horizontal
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
-      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg, topoJulianDate);
       topoAzimuth = (altAz.azimuth * Math.PI) / 180;
       topoAltitude = (altAz.altitude * Math.PI) / 180;
       isAnimating = false;
@@ -547,7 +546,7 @@ export function createCelestialControls(
       // to keep the horizon horizontal
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
-      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg, topoJulianDate);
       console.log('[Controls] animateToRaDec (topocentric):', 'RA:', ra.toFixed(2), 'Dec:', dec.toFixed(2),
         'LST:', lstDeg.toFixed(2), 'Lat:', latDeg.toFixed(2),
         '-> Alt:', altAz.altitude.toFixed(2), 'Az:', altAz.azimuth.toFixed(2));
@@ -612,7 +611,7 @@ export function createCelestialControls(
       const azDeg = (topoAzimuth * 180) / Math.PI;
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
-      return horizontalToEquatorial(azDeg, altDeg, lstDeg, latDeg);
+      return horizontalToEquatorial(azDeg, altDeg, lstDeg, latDeg, topoJulianDate);
     }
 
     // Geocentric/Hubble/JWST: compute from view direction
@@ -717,7 +716,7 @@ export function createCelestialControls(
       const { ra, dec } = getRaDec();
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
-      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      const altAz = equatorialToHorizontal(ra, dec, lstDeg, latDeg, topoJulianDate);
       topoAzimuth = (altAz.azimuth * Math.PI) / 180;
       topoAltitude = (altAz.altitude * Math.PI) / 180;
       viewMode = mode;
@@ -730,7 +729,7 @@ export function createCelestialControls(
         const azDeg = (topoAzimuth * 180) / Math.PI;
         const lstDeg = (topoLST * 180) / Math.PI;
         const latDeg = (topoLatitude * 180) / Math.PI;
-        const raDec = horizontalToEquatorial(azDeg, altDeg, lstDeg, latDeg);
+        const raDec = horizontalToEquatorial(azDeg, altDeg, lstDeg, latDeg, topoJulianDate);
         viewMode = mode;
         lookAtRaDec(raDec.ra, raDec.dec);
       } else {
@@ -747,9 +746,10 @@ export function createCelestialControls(
     return viewMode;
   }
 
-  function setTopocentricParams(latitudeRad: number, lstRad: number): void {
+  function setTopocentricParams(latitudeRad: number, lstRad: number, jd: number = J2000): void {
     topoLatitude = latitudeRad;
     topoLST = lstRad;
+    topoJulianDate = jd;
 
     if (viewMode === "topocentric") {
       updateTopocentricCamera();
@@ -761,7 +761,7 @@ export function createCelestialControls(
       const { ra, dec } = getRaDec();
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
-      return equatorialToHorizontal(ra, dec, lstDeg, latDeg);
+      return equatorialToHorizontal(ra, dec, lstDeg, latDeg, topoJulianDate);
     }
 
     return {
@@ -778,7 +778,7 @@ export function createCelestialControls(
     if (viewMode !== "topocentric") {
       const lstDeg = (topoLST * 180) / Math.PI;
       const latDeg = (topoLatitude * 180) / Math.PI;
-      const raDec = horizontalToEquatorial(azimuth, altitude, lstDeg, latDeg);
+      const raDec = horizontalToEquatorial(azimuth, altitude, lstDeg, latDeg, topoJulianDate);
       animateToRaDec(raDec.ra, raDec.dec, durationMs);
       return;
     }

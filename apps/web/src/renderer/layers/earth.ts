@@ -15,6 +15,8 @@
  *   orbit around the Earth.
  */
 
+import { horizontalDirectionInto, julianDate } from "../../geometry/precession";
+
 import * as THREE from "three";
 import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import { computeGMST } from "../../geometry/time";
@@ -559,6 +561,14 @@ export function createEarthLayer(
     hasBeenPositioned = true;
   }
 
+  const frameX = new THREE.Vector3();
+  const frameY = new THREE.Vector3();
+  const frameZ = new THREE.Vector3();
+  const frameMatrix = new THREE.Matrix4();
+  const earthFrame = new THREE.Quaternion();
+  const earthSpin = new THREE.Quaternion();
+  const spinAxis = new THREE.Vector3(0, 1, 0);
+
   function updateRotation(date: Date, _longitudeDeg: number): void {
     if (!group.visible) return;
 
@@ -593,9 +603,15 @@ export function createEarthLayer(
     const earthMesh = group.children[0] as THREE.Mesh;
     const atmosphereMesh = group.children[1] as THREE.Mesh;
     const cloudMesh = group.children[2] as THREE.Mesh;
-    earthMesh.rotation.y = rotationRad;
-    atmosphereMesh.rotation.y = rotationRad;
-    cloudMesh.rotation.y = cloudRotationRad;
+    // Earth's pole/equinox are of date; the surrounding map is fixed J2000.
+    const jd = julianDate(date);
+    horizontalDirectionInto(frameX, 90, 0, 180, 0, jd);
+    horizontalDirectionInto(frameY, 90, 0, 0, 90, jd);
+    horizontalDirectionInto(frameZ, 90, 0, 90, 0, jd);
+    earthFrame.setFromRotationMatrix(frameMatrix.makeBasis(frameX, frameY, frameZ));
+    earthMesh.quaternion.copy(earthFrame).multiply(earthSpin.setFromAxisAngle(spinAxis, rotationRad));
+    atmosphereMesh.quaternion.copy(earthMesh.quaternion);
+    cloudMesh.quaternion.copy(earthFrame).multiply(earthSpin.setFromAxisAngle(spinAxis, cloudRotationRad));
   }
 
   function updateSunDirection(sunPosition: THREE.Vector3): void {

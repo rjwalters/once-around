@@ -3,6 +3,7 @@
 //! Supports elliptical (e < 1), parabolic (e = 1), and hyperbolic (e > 1) orbits.
 //! Uses perihelion time and perihelion distance rather than mean anomaly at epoch.
 
+use crate::coords::OBLIQUITY_J2000;
 use crate::coords::{CartesianCoord, ecliptic_to_equatorial};
 use crate::planets::AU_TO_KM;
 use crate::time::SkyTime;
@@ -479,7 +480,7 @@ pub fn compute_comet_position(comet: Comet, time: &SkyTime) -> CometPosition {
 /// Compute a comet's position using a shared [`TimeContext`].
 ///
 /// Bit-identical to [`compute_comet_position`]: shares Earth's heliocentric vector
-/// and the true obliquity, which would otherwise be recomputed identically here.
+/// and the epoch. Directions use fixed J2000 obliquity.
 pub fn compute_comet_position_with_ctx(comet: Comet, ctx: &TimeContext) -> CometPosition {
     let elem = comet.elements();
     let jde = ctx.jde;
@@ -507,8 +508,8 @@ pub fn compute_comet_position_with_ctx(comet: Comet, ctx: &TimeContext) -> Comet
     let lon = geo_y.atan2(geo_x);
     let lat = (geo_z / distance_au).asin();
 
-    // Convert to equatorial coordinates using true obliquity
-    let obliquity = ctx.true_obliquity_rad;
+    // Orbital elements and VSOP87A Earth are in the fixed J2000 ecliptic.
+    let obliquity = OBLIQUITY_J2000;
     let direction = ecliptic_to_equatorial(lon, lat, obliquity).normalize();
 
     // Compute magnitude

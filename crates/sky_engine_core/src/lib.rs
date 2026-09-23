@@ -2,6 +2,7 @@ pub mod catalog;
 pub mod comets;
 pub mod coords;
 pub mod events;
+pub mod frames;
 pub mod minor_bodies;
 pub mod planetary_moons;
 pub mod planets;

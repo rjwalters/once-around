@@ -7,7 +7,7 @@
 
 /**
  * Compute Greenwich Mean Sidereal Time for a given date.
- * Uses the IAU 2006 precession model.
+ * Uses the conventional mean sidereal-time polynomial (Meeus, Chapter 12).
  * @param date - The date to compute GMST for
  * @returns GMST in degrees (0-360)
  */
