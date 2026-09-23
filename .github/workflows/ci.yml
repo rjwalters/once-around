@@ -40,6 +40,22 @@ jobs:
       - name: Run unit tests
         run: pnpm --filter once-around-web test:unit
 
+  report-worker:
+    name: Report Worker (schema, local D1, typecheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck:worker
+      - run: pnpm test:worker
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
   rust-test:
     name: Rust tests (sky_engine_core + sky_engine)
     runs-on: ubuntu-latest
@@ -214,3 +230,14 @@ jobs:
 
       - name: Typecheck
         run: pnpm --filter once-around-web typecheck
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Alignment browser tests
+        run: pnpm exec playwright test tests/alignment-diagnostic.spec.ts --reporter=list
+        env:
+          VITE_ALIGNMENT_REPORT_ENDPOINT: https://reports.example.test/reports

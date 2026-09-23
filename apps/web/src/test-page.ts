@@ -1,4 +1,4 @@
-/** Camera-backed alignment measurements; nothing is persisted or applied to AR. */
+/** Camera-backed measurements with explicit, optional report submission. */
 import init, { SkyEngine } from "./wasm/sky_engine";
 import {
   equatorialToHorizontal,
@@ -24,6 +24,17 @@ import {
   type TargetBody,
 } from "./alignment-diagnostic";
 
+import {
+  browserDescription,
+  createAlignmentReport,
+  createReportSender,
+  reportEndpoint,
+} from "./alignment-report";
+import { isDescription } from "./alignment-report-schema";
+
+declare const __GIT_COMMIT__: string;
+declare const __BUILD_TIME__: string;
+
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const startButton = element<HTMLButtonElement>("start");
@@ -34,6 +45,21 @@ const history = element<HTMLOListElement>("history");
 const copyButton = element<HTMLButtonElement>("copy");
 const downloadButton = element<HTMLButtonElement>("download");
 const includeCoordinates = element<HTMLInputElement>("include-coordinates");
+const sendButton = element<HTMLButtonElement>("send-report");
+const sendFields = element<HTMLFieldSetElement>("send-fields");
+const sendCoordinates = element<HTMLInputElement>("send-coordinates");
+const phoneDescription = element<HTMLInputElement>("phone-description");
+const browserInput = element<HTMLInputElement>("browser-description");
+const endpoint = reportEndpoint(
+  import.meta.env.VITE_ALIGNMENT_REPORT_ENDPOINT,
+  import.meta.env.DEV,
+);
+const sendReport = endpoint ? createReportSender(endpoint) : null;
+let sending = false;
+browserInput.value = browserDescription(navigator.userAgent);
+element("send-status").textContent = endpoint
+  ? "Send when ready. Phone and browser descriptions are optional."
+  : "Report sending is not configured for this site. Copy and Download remain available.";
 let target: TargetBody = "Moon";
 let engine: SkyEngine | null = null;
 let memory: WebAssembly.Memory | null = null;
@@ -242,7 +268,45 @@ function renderHistory(): void {
   element("history-count").textContent =
     `${captures.length} of ${CAPTURE_HISTORY_LIMIT} recent captures`;
   copyButton.disabled = downloadButton.disabled = captures.length === 0;
+  refreshSend();
 }
+
+function refreshSend(): void {
+  sendButton.disabled =
+    !sendReport ||
+    sending ||
+    captures.length === 0 ||
+    !isDescription(phoneDescription.value.trim() || "Unknown") ||
+    !isDescription(browserInput.value.trim() || "Unknown");
+  sendFields.disabled = sending;
+  sendButton.textContent = sending ? "Sending…" : "Send report";
+}
+phoneDescription.addEventListener("input", refreshSend);
+browserInput.addEventListener("input", refreshSend);
+sendButton.addEventListener("click", async () => {
+  if (!sendReport || sending) return;
+  try {
+    const report = createAlignmentReport(
+      captures,
+      sendCoordinates.checked,
+      { phone: phoneDescription.value, browser: browserInput.value },
+      { commit: __GIT_COMMIT__, time: __BUILD_TIME__ },
+    );
+    sending = true;
+    refreshSend();
+    element("send-status").textContent =
+      "Sending measurements… Keep this page open.";
+    const receipt = await sendReport(report);
+    element("send-status").textContent =
+      `Report received. Receipt: ${receipt.receiptId}. Your local captures are still available.`;
+  } catch (error) {
+    element("send-status").textContent =
+      `${error instanceof Error ? error.message : "Could not send. Try again later."} Your local captures are still available.`;
+  } finally {
+    sending = false;
+    refreshSend();
+  }
+});
 
 startButton.addEventListener("click", startSession);
 stopButton.addEventListener("click", stopSession);

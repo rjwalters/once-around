@@ -1,0 +1,81 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "once-around-reports-unconfigured",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-11",
+  // Default is disabled and cannot deploy to a real account. Production is
+  // explicit; local development has a separate database and rate namespace.
+  "account_id": "00000000000000000000000000000000",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "REPORTS_ENABLED": "false",
+    "ALLOWED_ORIGINS": "https://once-around.pages.dev,https://oncearound.org,https://www.oncearound.org",
+  },
+  "d1_databases": [
+    {
+      "binding": "REPORTS",
+      "database_name": "once-around-reports-unconfigured",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "ratelimits": [
+    {
+      "name": "REPORT_RATE_LIMIT",
+      "namespace_id": "12601",
+      "simple": { "limit": 20, "period": 60 },
+    },
+  ],
+  "triggers": { "crons": ["17 3 * * *"] },
+  "env": {
+    "production": {
+      "name": "once-around-reports",
+      "account_id": "251e6e8626d921603fdc3f0d75576bc6",
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": {
+        "REPORTS_ENABLED": "true",
+        "ALLOWED_ORIGINS": "https://once-around.pages.dev,https://oncearound.org",
+      },
+      "d1_databases": [
+        {
+          "binding": "REPORTS",
+          "database_name": "once-around-alignment-reports",
+          "database_id": "a670b616-2753-4c36-b164-e2650b39c869",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "REPORT_RATE_LIMIT",
+          "namespace_id": "12601",
+          "simple": { "limit": 20, "period": 60 },
+        },
+      ],
+    },
+    "local": {
+      "name": "once-around-reports-local",
+      "vars": {
+        "REPORTS_ENABLED": "true",
+        "ALLOWED_ORIGINS": "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://127.0.0.1:5173",
+      },
+      "d1_databases": [
+        {
+          "binding": "REPORTS",
+          "database_name": "once-around-reports-local",
+          "database_id": "00000000-0000-0000-0000-000000000126",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "REPORT_RATE_LIMIT",
+          "namespace_id": "12602",
+          "simple": { "limit": 20, "period": 60 },
+        },
+      ],
+    },
+  },
+}

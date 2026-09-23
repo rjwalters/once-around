@@ -19,6 +19,9 @@ export default defineConfig({
   ],
   webServer: {
     command: "pnpm dev",
+    env: {
+      VITE_ALIGNMENT_REPORT_ENDPOINT: "https://reports.example.test/reports",
+    },
     url: "http://localhost:5173",
     reuseExistingServer: !process.env.CI,
     timeout: 60000,

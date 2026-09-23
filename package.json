@@ -16,7 +16,9 @@
     "test:unit": "pnpm --filter once-around-web test:unit",
     "typecheck": "pnpm --filter once-around-web typecheck",
     "test:perf": "playwright test tests/performance.spec.ts --reporter=list",
-    "test:ui": "playwright test --ui"
+    "test:ui": "playwright test --ui",
+    "test:worker": "pnpm --filter once-around-report-worker test",
+    "typecheck:worker": "pnpm --filter once-around-report-worker typecheck"
   },
   "keywords": [],
   "author": "",
