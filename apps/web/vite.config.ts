@@ -66,8 +66,9 @@ export default defineConfig({
         test: resolve(__dirname, "test.html"),
       },
       output: {
-        manualChunks: {
-          three: ["three"],
+        // Vite 8 (Rolldown) only accepts the function form of manualChunks.
+        manualChunks(id: string) {
+          if (id.includes("/node_modules/three/")) return "three";
         },
       },
     },
