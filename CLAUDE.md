@@ -23,7 +23,7 @@ cargo test -p sky_engine_core   # Rust engine suites (unit + golden + Horizons a
 - **The SGP4 cross-check owns a second, separately pinned fixture pair.** `crates/sky_engine/tests/sgp4_cross_check.rs` validates the Horizons pipeline against independent SGP4 propagation using `iss_tle_sgp4_check.tle` + `iss_ephemeris_sgp4_check_fixture.bin` (both 2026-07-29). Those two must always be captured *together* — the tolerance assumes the TLE epoch sits inside the ephemeris window, and a fresh TLE paired with a stale window silently inflates the deltas. `sgp4`/`erfa` are `[dev-dependencies]` on purpose so `pnpm build:wasm` never links them. Regeneration procedure is in that file's doc comment.
 
 <!-- BEGIN REPO-SKILLS -->
-This repository has [Repo Skills](https://github.com/rjwalters/repo) v0.4.3 installed —
+This repository has [Repo Skills](https://github.com/rjwalters/repo) v0.24.3 installed —
 general repository hygiene and environment commands invoked as `/repo:<command>`. Run
 `/repo:help` for the command list, or see `.claude/skills/repo/SKILL.md` for the full
 guide. Hygiene commands apply safe, reversible fixes by default and report each
