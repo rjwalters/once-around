@@ -187,17 +187,22 @@ impl SatelliteEphemeris {
 
     /// Interpolate position at a given Julian Date.
     /// Uses cubic Hermite interpolation for smooth motion.
-    /// Returns None if the date is outside the ephemeris range.
+    /// Returns None if the date is outside the ephemeris range, or if `jd`
+    /// is not finite (NaN or +/-infinity) -- a non-finite query time can
+    /// never be "inside" the range, so it must not reach the search below.
     pub fn interpolate(&self, jd: f64) -> Option<(f64, f64, f64)> {
         if self.points.len() < 2 {
             return None;
         }
 
-        // Find the bracketing points
-        let idx = match self
-            .points
-            .binary_search_by(|p| p.jd.partial_cmp(&jd).unwrap())
-        {
+        if !jd.is_finite() {
+            return None;
+        }
+
+        // Find the bracketing points. `total_cmp` is a total order, so the
+        // comparator can never panic even if a stored point's JD were NaN
+        // (defence in depth behind the guard above).
+        let idx = match self.points.binary_search_by(|p| p.jd.total_cmp(&jd)) {
             Ok(i) => {
                 return Some((
                     self.points[i].x_km,
@@ -1029,6 +1034,46 @@ mod tests {
         assert!((pos.0 - 3400.0).abs() < 1.0);
         assert!((pos.1 - 3400.0).abs() < 1.0);
         assert!(pos.2.abs() < 1.0);
+    }
+
+    #[test]
+    fn test_interpolate_non_finite_jd_returns_none() {
+        // Regression for #158: a non-finite query time used to panic in the
+        // binary search comparator (`partial_cmp(..).unwrap()` on NaN).
+        let points: Vec<SatelliteEphemerisPoint> = (0..6)
+            .map(|i| SatelliteEphemerisPoint {
+                jd: 2460000.0 + i as f64 * 0.25,
+                x_km: 6800.0 + i as f64,
+                y_km: 100.0 * i as f64,
+                z_km: -50.0 * i as f64,
+            })
+            .collect();
+        let mut data = Vec::new();
+        data.extend_from_slice(&(points.len() as u32).to_le_bytes());
+        for p in &points {
+            data.extend_from_slice(&p.jd.to_le_bytes());
+            data.extend_from_slice(&p.x_km.to_le_bytes());
+            data.extend_from_slice(&p.y_km.to_le_bytes());
+            data.extend_from_slice(&p.z_km.to_le_bytes());
+        }
+        let eph = SatelliteEphemeris::from_binary(SatelliteId::ISS, &data).unwrap();
+
+        assert_eq!(eph.interpolate(f64::NAN), None);
+        assert_eq!(eph.interpolate(f64::INFINITY), None);
+        assert_eq!(eph.interpolate(f64::NEG_INFINITY), None);
+
+        // Finite in-range queries still work: an exact sample hit, a
+        // linear-fallback interval, and a cubic (interior) interval.
+        assert_eq!(eph.interpolate(2460000.5), Some((6802.0, 200.0, -100.0)));
+        assert!(eph.interpolate(2460000.1).is_some());
+        assert!(eph.interpolate(2460000.6).is_some());
+
+        // The legacy ISS wrapper delegates to the same code path.
+        let legacy = IssEphemeris::from_binary(&data).unwrap();
+        assert_eq!(legacy.interpolate(f64::NAN), None);
+        assert_eq!(legacy.interpolate(f64::INFINITY), None);
+        assert_eq!(legacy.interpolate(f64::NEG_INFINITY), None);
+        assert!(legacy.interpolate(2460000.6).is_some());
     }
 
     /// Sun along +X at a representative Earth-Sun distance.
