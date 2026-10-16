@@ -40,11 +40,45 @@ set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$TEST_DIR/.." && pwd)"
-DEFAULTS_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
-GUIDE_MD="$DEFAULTS_DIR/.claude/commands/loom/guide.md"
-SWEEP_MD="$DEFAULTS_DIR/.claude/commands/loom/sweep.md"
-CHAMPION_MD="$DEFAULTS_DIR/.claude/commands/loom/champion-pr-merge.md"
-CHAMPION_COMMON_MD="$DEFAULTS_DIR/.claude/commands/loom/champion-common.md"
+
+# Two `..` reaches repo-root/.claude/commands/loom for an INSTALLED copy
+# (SCRIPTS_DIR is .loom/scripts there); one `..` reaches defaults/.claude/
+# commands/loom when running inside this source repo (SCRIPTS_DIR is
+# defaults/scripts) -- the two layouts differ in depth, so probe both rather
+# than hard-coding one (#6725).
+if [[ -d "$SCRIPTS_DIR/../../.claude/commands/loom" ]]; then
+    PROMPT_DIR="$(cd "$SCRIPTS_DIR/../../.claude/commands/loom" && pwd)"
+else
+    PROMPT_DIR="$(cd "$SCRIPTS_DIR/../.claude/commands/loom" && pwd)"
+fi
+GUIDE_MD="$PROMPT_DIR/guide.md"
+CHAMPION_MD="$PROMPT_DIR/champion-pr-merge.md"
+CHAMPION_COMMON_MD="$PROMPT_DIR/champion-common.md"
+
+# The /loom:sweep skill in document order (#7726 split the monolithic
+# sweep.md into a dispatcher + 11 sibling reference files). Concatenate them
+# into one file so the --auto-stack detection pattern is found wherever it
+# now lives — mirrors SWEEP_SKILL_FILES in
+# loom-daemon/tests/sweep_md_doc_lint.rs.
+SWEEP_SKILL_FILES=(
+    sweep.md
+    sweep-arguments.md
+    sweep-examples.md
+    sweep-execution-model.md
+    sweep-backend-detection.md
+    sweep-scheduling-signals.md
+    sweep-dry-run.md
+    sweep-mode-c-lifecycle.md
+    sweep-wave-lifecycle.md
+    sweep-summary-output.md
+    sweep-run-hygiene.md
+    sweep-reference.md
+)
+SWEEP_MD="$(mktemp)"
+trap 'rm -f "$SWEEP_MD"' EXIT
+for f in "${SWEEP_SKILL_FILES[@]}"; do
+    cat "$PROMPT_DIR/$f" >> "$SWEEP_MD"
+done
 
 # Source warn-out-of-set-deps.sh's real parse_out_of_set_deps BEFORE defining
 # our own RED/GREEN/NC below — the script's own `[[ -t 2 ]]` color block
@@ -53,27 +87,8 @@ CHAMPION_COMMON_MD="$DEFAULTS_DIR/.claude/commands/loom/champion-common.md"
 # shellcheck source=/dev/null
 source "$SCRIPTS_DIR/warn-out-of-set-deps.sh"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-assert_eq() {
-    local expected="$1" actual="$2" msg="$3"
-    TESTS_RUN=$((TESTS_RUN + 1))
-    if [[ "$expected" == "$actual" ]]; then
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-        echo -e "  ${GREEN}PASS${NC}: $msg"
-    else
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        echo -e "  ${RED}FAIL${NC}: $msg"
-        echo "    Expected: '$expected'"
-        echo "    Actual:   '$actual'"
-    fi
-}
+# shellcheck source=lib/assert.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assert.sh"
 
 # Pin a literal snippet as present verbatim in a doc file — catches drift
 # between this test's mirrored functions and the shipped markdown.
@@ -91,13 +106,14 @@ assert_doc_contains() {
 
 # =====================================================================
 # guide.md's parse_dependencies — mirrors defaults/.claude/commands/loom/guide.md
-# verbatim (four alternatives incl. checkbox form; widened separator).
+# verbatim (four alternatives incl. checkbox form, UNCHECKED only per #7973;
+# widened separator).
 # =====================================================================
 guide_parse_dependencies() {
     local body="$1"
     echo "$body" \
-        | grep -E '(Blocked by|Depends on|Requires|\- \[.\])[*_:[:space:]]*#[0-9]+' \
-        | grep -oE '#[0-9]+' | tr -d '#' | sort -u
+        | grep -E '(Blocked by|Depends on|Requires|\- \[ \])[*_:[:space:]]*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+' \
+        | grep -oE '([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+' | sed 's/^#//' | sort -u
 }
 
 # =====================================================================
@@ -160,10 +176,28 @@ out="$(guide_parse_dependencies '- [ ] #12: some description')"
 assert_eq "12" "$out" "checkbox form still works (- [ ] #N)"
 
 echo
+echo "--- guide.md parse_dependencies: checked vs. unchecked checklist (#7973) ---"
+
+out="$(guide_parse_dependencies '- [x] #7431 (soak criteria + rollback path documented)')"
+assert_eq "" "$out" "a CHECKED checklist box (- [x] #N) is NOT a dependency (#7973 regression guard)"
+
+out="$(guide_parse_dependencies '- [ ] #12: some description')"
+assert_eq "12" "$out" "an UNCHECKED checklist box (- [ ] #N) still IS a dependency (no regression to #4508)"
+
+echo
 echo "--- guide.md parse_dependencies: edge case (unrelated same-line ref) ---"
 
 out="$(guide_parse_dependencies 'Depends on #5 (see #99)')"
 assert_eq $'5\n99' "$out" "captures the unrelated same-line #99 too (documented conservative trade-off)"
+
+echo
+echo "--- guide.md parse_dependencies: cross-repo OWNER/REPO#N (#10443) ---"
+
+out="$(guide_parse_dependencies 'Blocked by: example-org/tool-repo#202')"
+assert_eq "example-org/tool-repo#202" "$out" "qualified ref is kept whole (routed via --repo by check_and_unblock)"
+
+out="$(guide_parse_dependencies '**Blocked by:** example-org/tool-repo#202, #5')"
+assert_eq "5"$'\n'"example-org/tool-repo#202" "$out" "mixed qualified + bare refs: bare stays a plain number"
 
 echo
 echo "--- sweep.md --auto-stack detection: widened separator, phrase-set unchanged ---"
@@ -228,8 +262,8 @@ echo
 echo "--- Doc pins: shipped markdown matches the mirrored functions above ---"
 
 assert_doc_contains "$GUIDE_MD" \
-    "grep -E '(Blocked by|Depends on|Requires|\- \[.\])[*_:[:space:]]*#[0-9]+'" \
-    "guide.md parse_dependencies ships the widened four-alternative pattern"
+    "grep -E '(Blocked by|Depends on|Requires|\- \[ \])[*_:[:space:]]*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+'" \
+    "guide.md parse_dependencies ships the widened four-alternative pattern (unchecked checkbox only, #7973; OWNER/REPO#N, #10443)"
 
 assert_doc_contains "$SWEEP_MD" \
     "grep -E '(Depends on|Requires)[*_:[:space:]]*#[0-9]+'" \

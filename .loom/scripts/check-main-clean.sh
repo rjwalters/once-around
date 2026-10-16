@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # check-main-clean.sh - Backstop guard: fail if the MAIN worktree is dirty.
+# requires-daemon: stashes optional        --quarantine probes `stashes build-trees`; missing/too old -> loud include-everything rescue (#11075)
 #
 # Detects the #2802 / #3513 failure mode where a Builder agent's cwd resets
 # between tool calls and a repo-relative Write/Edit/Bash file operation lands
@@ -13,6 +14,22 @@
 # It resolves the MAIN worktree from anywhere — including from inside an issue
 # worktree — via `git rev-parse --git-common-dir`, so it works whether invoked
 # from the repo root or from a worktree.
+#
+# Abandoned-conflict detection (#6162):
+#   Before any snapshot/baseline/plain/quarantine logic runs, this script also
+#   checks for an unmerged index entry (`git status --porcelain` XY in
+#   DD/AU/UD/UA/DU/AA/UU) with NO merge or rebase actually in progress
+#   (MERGE_HEAD, rebase-merge/, rebase-apply/ all absent) — an agent's merge
+#   or `git stash pop` hit a conflict and was walked away from instead of
+#   resolved or aborted (the #6162 incident: an abandoned stash-pop conflict
+#   left live `<<<<<<<`/`=======`/`>>>>>>>` markers in a script that a resync
+#   would have shipped fleet-wide). This is a DISTINCT, more urgent report
+#   than ordinary dirt (which already technically flags a `UU` line, but with
+#   a generic "dirty" message that doesn't name a working restore path) —
+#   see the "Abandoned-conflict detection" block below for the exact
+#   condition and remediation. It is never safe to --baseline away or
+#   --quarantine (an unmerged index entry breaks `git stash push`), so it
+#   always hard-exits (EXIT_MAIN_DIRTY) rather than flowing into either.
 #
 # Usage:
 #   ./.loom/scripts/check-main-clean.sh                  # check main worktree, exit 3 if dirty
@@ -68,6 +85,18 @@
 #   - `--log FILE` appends the same one-line JSON entry to FILE (best effort;
 #     never fails the check). Defaults to `<main>/.loom/logs/main-quarantine.log`
 #     when that directory exists.
+#   - Forge breadcrumb (#5691): on a SUCCESSFUL quarantine, if `--label` carries
+#     an `issue=N` field (the run-id/issue-number attribution every caller
+#     already passes, e.g. `run=$RUN_ID issue=$N`), a best-effort
+#     `gh issue comment N` is posted naming the stashed paths, the host, and the
+#     stash ref/commit — so an operator (or the issue's own history) has a
+#     forge-visible trail back to `stash@{N}` on a specific host, not just the
+#     structured log line. A missing/unauthenticated `gh`, a label with no
+#     `issue=` field (e.g. the post-wave `run=... wave=...` label), or a failed
+#     API call are all silent no-ops that never change this check's exit code;
+#     the attempt's own outcome is recorded as a distinct
+#     `"event":"main-clean.quarantine-comment"` log line. Opt out entirely with
+#     `LOOM_QUARANTINE_COMMENT=0`.
 #   - Exit 4 (not 3) on a SUCCESSFUL quarantine: main is provably back at the
 #     baseline, so the caller can log and continue rather than hard-blocking. If
 #     the quarantine could not be completed, the exit stays 3 (hard-block).
@@ -169,7 +198,19 @@ EXIT_QUARANTINED=4
 LOOM_OWNED_PREFIXES=(
     ".loom/sweep-checkpoint/"
     ".loom/sweep-run/"
-    ".loom/tokens/"
+    # The two per-host credential pools, never committed and never quarantined:
+    # the Claude OAuth token pool and the provider-neutral API-key account pool
+    # (#8401). They share one physical line, and the reason is not stylistic:
+    # this file is `contract` in scripts/shell-allowlist.txt, so epic #7810's
+    # shell-budget ratchet counts code LINES and refuses a new one here. Putting
+    # the second entry on the existing line makes that count read +0. Nothing
+    # was removed elsewhere to pay for it, so this is NOT the ratchet's option 2
+    # -- it sidesteps the line count, because the gate offers no path for a pure
+    # data row. Whether that is acceptable is an open policy question raised on
+    # PR #8428; do not treat this line as precedent for adding further entries.
+    # The Rust mirror (loom-daemon/src/main_health_gate/owned_paths.rs) is under
+    # no such budget and lists them one per line.
+    ".loom/tokens/" ".loom/api-keys/"
     ".loom/accounts.env"
     ".loom/exit-codes/"
     ".loom/stats/"
@@ -181,6 +222,16 @@ LOOM_OWNED_PREFIXES=(
     ".loom/logs/"
     ".loom/worktrees/"
     ".loom-managed"
+    # Host-local config overlay (#4039 / Epic #3835 Phase 2; listed here for
+    # #8075). `.loom-local/local.json` is the highest-precedence config tier and
+    # is ungitted BY DESIGN — so in a consumer repo whose managed .gitignore
+    # block predates #8075 it surfaces as `?? .loom-local/` and was eligible for
+    # `--quarantine`'s `git stash push --include-untracked`. Stashing it
+    # silently reverts whatever the operator overrode (e.g. a per-repo model
+    # pin) with no signal anywhere. It is never source a builder writes to main,
+    # so filtering it cannot mask contamination. Independent of the .gitignore
+    # fix, which only reaches a consumer repo after a resync.
+    ".loom-local/"
 )
 
 # ---- Loom-owned stash producers (#5185) ----------------------------------
@@ -227,14 +278,16 @@ is_loom_owned() {
 # filter_loom_owned <porcelain-text> -> the same text with Loom-owned transient
 # lines removed. Parses each `git status --porcelain` v1 line (2 status chars +
 # space + path; rename lines carry "old -> new" and are keyed on the new path).
+# Only an R/C status splits on " -> ": a non-rename path containing one always
+# arrives C-quoted (`?? "a -> b"`) and must be evaluated whole (#11149). A
+# QUOTED rename side that itself contains " -> " still mis-splits here — the
+# result is a path that matches nothing Loom-owned, so the line is kept.
 filter_loom_owned() {
     local in="$1" line path out=""
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         path="${line:3}"
-        if [[ "$path" == *" -> "* ]]; then
-            path="${path##* -> }"
-        fi
+        if [[ "${line:0:2}" == *[RC]* ]]; then path="${path##* -> }"; fi
         path="${path%\"}"
         path="${path#\"}"
         if is_loom_owned "$path"; then
@@ -264,6 +317,14 @@ unquote_path() {
         p=$(printf '%b' "$p")
     fi
     printf '%s' "$p"
+}
+
+# Portable sha256 (sha256sum on Linux, shasum on macOS) - same fallback shape
+# the rest of the repo's scripts use (see detect-dependency-cycle.sh).
+_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum
+    elif command -v shasum >/dev/null 2>&1; then shasum -a 256
+    else cksum; fi
 }
 
 # json_escape <text> -> the text, escaped for embedding in a JSON string.
@@ -476,6 +537,68 @@ status=$(git -C "$main_root" status --porcelain 2>/dev/null || true)
 # every mode sees a consistently-filtered view.
 status=$(filter_loom_owned "$status")
 
+# ---- Abandoned-conflict detection (#6162 AC3) -----------------------------
+#
+# An unmerged index entry (porcelain XY in DD/AU/UD/UA/DU/AA/UU — the seven
+# combinations git uses for an unmerged path) with NO merge/rebase actually
+# in progress (MERGE_HEAD, rebase-merge/, rebase-apply/ all absent from the
+# git dir) means an agent popped a stash / attempted a merge, hit a conflict,
+# and walked away without resolving OR aborting — exactly the #6162
+# incident: an abandoned `git stash pop` conflict left live `<<<<<<<` /
+# `=======` / `>>>>>>>` markers in defaults/scripts/spawn-claude.sh, which
+# `resync-installed.sh` would then have shipped fleet-wide.
+#
+# Generic `git status --porcelain` dirty-detection already technically
+# covers this — a `UU ` line is not excluded by is_loom_owned, so it would
+# already trip the plain/baseline "dirty" path below — but a bare "main
+# worktree is dirty" message does not tell an operator this is a stuck
+# conflict, nor that the standard "git checkout -- <path>" restore does not
+# work on an unmerged path. This block reports it as its own, more specific
+# and more urgent condition, with remediation that actually applies.
+#
+# Runs unconditionally for every mode that reaches this point (snapshot,
+# baseline, plain, quarantine — --list-quarantined already returned above,
+# since it is a read-only stash report unrelated to the working tree) and
+# BEFORE any baseline/quarantine logic: an abandoned conflict is never safe
+# to baseline away (it is never "pre-existing dirt" worth ignoring) or to
+# quarantine automatically (`git stash push` against an unmerged index entry
+# is unreliable), so it hard-exits directly rather than flowing into either.
+unmerged=$(printf '%s\n' "$status" | grep -E '^(DD|AU|UD|UA|DU|AA|UU) ' || true)
+if [[ -n "$unmerged" ]]; then
+    merge_in_progress=0
+    [[ -f "$abs_common/MERGE_HEAD" ]] && merge_in_progress=1
+    [[ -d "$abs_common/rebase-merge" ]] && merge_in_progress=1
+    [[ -d "$abs_common/rebase-apply" ]] && merge_in_progress=1
+    if [[ "$merge_in_progress" -eq 0 ]]; then
+        echo "ERROR: MAIN worktree has an ABANDONED CONFLICT STATE (unmerged index entries, no merge/rebase in progress)." >&2
+        echo "       Main worktree: $main_root" >&2
+        echo "" >&2
+        echo "       This usually means a merge / cherry-pick / 'git stash pop' hit a" >&2
+        echo "       conflict and was walked away from instead of resolved or aborted" >&2
+        echo "       (#6162). The path(s) below likely still contain literal" >&2
+        echo "       '<<<<<<<' / '=======' / '>>>>>>>' conflict markers and will NOT" >&2
+        echo "       parse or behave as valid source." >&2
+        echo "" >&2
+        echo "       Unmerged path(s):" >&2
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "         $line" >&2
+        done <<< "$unmerged"
+        echo "" >&2
+        echo "       This is NOT safe to restore with a plain 'git checkout -- <path>'" >&2
+        echo "       (it will refuse on an unmerged path) and is NOT auto-quarantined" >&2
+        echo "       ('git stash push' against an unmerged index entry is unreliable)." >&2
+        echo "       Resolve manually:" >&2
+        echo "         - finish the merge for each path, then 'git add <path>'; or" >&2
+        echo "         - restore a known-good version: 'git checkout <good-ref> -- <path>'" >&2
+        echo "           (stages the restored content and clears the conflict for that" >&2
+        echo "           path — the exact remediation used in the #6162 incident); or" >&2
+        echo "         - discard the whole conflicted operation and return to HEAD with" >&2
+        echo "           'git reset --merge'." >&2
+        exit "$EXIT_MAIN_DIRTY"
+    fi
+fi
+
 # ---- Snapshot mode: record and exit --------------------------------------
 if [[ "$MODE" == "snapshot" ]]; then
     # Ensure the parent directory exists so callers can point at .loom/ transients.
@@ -539,14 +662,98 @@ emit_quarantine_log() {
     fi
 }
 
+# post_quarantine_breadcrumb <label> <stash-sha> (#5691)
+# Best-effort forge breadcrumb: posts a comment on the issue named by the
+# label's `issue=` field (the run-id/issue-number attribution every
+# check-main-clean.sh caller already carries in its --label, e.g.
+# "run=$RUN_ID issue=$N" — see sweep.md's wave-lifecycle backstop) stating
+# which paths were stashed, on which host, and as which stash ref. Reads the
+# offending path list from the global OFFENDING_PATHS array populated by
+# collect_offending_paths just before this is called.
+#
+# This is PURELY additive: nothing here can change the check's exit code or
+# verdict. A label with no `issue=` field (e.g. the post-wave `run=...
+# wave=...` label — nothing to comment on), a missing/unauthenticated `gh`
+# binary, LOOM_QUARANTINE_COMMENT=0, or a failed API call are all silent
+# no-ops from the caller's perspective; the outcome is only ever recorded (via
+# emit_quarantine_log, reusing the same structured log file rather than a new
+# one) as its own "main-clean.quarantine-comment" event, distinct from the
+# "main-clean.quarantine" event this augments.
+post_quarantine_breadcrumb() {
+    local label="$1" stash_sha="$2"
+    local issue_num
+    issue_num=$(stash_field "$label" "issue")
+    [[ -n "$issue_num" ]] || return 0
+    [[ "${LOOM_QUARANTINE_COMMENT:-1}" != "0" ]] || return 0
+    command -v gh >/dev/null 2>&1 || return 0
+
+    local host
+    host=$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo "")
+    [[ -n "$host" ]] || host="unknown-host"
+
+    # The raw hostname must never reach a *public* forge comment (#6189): a
+    # consumer repo's quarantine breadcrumb is world-readable, and combined
+    # with the fleet-hardware detail already shipped in
+    # .loom/docs/daemon-reference.md it is more identifying of the operator
+    # than either piece alone. Derive a short, stable, non-reversible
+    # identifier from the hostname for the comment body instead; the
+    # structured log below still records the raw `$host` since that file
+    # stays on the operator's own machine.
+    local host_public
+    host_public="host-$(printf '%s' "$host" | _sha256 | cut -c1-8)"
+
+    local paths_display="" p
+    for p in "${OFFENDING_PATHS[@]}"; do
+        [[ -n "$paths_display" ]] && paths_display+=", "
+        paths_display+="\`$p\`"
+    done
+    [[ -n "$paths_display" ]] || paths_display="(no paths recorded)"
+
+    local body
+    body=$(cat <<EOF
+Quarantine: uncommitted changes to ${paths_display} were stashed on \`${host_public}\` as \`stash@{0}\` (commit \`${stash_sha:0:12}\`) by \`check-main-clean.sh --quarantine\`.
+
+Nothing was discarded — recover the diff on that host with \`git stash show -p ${stash_sha}\`, or list every outstanding quarantine with \`./.loom/scripts/check-main-clean.sh --list-quarantined\`.
+
+<!-- loom:quarantine-breadcrumb stash=${stash_sha} -->
+EOF
+)
+
+    local comment_ts comment_err rc=0
+    comment_ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
+    # #9548: vet the repo (forge-helpers.sh in a subshell: it sets -e), and
+    # name it; a refusal is logged as a failed breadcrumb like any other.
+    local comment_repo=""
+    if comment_repo="$(source "$(dirname "${BASH_SOURCE[0]}")/lib/forge-helpers.sh" && loom_write_repo "${LOOM_REPO:-}" 2>&1)"; then
+        comment_err=$(gh issue comment "$issue_num" --repo "$comment_repo" --body "$body" 2>&1) || rc=$?
+    else
+        rc=1; comment_err="loom-daemon forge may-write refused the repo (#9548): $comment_repo"
+    fi
+    if [[ "$rc" -eq 0 ]]; then
+        emit_quarantine_log "{\"event\":\"main-clean.quarantine-comment\",\"ts\":\"$comment_ts\",\"result\":\"posted\",\"issue\":\"$(json_escape "$issue_num")\",\"host\":\"$(json_escape "$host")\",\"stash_commit\":\"$stash_sha\"}"
+    else
+        emit_quarantine_log "{\"event\":\"main-clean.quarantine-comment\",\"ts\":\"$comment_ts\",\"result\":\"failed\",\"issue\":\"$(json_escape "$issue_num")\",\"host\":\"$(json_escape "$host")\",\"stash_commit\":\"$stash_sha\",\"reason\":\"$(json_escape "$(printf '%s' "$comment_err" | tr '\n' ' ')")\"}"
+    fi
+    return 0
+}
+
 # Collect the offending (NEW) paths from the porcelain lines. Rename lines
 # ("old -> new") contribute BOTH sides so the rename is undone as a whole.
+# Only an R/C status is split (#11149): `?? "a -> b"` is one quoted path. A
+# QUOTED rename side containing " -> " is still mis-split (pre-existing,
+# contrived); the bogus pathspec matches nothing, so the stash is unaffected.
+#
+# A STAGED deletion (`D  old.txt`) is unstaged here: `git stash push -- <path>`
+# fails ("did not match any files") on a path in neither the index nor the
+# worktree. A rename into a build tree leaves exactly that once its build-tree
+# side is unstaged (#11149); the stash still records the worktree deletion.
 collect_offending_paths() {
     local line path
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         path="${line:3}"
-        if [[ "$path" == *" -> "* ]]; then
+        if [[ "${line:0:2}" == "D " ]]; then git -C "$main_root" reset -q -- ":(literal,top)$(unquote_path "$path")" >/dev/null 2>&1 || true; fi
+        if [[ "${line:0:2}" == *[RC]* && "$path" == *" -> "* ]]; then
             OFFENDING_PATHS+=("$(unquote_path "${path%% -> *}")")
             path="${path##* -> }"
         fi
@@ -575,7 +782,51 @@ if [[ -n "$effective_status" && "$QUARANTINE" -eq 1 ]]; then
             <(printf '%s\n' "$recheck_status" | sort) \
             | sed '/^$/d')
     fi
-    effective_status="$recheck_status"
+    # Cargo build trees are never rescued (#11075): a directory holding a
+    # content-verified cargo marker (any name, ignored or not) is excluded from
+    # the stash and its porcelain lines are neither offending nor residual
+    # dirt. Discovery lives in `loom-daemon stashes build-trees` (Rust, shared
+    # with the worktree quarantine) — one implementation, not two that drift.
+    #
+    # No usable daemon (missing, or too old to have the subcommand) falls back
+    # to the pre-#11075 include-everything rescue, LOUDLY. Refusing instead
+    # would leave the dirt on main, which is worse than one oversized stash.
+    TAG_DIRS=(); bt_excludes=(); bt_ok=0
+    # shellcheck source=lib/locate-daemon-bin.sh
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/locate-daemon-bin.sh"
+    bt_bin=$(loom_daemon_self_bin_override || LOOM_LOCATE_DAEMON_BIN_QUIET=1 loom_locate_daemon_bin "$main_root" || true)
+    if [[ -n "$bt_bin" ]]; then
+        # A trailing empty record is the success sentinel: it only arrives when
+        # the subcommand exited 0, so a failed or absent subcommand stays bt_ok=0.
+        while IFS= read -r -d '' d; do
+            if [[ -z "$d" ]]; then bt_ok=1; else TAG_DIRS+=("$d"); fi
+        done < <("$bt_bin" stashes build-trees --workspace "$main_root" -z 2>/dev/null && printf '\0')
+    fi
+    if [[ "$bt_ok" -eq 0 ]]; then
+        # A subcommand that printed some directories and then failed must not
+        # leave them excluded: the warning promises include-everything (#11149).
+        TAG_DIRS=()
+        echo "WARNING: check-main-clean.sh: no loom-daemon with \`stashes build-trees\` (${bt_bin:-not found});" >&2
+        echo "         cargo build trees will NOT be excluded and may be stashed into refs/stash (#11075)." >&2
+        echo "         Update loom-daemon (\`loom update\`) to restore the exclusion." >&2
+    fi
+    for d in ${TAG_DIRS[@]+"${TAG_DIRS[@]}"}; do
+        # Exclude pathspecs only limit the worktree diff; unstage staged copies
+        # so the stash's index commit cannot carry them either.
+        git -C "$main_root" reset -q -- ":(literal,top)$d" >/dev/null 2>&1 || true
+        bt_excludes+=(":(exclude,literal,top)$d")
+    done
+    # bt_filter <porcelain> -> the text minus build-tree lines; unchanged when
+    # the daemon is unusable or the call fails (never drop real dirt).
+    bt_filter() {
+        local out
+        if [[ "$bt_ok" -eq 1 ]] && out=$(printf '%s\n' "$1" | "$bt_bin" stashes build-trees --workspace "$main_root" --filter-status 2>/dev/null); then
+            printf '%s' "$out"
+        else
+            printf '%s' "$1"
+        fi
+    }
+    effective_status=$(bt_filter "$recheck_status")
 
     OFFENDING_PATHS=()
     if [[ -n "$effective_status" ]]; then
@@ -616,7 +867,7 @@ if [[ -n "$effective_status" && "$QUARANTINE" -eq 1 ]]; then
     # offending pathspecs so baselined (pre-existing) dirt is left untouched;
     # `:(literal,top)` anchors each at the repo root and disables glob magic so
     # a path containing `*`/`[` cannot over-match.
-    stash_pathspecs=()
+    stash_pathspecs=(${bt_excludes[@]+"${bt_excludes[@]}"})
     for p in "${OFFENDING_PATHS[@]}"; do
         stash_pathspecs+=(":(literal,top)$p")
     done
@@ -642,11 +893,11 @@ if [[ -n "$effective_status" && "$QUARANTINE" -eq 1 ]]; then
     # no new dirt remains. A partial quarantine is exactly the failure mode this
     # mode exists to prevent, so it is reported as a hard failure, not a success.
     post_status=$(filter_loom_owned "$(git -C "$main_root" status --porcelain 2>/dev/null || true)")
-    post_effective="$post_status"
+    post_effective=$(bt_filter "$post_status")
     if [[ "$MODE" == "baseline" && -r "$MODE_FILE" ]]; then
         post_effective=$(comm -13 \
             <(sort "$MODE_FILE") \
-            <(printf '%s\n' "$post_status" | sort) \
+            <(printf '%s\n' "$post_effective" | sort) \
             | sed '/^$/d')
     fi
     if [[ -n "$post_effective" ]]; then
@@ -680,6 +931,9 @@ if [[ -n "$effective_status" && "$QUARANTINE" -eq 1 ]]; then
     fi
 
     emit_quarantine_log "{\"event\":\"main-clean.quarantine\",\"ts\":\"$ts\",\"result\":\"quarantined\",\"label\":\"$(json_escape "$QUARANTINE_LABEL")\",\"main\":\"$(json_escape "$main_root")\",\"stash_ref\":\"stash@{0}\",\"stash_commit\":\"$stash_sha\",\"stash_message\":\"$(json_escape "$stash_msg")\",\"paths\":[$paths_json],\"count\":${#OFFENDING_PATHS[@]}}"
+
+    # Best-effort breadcrumb: never affects this check's verdict (#5691).
+    post_quarantine_breadcrumb "$QUARANTINE_LABEL" "$stash_sha"
 
     echo "check-main-clean.sh: QUARANTINED ${#OFFENDING_PATHS[@]} contaminating path(s) from the main worktree." >&2
     echo "       Main worktree: $main_root (now matches the baseline)" >&2

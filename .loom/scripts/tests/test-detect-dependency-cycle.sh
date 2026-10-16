@@ -30,38 +30,32 @@ set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$TEST_DIR/.." && pwd)"
-DEFAULTS_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 DDC="$SCRIPTS_DIR/detect-dependency-cycle.sh"
-CHAMPION_MERGE_MD="$DEFAULTS_DIR/.claude/commands/loom/champion-pr-merge.md"
-CHAMPION_PROMO_MD="$DEFAULTS_DIR/.claude/commands/loom/champion-issue-promo.md"
+
+# Two `..` reaches repo-root/.claude/commands/loom for an INSTALLED copy
+# (SCRIPTS_DIR is .loom/scripts there); one `..` reaches defaults/.claude/
+# commands/loom when running inside this source repo (SCRIPTS_DIR is
+# defaults/scripts) -- the two layouts differ in depth, so probe both rather
+# than hard-coding one (#6725).
+if [[ -d "$SCRIPTS_DIR/../../.claude/commands/loom" ]]; then
+    PROMPT_DIR="$(cd "$SCRIPTS_DIR/../../.claude/commands/loom" && pwd)"
+else
+    PROMPT_DIR="$(cd "$SCRIPTS_DIR/../.claude/commands/loom" && pwd)"
+fi
+CHAMPION_MERGE_MD="$PROMPT_DIR/champion-pr-merge.md"
+CHAMPION_PROMO_MD="$PROMPT_DIR/champion-issue-promo.md"
 
 # Source the script for its pure helpers BEFORE defining our own colors - the
 # script's own `[[ -t 2 ]]` block defines RED/YELLOW/BLUE/NC, so sourcing first
 # (and setting ours last) keeps this file's output colors consistent.
-# shellcheck source=/dev/null
-source "$DDC"
+# Pin the loom-daemon this suite tests against — the subject is a thin stub over
+# `loom-daemon detect-dependency-cycle` now (epic #7810 PR 3). FATAL, not SKIP: see the helper.
+# shellcheck source=lib/require-daemon-bin.sh
+source "$TEST_DIR/lib/require-daemon-bin.sh"
+loom_test_require_daemon_bin "$SCRIPTS_DIR" "detect-dependency-cycle"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-assert_eq() {
-    local expected="$1" actual="$2" msg="$3"
-    TESTS_RUN=$((TESTS_RUN + 1))
-    if [[ "$expected" == "$actual" ]]; then
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-        echo -e "  ${GREEN}PASS${NC}: $msg"
-    else
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        echo -e "  ${RED}FAIL${NC}: $msg"
-        echo "    Expected: '$expected'"
-        echo "    Actual:   '$actual'"
-    fi
-}
+# shellcheck source=lib/assert.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assert.sh"
 
 assert_contains() {
     local haystack="$1" needle="$2" msg="$3"
@@ -104,45 +98,24 @@ assert_doc_contains() {
 }
 
 # =====================================================================
-# Unit tests: the real sourced helpers
+# Where the pure-helper unit tests went (epic #7810, PR 3)
 # =====================================================================
-
-echo "--- parse_dependency_refs: shared phrase vocabulary (#4508) preserved ---"
-
-out="$(parse_dependency_refs '**Blocked by:** #1 (reason), #3 (reason)' 'o/r')"
-assert_eq $'o/r#1\no/r#3' "$out" "bold+colon comma-list captures ALL refs, normalized to the citing repo"
-
-out="$(parse_dependency_refs 'Blocked by #7' 'o/r')"
-assert_eq "o/r#7" "$out" "plain Blocked by #N"
-
-out="$(parse_dependency_refs '_Depends on_ #5' 'o/r')"
-assert_eq "o/r#5" "$out" "italic-wrapped phrase"
-
-out="$(parse_dependency_refs 'Requires #9' 'o/r')"
-assert_eq "o/r#9" "$out" "plain Requires #N"
-
-out="$(parse_dependency_refs 'Mentions #9 in passing' 'o/r')"
-assert_eq "" "$out" "a bare #N with no dependency phrase is NOT an edge"
-
-echo
-echo "--- parse_dependency_refs: cross-repo reference forms ---"
-
-out="$(parse_dependency_refs 'Blocked by 2AMLogic/klayout-tools#391' 'o/r')"
-assert_eq "2AMLogic/klayout-tools#391" "$out" "explicit owner/repo#N keeps its own repo"
-
-out="$(parse_dependency_refs 'Depends on https://github.com/2AMLogic/marketing/issues/56' 'o/r')"
-assert_eq "2AMLogic/marketing#56" "$out" "issue URL normalizes to owner/repo#N"
-
-out="$(parse_dependency_refs '**Blocked by:** #7 and 2AMLogic/x#8' 'o/r')"
-assert_eq $'2AMLogic/x#8\no/r#7' "$out" "same-repo and cross-repo refs on one line both captured"
-
-echo
-echo "--- _cycle_segment: reports the loop, not the whole path ---"
-
-assert_eq "o/r#1 o/r#2 o/r#1" "$(_cycle_segment 'o/r#1' 'o/r#1 o/r#2')" \
-    "2-cycle through the root"
-assert_eq "o/r#2 o/r#3 o/r#2" "$(_cycle_segment 'o/r#2' 'o/r#1 o/r#2 o/r#3')" \
-    "cycle NOT through the root trims the leading approach path"
+#
+# This suite used to `source "$DDC"` and call parse_dependency_refs and
+# _cycle_segment directly. Both are now Rust —
+# `loom-daemon/src/dep_classify/refs.rs` and `cycle.rs` — with their own unit
+# tests covering the same cases: the #4508 phrase vocabulary (bold/italic/colon
+# wrappings, comma lists capturing every ref on the line, a bare #N with no
+# phrase not being an edge), the cross-repo forms, and a cycle segment that
+# reports the loop rather than the whole approach path.
+#
+# #7943 landed the refs port beside a differential test that ran the Rust
+# function and this shell function over the same fixtures and asserted they
+# agreed. That test is deleted with the shell it compared against; the evidence
+# is the merged CI run, not a fixture pinning a deleted file.
+#
+# What remains below is what can still be proven both ways: the black-box
+# assertions, written against the shell, run unchanged against the Rust CLI.
 
 # =====================================================================
 # Black-box tests: stub `gh` on PATH, run the real script
@@ -159,6 +132,15 @@ STUB_DIR="$(cd "$(dirname "$0")" && pwd)"
 printf '%s\n' "$*" >> "$STUB_DIR/calls.log"
 
 [[ "${1:-}" == "--version" ]] && { echo "gh version 0.0.0 (stub)"; exit 0; }
+# REST comment listing (#9548: dep classification reads comments from REST,
+# trusted authors only). A fixture comment without an author is this fleet's
+# default App; one may carry its own `user`/`author_association`.
+if [[ "${1:-}" == "api" && "${2:-}" =~ ^repos/([^/]+/[^/]+)/issues/([0-9]+)/comments$ ]]; then
+  f="$STUB_DIR/issue-$(printf '%s' "${BASH_REMATCH[1]}#${BASH_REMATCH[2]}" | tr '/#' '__').json"
+  [[ -f "$f" ]] || { echo "gh: not found" >&2; exit 1; }
+  jq '[.comments[] | {body, user: (.user // {login: "loom-fleet-dispatch[bot]", type: "Bot"}), author_association: (.author_association // "NONE")}]' "$f"
+  exit 0
+fi
 [[ "${1:-}" != "issue" ]] && { echo "stub gh: unhandled args: $*" >&2; exit 3; }
 
 action="$2"; num="$3"; shift 3
@@ -255,11 +237,11 @@ assert_contains "$OUT" "CYCLE_PATH: o/r#2 -> o/r#3 -> o/r#2" "reports the loop i
 echo
 echo "--- cross-repo cycle (the motivating incident's shape) ---"
 reset_state
-fixture '2AMLogic/marketing#56' OPEN 'Blocked by 2AMLogic/klayout-tools#391 (epic must land first)'
-fixture '2AMLogic/klayout-tools#391' OPEN 'Phase 8 Depends on https://github.com/2AMLogic/marketing/issues/56 canary output'
-run_ddc --issue 56 --repo 2AMLogic/marketing
+fixture 'example-org/downstream-repo#101' OPEN 'Blocked by example-org/tool-repo#202 (epic must land first)'
+fixture 'example-org/tool-repo#202' OPEN 'Phase 8 Depends on https://github.com/example-org/downstream-repo/issues/101 canary output'
+run_ddc --issue 101 --repo example-org/downstream-repo
 assert_eq "1" "$RC" "exit 1 on a cycle spanning two repos"
-assert_contains "$OUT" "CYCLE_PATH: 2AMLogic/marketing#56 -> 2AMLogic/klayout-tools#391 -> 2AMLogic/marketing#56" \
+assert_contains "$OUT" "CYCLE_PATH: example-org/downstream-repo#101 -> example-org/tool-repo#202 -> example-org/downstream-repo#101" \
     "cross-repo path names both repos"
 
 echo
@@ -355,27 +337,36 @@ assert_eq "0" "$RC" "exit 0 when a referenced issue is not visible to this token
 assert_contains "$OUT" "UNREADABLE: private/repo#9" "unreadable node is surfaced as partial coverage"
 
 echo
-echo "--- --report: surfaces the cycle and routes to loom:operator-only ---"
+echo "--- --report: surfaces the cycle and routes to loom:operator (#11795) ---"
 reset_state
-fixture '2AMLogic/marketing#56' OPEN 'Blocked by 2AMLogic/klayout-tools#391'
-fixture '2AMLogic/klayout-tools#391' OPEN 'Depends on 2AMLogic/marketing#56'
-run_ddc --issue 56 --repo 2AMLogic/marketing --report
+fixture 'example-org/downstream-repo#101' OPEN 'Blocked by example-org/tool-repo#202'
+fixture 'example-org/tool-repo#202' OPEN 'Depends on example-org/downstream-repo#101'
+run_ddc --issue 101 --repo example-org/downstream-repo --report
 assert_eq "1" "$RC" "--report still exits 1 on a cycle"
-assert_contains "$OUT" "REPORTED: 2AMLogic/marketing#56" "REPORTED marker emitted"
-COMMENT="$(cat "$STUB_DIR/comments-2AMLogic_marketing_56.log" 2>/dev/null || true)"
+assert_contains "$OUT" "REPORTED: example-org/downstream-repo#101" "REPORTED marker emitted"
+COMMENT="$(cat "$STUB_DIR/comments-example-org_downstream-repo_101.log" 2>/dev/null || true)"
 assert_contains "$COMMENT" "Dependency cycle detected" "comment states the cycle explicitly"
-assert_contains "$COMMENT" "2AMLogic/marketing#56" "comment names this side of the cycle"
-assert_contains "$COMMENT" "2AMLogic/klayout-tools#391" "comment names the OTHER side of the cycle"
+assert_contains "$COMMENT" "example-org/downstream-repo#101" "comment names this side of the cycle"
+assert_contains "$COMMENT" "example-org/tool-repo#202" "comment names the OTHER side of the cycle"
 assert_contains "$COMMENT" "champion:dep-cycle:" "comment carries the idempotency marker"
-LABELS="$(cat "$STUB_DIR/labels-2AMLogic_marketing_56.log" 2>/dev/null || true)"
-assert_contains "$LABELS" "loom:operator-only" "routes to loom:operator-only"
+LABELS="$(cat "$STUB_DIR/labels-example-org_downstream-repo_101.log" 2>/dev/null || true)"
+# Exact-line match: a substring check would also accept the retired names.
+assert_eq "loom:operator" "$(grep -x 'loom:operator' <<<"$LABELS" | head -1)" \
+    "routes to loom:operator — breaking a cycle is a human call (#5671, #11795)"
+# The pre-#11795 names are retired: the cycle route must never apply them
+# (the old operator-only + operator-decision pair folds into loom:operator).
+assert_not_contains "$LABELS" "loom:operator-only" "does not apply the retired loom:operator-only (#11795)"
+assert_not_contains "$LABELS" "loom:operator-decision" "does not apply the retired loom:operator-decision (#11795)"
+# The blocker list is `sort -u`-ordered, so it reads downstream-repo before
+# tool-repo for these fixture names.
+assert_contains "$COMMENT" "Blocked by example-org/downstream-repo#101 example-org/tool-repo#202" "comment names the blocker(s) in machine-readable form (#5671)"
 
 echo
 echo "--- --report is idempotent: the same cycle is surfaced once ---"
-run_ddc --issue 56 --repo 2AMLogic/marketing --report
+run_ddc --issue 101 --repo example-org/downstream-repo --report
 assert_eq "1" "$RC" "second pass still reports the cycle to its caller"
-assert_contains "$OUT" "ALREADY_REPORTED: 2AMLogic/marketing#56" "second pass skips the comment"
-COMMENT_COUNT="$(jq '.comments | length' "$STUB_DIR/issue-2AMLogic_marketing_56.json")"
+assert_contains "$OUT" "ALREADY_REPORTED: example-org/downstream-repo#101" "second pass skips the comment"
+COMMENT_COUNT="$(jq '.comments | length' "$STUB_DIR/issue-example-org_downstream-repo_101.json")"
 assert_eq "1" "$COMMENT_COUNT" "exactly one comment posted across two passes"
 
 echo
@@ -415,7 +406,7 @@ echo "--- Doc pins: the Champion prose actually calls the detector ---"
     assert_doc_contains "$CHAMPION_MERGE_MD" 'if [ "$ALL_RESOLVED" = false ]; then' \
         "the walk is gated on the 'still blocked' branch, not run on every pass"
     assert_doc_contains "$CHAMPION_MERGE_MD" '"$GH_READ" issue view "$blocked" --json labels' \
-        "an already-surfaced cycle (loom:operator-only) short-circuits the walk with one cached read"
+        "an already-surfaced cycle (loom:operator) short-circuits the walk with one cached read"
     assert_doc_contains "$CHAMPION_PROMO_MD" "detect-dependency-cycle.sh" \
         "champion-issue-promo.md's Technical Feasibility check invokes the detector"
     assert_doc_contains "$CHAMPION_PROMO_MD" 'if [ "$DECLARES_DEP" -gt 0 ]; then' \

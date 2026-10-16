@@ -13,12 +13,42 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SWEEP_MD="$SCRIPT_DIR/../../../defaults/.claude/commands/loom/sweep.md"
+SWEEP_SKILL_DIR="$SCRIPT_DIR/../../../defaults/.claude/commands/loom"
 
-if [[ ! -f "$SWEEP_MD" ]]; then
-    echo "FAIL: skill file not found at $SWEEP_MD" >&2
+if [[ ! -d "$SWEEP_SKILL_DIR" ]]; then
+    echo "FAIL: skill directory not found at $SWEEP_SKILL_DIR" >&2
     exit 1
 fi
+
+# The /loom:sweep skill in document order (#7726 split the monolithic
+# sweep.md into a dispatcher + 11 sibling reference files). Concatenate them
+# into one file so every assertion below finds its content wherever it now
+# lives — mirrors SWEEP_SKILL_FILES in
+# loom-daemon/tests/sweep_md_doc_lint.rs.
+SWEEP_SKILL_FILES=(
+    sweep.md
+    sweep-arguments.md
+    sweep-examples.md
+    sweep-execution-model.md
+    sweep-backend-detection.md
+    sweep-scheduling-signals.md
+    sweep-dry-run.md
+    sweep-mode-c-lifecycle.md
+    sweep-wave-lifecycle.md
+    sweep-summary-output.md
+    sweep-run-hygiene.md
+    sweep-reference.md
+)
+SWEEP_MD="$(mktemp)"
+trap 'rm -f "$SWEEP_MD"' EXIT
+for f in "${SWEEP_SKILL_FILES[@]}"; do
+    path="$SWEEP_SKILL_DIR/$f"
+    if [[ ! -f "$path" ]]; then
+        echo "FAIL: skill sibling file not found at $path" >&2
+        exit 1
+    fi
+    cat "$path" >> "$SWEEP_MD"
+done
 
 PASS=0
 FAIL=0
@@ -104,7 +134,7 @@ assert_contains "Skip: state != OPEN" 'state != OPEN'
 assert_contains "Skip: loom:blocked PRs" 'loom:blocked'
 assert_contains "Skip: no actionable label" 'no actionable label'
 assert_contains "Skip: multiple actionable labels" 'multiple actionable labels'
-assert_contains "Skip: loom:operator-only PRs" 'loom:operator-only'
+assert_contains "Skip: loom:frozen PRs" 'loom:frozen'
 
 echo
 echo "--- Load-bearing constraints (#3289, #3298, #3373) ---"
@@ -114,13 +144,17 @@ assert_contains "One-level-deep callout preserved" 'One level deep'
 assert_contains "Never-dispatch-nested-orchestrator-as-subagent guard preserved (issue-side)" 'Do NOT, under any circumstances, dispatch a nested orchestrator skill (`/loom:sweep`) as a subagent from `/loom:sweep`'
 assert_contains "Never-invoke /loom:sweep, /loom:judge, or /loom:doctor as a subagent (Mode C constraints)" 'Never invoke `/loom:sweep`, `/loom:judge`, or `/loom:doctor` as a subagent from `/loom:sweep`'
 
-# Sequential per-PR Judge.
 assert_contains "Per-PR Judge sequential within wave" 'Per-PR Judge is sequential'
-
 # Configurable Doctor→Judge cycle cap (#3668).
 assert_contains "Configurable Doctor→Judge cycle cap (Mode C, C1b)" 'up to `sweep.max_doctor_cycles`'
 assert_contains "Cap-reached block note (Mode C, C1b)" 'cap reached'
 assert_contains "Distinct-defect exception referenced (Mode C, C1b)" 'distinct defect'
+assert_contains "Rebase pass is not a Doctor cycle (#9265)" 'is a **rebase pass**'
+assert_contains "Rebase budget names its bound (#9265)" 'Rebase budget: 3 rebase passes per PR per sweep run'
+assert_contains "Rebase-churn park reason (#9265)" '--reason "rebase budget exhausted after 3 conflict-only passes; main is moving"'
+assert_contains "Approved-but-conflicting route (Mode C, #9265)" 'Run a **rebase pass** → re-Judge (**C1a**) → **C2**'
+assert_contains "Approved-but-conflicting route (wave, #9265)" 'rebase pass → re-Judge → merge'
+assert_not_contains "Base-conflict Doctor not charged to the cap (#9265)" 'a revalidation Doctor counts against'
 
 # #3373: checkpoint reuse via closingIssuesReferences.
 assert_contains "Checkpoint scope via closingIssuesReferences" 'closingIssuesReferences'
@@ -135,7 +169,6 @@ assert_contains "PR-set dry-run shows would-Doctor-then-Judge" 'would Doctor →
 assert_contains "PR-set dry-run shows would-merge" 'would merge'
 assert_contains "PR-set dry-run shows would-skip with reason" 'would skip (no actionable label)'
 assert_contains "PR-set dry-run footer total" 'No PRs were modified'
-
 # Dry-run gate inviolable contract preserved (issue-side regression).
 assert_contains "Dry-run gate: no label edits" 'no label edits'
 assert_contains "Dry-run gate: no merge-pr.sh" 'no `merge-pr.sh`'
@@ -167,12 +200,9 @@ assert_contains "Limitations entry: PRs without Closes #N" 'PRs without `Closes 
 echo
 echo "--- Anti-regressions (must NOT appear) ---"
 
-# Must not invent a separate /sweep-pr verb.
 assert_not_contains "No /sweep-pr verb invented" '/sweep-pr'
-# Must not create new labels.
 assert_not_contains "No new label 'loom:judging' invented" 'loom:judging'
 assert_not_contains "No new label 'loom:doctoring' invented" 'loom:doctoring'
-# Must not call gh pr merge directly.
 assert_not_contains "No direct gh pr merge call" 'gh pr merge --squash'
 
 echo
