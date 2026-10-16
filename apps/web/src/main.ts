@@ -298,17 +298,12 @@ async function main(): Promise<void> {
       arModeManagerRef?.disable();
       timeControls?.stopPlayback();
     },
-    applyTimeToEngine: (date) => applyTimeToEngine(engine, date),
-    recomputeEngine: () => engine.recompute(),
-    updateRenderer: () => {
-      renderer.updateFromEngine(engine, renderer.camera.fov);
-      requestRender();
-    },
+    // Shared observation-time path (hoisted declaration; only invoked at
+    // event time, after riseSetUI etc. are initialized).
+    setObservationTime: (date) => updateObservationTime(date, true),
     getBodyPositions: () => getBodyPositionsFromEngine(engine),
     positionToRaDec,
     calculateSunMoonSeparation,
-    updateEclipseRendering: (sep) => renderer.updateEclipse(sep),
-    updateVideoMarkers: (bodyPos) => videoMarkersRef?.updateMovingPositions(bodyPos),
     animateToRaDec: (ra, dec, dur) => controls.animateToRaDec(ra, dec, dur),
     getObserverLocation: () => ({
       latitude: settings.observerLatitude,
