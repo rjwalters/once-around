@@ -48,6 +48,11 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  # Pinned wasm-pack version (issue #159); see the "Install wasm-pack" step.
+  # Must match the pin in ci.yml.
+  WASM_PACK_VERSION: v0.15.0
+
 jobs:
   refresh:
     name: Regenerate ISS & Hubble ephemeris
@@ -135,8 +140,26 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # wasm-pack is pinned explicitly (issue #159). The action's default
+      # `version: latest` does an unauthenticated GitHub API lookup and, when
+      # that fails (e.g. rate-limited on shared runner IPs), silently falls back
+      # to v0.9.1, whose old bundled wasm-opt rejects modern rustc output with
+      # "Only 1 table definition allowed in MVP". v0.15.0 is the known-good
+      # version. To bump: change WASM_PACK_VERSION here AND in ci.yml
+      # together, and only after a green CI run with the new version.
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: ${{ env.WASM_PACK_VERSION }}
+
+      - name: Verify wasm-pack version
+        run: |
+          actual="$(wasm-pack --version)"
+          echo "$actual"
+          if [ "$actual" != "wasm-pack ${WASM_PACK_VERSION#v}" ]; then
+            echo "::error::Expected wasm-pack $WASM_PACK_VERSION, got: $actual"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
