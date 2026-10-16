@@ -34,7 +34,6 @@ tests/screenshots/
 
 # Repo Skills machine-local install metadata (absolute source path + timestamp)
 .claude/skills/repo/.install-local.json
-# Loom worktree marker (written by worktree.sh into each issue worktree; not in the managed block yet)
 # >>> loom-managed (do not edit) >>>
 # Loom runtime state (don't commit these)
 .loom-in-use

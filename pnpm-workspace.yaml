@@ -7,8 +7,9 @@ packages:
 # Modern pnpm does not run dependency install/postinstall scripts by default. On a
 # fresh non-interactive `pnpm install` it skips them and *appends a placeholder stub
 # to this file* ("set this to true or false" for each package), which dirties the
-# working tree of every fresh clone and agent worktree. CI never saw this because
-# `.github/workflows/ci.yml` pins pnpm to major 9, which predates the gate.
+# working tree of every fresh clone and agent worktree. CI didn't see this at first
+# because `.github/workflows/ci.yml` pinned pnpm to major 9, which predates the gate;
+# CI now uses the `packageManager` pin in package.json (#113).
 #
 # All four packages below ship native binaries that their install scripts fetch or
 # compile, and every one sits on a build/dev/deploy path this repo actually uses --
