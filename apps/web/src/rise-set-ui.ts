@@ -124,10 +124,19 @@ export class RiseSetUI {
     }
   }
 
-  /** Force a recompute (e.g. observer location changed). */
+  /**
+   * Force a recompute (e.g. observer location changed). When hidden (or before
+   * the engine is attached) the cached results are invalidated instead, so the
+   * next `setVisible(true)` recomputes for the current observer. Several hidden
+   * location changes therefore collapse into a single recompute on show.
+   */
   refresh(): void {
     if (this.visible && this.engine) {
       this.recompute();
+    } else {
+      // `computedKey` only encodes the civil date, not the observer, so it must
+      // be cleared here or the next show would re-render stale times.
+      this.computedKey = null;
     }
   }
 
