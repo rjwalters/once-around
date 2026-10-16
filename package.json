@@ -15,6 +15,7 @@
     "test": "playwright test",
     "test:unit": "pnpm --filter once-around-web test:unit",
     "typecheck": "pnpm --filter once-around-web typecheck",
+    "test:offline": "playwright test -c playwright.offline.config.ts",
     "test:perf": "playwright test tests/performance.spec.ts --reporter=list",
     "test:ui": "playwright test --ui",
     "test:worker": "pnpm --filter once-around-report-worker test",

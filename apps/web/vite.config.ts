@@ -1,8 +1,15 @@
 import { defineConfig } from "vitest/config";
 import { execSync } from "child_process";
-import { resolve } from "path";
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import { join, resolve } from "path";
+import type { Plugin } from "vite";
 import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
+import {
+  collectPrecacheAssets,
+  computeCacheVersion,
+  injectPrecacheManifest,
+} from "./src/sw-manifest.ts";
 
 // Get git commit hash at build time
 function getGitCommit(): string {
@@ -13,10 +20,40 @@ function getGitCommit(): string {
   }
 }
 
+/**
+ * Inject the hashed bundle outputs and a per-build cache version into
+ * dist/sw.js (issue #145). public/sw.js is copied verbatim before the bundle is
+ * written, so the rewrite runs in writeBundle, once the copy exists. Build-only:
+ * the dev server serves public/sw.js with its placeholders untouched.
+ */
+function swPrecacheManifest(): Plugin {
+  return {
+    name: "sw-precache-manifest",
+    apply: "build",
+    writeBundle(options, bundle) {
+      const outDir = options.dir;
+      if (!outDir) return;
+      const swPath = join(outDir, "sw.js");
+      if (!existsSync(swPath)) {
+        this.error(`sw-precache-manifest: ${swPath} not found (expected copy of public/sw.js)`);
+      }
+      const assets = collectPrecacheAssets(Object.keys(bundle));
+      if (!assets.some((url) => url.endsWith(".wasm"))) {
+        this.error("sw-precache-manifest: no .wasm asset found in the bundle");
+      }
+      const version = computeCacheVersion(assets, getGitCommit());
+      const source = readFileSync(swPath, "utf8");
+      writeFileSync(swPath, injectPrecacheManifest(source, { assets, version }));
+      this.info(`sw-precache-manifest: ${assets.length} assets, cache version ${version}`);
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     wasm(),
     topLevelAwait(),
+    swPrecacheManifest(),
     {
       // Inject a preload hint for the hashed wasm asset. The filename is only
       // known after bundling, so we read it from ctx.bundle in a post-transform.
