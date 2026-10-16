@@ -14,7 +14,7 @@ authors = ["Once-Around Contributors"]
 
 [workspace.dependencies]
 hifitime = "4"
-vsop87 = "2"
+vsop87 = "3"
 
 [profile.release]
 opt-level = "s"
