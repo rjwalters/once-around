@@ -57,6 +57,11 @@ export class ISSPassesUI {
   private visible = false;
   private worker: Worker | null = null;
   private latestRequestId = 0;
+  /**
+   * Set when pass computation failed (worker and main-thread fallback both
+   * unavailable/failed). Rendered as a retryable error, never as "no passes".
+   */
+  private computeError: string | null = null;
 
   constructor(options: ISSPassesUIOptions) {
     this.container = document.getElementById(options.containerId);
@@ -80,18 +85,57 @@ export class ISSPassesUI {
   private initWorker(): void {
     if (typeof Worker === "undefined") return;
     try {
-      this.worker = new Worker(
+      const worker = new Worker(
         new URL("./workers/iss-passes-worker.ts", import.meta.url),
         { type: "module" }
       );
-      this.worker.onmessage = (event: MessageEvent<WorkerMessage>) =>
+      // Every handler checks the worker is still current, so a late event
+      // from a worker we already discarded can never touch UI state.
+      worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+        if (worker !== this.worker) return;
         this.onWorkerMessage(event.data);
-      this.worker.onerror = (e) => {
-        console.error("ISS passes worker error:", e);
       };
+      // Fires asynchronously for script load failures (e.g. the worker chunk
+      // 404s or is blocked) and for uncaught errors inside the worker.
+      worker.onerror = (e) => {
+        if (worker !== this.worker) return;
+        console.error("ISS passes worker error:", e);
+        this.failWorker();
+      };
+      worker.onmessageerror = (e) => {
+        if (worker !== this.worker) return;
+        console.error("ISS passes worker message error:", e);
+        this.failWorker();
+      };
+      this.worker = worker;
     } catch (e) {
       console.warn("ISS passes worker unavailable; using main thread:", e);
       this.worker = null;
+    }
+  }
+
+  /**
+   * Discard a failed worker and recover. The worker is terminated and dropped
+   * (so later computations use the main-thread path), and any in-flight
+   * request is re-run on the main thread. Re-running bumps `latestRequestId`,
+   * so a late response from the dead worker could not win even if one arrived.
+   */
+  private failWorker(): void {
+    const worker = this.worker;
+    if (!worker) return;
+    this.worker = null;
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker.onmessageerror = null;
+    try {
+      worker.terminate();
+    } catch {
+      // Already dead; nothing to clean up.
+    }
+    if (this.isComputing) {
+      // `this.worker` is now null, so this takes the main-thread path and
+      // cannot re-enter failWorker().
+      this.computePasses();
     }
   }
 
@@ -103,12 +147,16 @@ export class ISSPassesUI {
 
     if (msg.type === "result") {
       this.passes = parsePassBuffer(msg.buffer);
+      this.computeError = null;
+      this.isComputing = false;
+      this.render();
     } else {
-      console.error("Error computing ISS passes:", msg.error);
-      this.passes = [];
+      // A worker-side failure (e.g. it could not load its own copy of the
+      // ephemeris) is not "no passes". The main thread already holds valid
+      // ephemeris, so drop the worker and compute there instead.
+      console.error("Error computing ISS passes in worker:", msg.error);
+      this.failWorker();
     }
-    this.isComputing = false;
-    this.render();
   }
 
   /**
@@ -123,6 +171,7 @@ export class ISSPassesUI {
       this.container.style.display = visible ? '' : 'none';
     }
     // Lazy compute: only compute passes when becoming visible for the first time
+    // (also retries after a previous failure, since that leaves passes empty).
     if (visible && !wasVisible && this.engine && this.passes.length === 0 && !this.isComputing) {
       this.computePasses();
     }
@@ -142,7 +191,7 @@ export class ISSPassesUI {
   }
 
   /**
-   * Recompute passes (call when location changes).
+   * Recompute passes (call when location changes, or to retry after an error).
    */
   refresh(): void {
     this.computePasses();
@@ -154,48 +203,63 @@ export class ISSPassesUI {
   private computePasses(): void {
     if (!this.engine) return;
 
+    // Every request (worker or main thread) gets a fresh id; anything still in
+    // flight from an older request is ignored when it completes.
+    const requestId = ++this.latestRequestId;
+    this.computeError = null;
+
     // Check ephemeris coverage. If it is missing or no longer covers the
     // current time, there is nothing to scan — skip the worker entirely and let
     // render() surface the appropriate "not loaded" or "out of date" message.
     if (getEphemerisStatus(this.engine, 0).state !== "ok") {
       this.passes = [];
+      this.isComputing = false;
       this.render();
       return;
     }
 
+    this.isComputing = true;
+    this.render(); // Show loading state
+
     // Preferred path: run the scan in the Web Worker (never blocks the main
     // thread). A newer request supersedes any in-flight one via requestId.
     if (this.worker) {
-      this.isComputing = true;
-      this.render(); // Show loading state
-      const requestId = ++this.latestRequestId;
-      this.worker.postMessage({
-        type: "compute",
-        requestId,
-        observerLat: this.engine.observer_lat(),
-        observerLon: this.engine.observer_lon(),
-        minAltitude: this.minAltitude,
-        maxPasses: this.maxPasses,
-        sunAltitudeLimit: SUN_ALTITUDE_LIMIT,
-        nowMs: Date.now()
-      });
-      return;
+      try {
+        this.worker.postMessage({
+          type: "compute",
+          requestId,
+          observerLat: this.engine.observer_lat(),
+          observerLon: this.engine.observer_lon(),
+          minAltitude: this.minAltitude,
+          maxPasses: this.maxPasses,
+          sunAltitudeLimit: SUN_ALTITUDE_LIMIT,
+          nowMs: Date.now()
+        });
+        return;
+      } catch (e) {
+        // postMessage on a broken worker: discard it and use the main thread.
+        console.error("ISS passes worker postMessage failed:", e);
+        this.failWorker();
+        return;
+      }
     }
 
-    // Fallback: no worker available. The WASM scan is a single fast call, but
-    // defer via setTimeout so the current event (e.g. location change) yields first.
-    if (this.isComputing) return;
-    this.isComputing = true;
-    this.render(); // Show loading state
+    // Fallback: no worker available (or it failed). The WASM scan is a single
+    // fast call, but defer via setTimeout so the current event (e.g. location
+    // change) yields first.
     setTimeout(() => {
+      // Superseded by a newer request while waiting; that one renders.
+      if (requestId !== this.latestRequestId || !this.engine) return;
       try {
-        this.passes = findISSPasses(this.engine!, {
+        this.passes = findISSPasses(this.engine, {
           minAltitude: this.minAltitude,
           maxPasses: this.maxPasses
         });
+        this.computeError = null;
       } catch (e) {
         console.error("Error computing ISS passes:", e);
         this.passes = [];
+        this.computeError = "Could not compute ISS passes.";
       }
       this.isComputing = false;
       this.render();
@@ -331,6 +395,22 @@ export class ISSPassesUI {
         </div>
         <div class="iss-passes-loading">Computing passes...</div>
       `;
+      return;
+    }
+
+    // Computation failed: say so (distinct from "no passes") and offer a retry.
+    if (this.computeError) {
+      this.container.innerHTML = `
+        <div class="iss-passes-header">
+          <span class="iss-passes-title">ISS Pass Predictions</span>
+        </div>
+        <div class="iss-passes-empty iss-passes-error" role="alert">${this.computeError}</div>
+        <button class="iss-goto-pass-btn iss-passes-retry-btn" type="button">Retry</button>
+      `;
+      const retryBtn = this.container.querySelector('.iss-passes-retry-btn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => this.refresh());
+      }
       return;
     }
 
