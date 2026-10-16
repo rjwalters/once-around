@@ -78,6 +78,13 @@ jobs:
           echo "ISS: ${ISS_WINDOW} days (through ${ISS_END})"
           echo "Hubble: ${HUBBLE_WINDOW} days (through ${HUBBLE_END})"
 
+      # Fail-closed (issue #147): the generator validates the full Horizons
+      # response (markers, finite values, monotonic cadence, coverage of the
+      # possibly cutoff-clamped window) and only then atomically replaces the
+      # output; on any failure it exits non-zero and leaves the prior binary
+      # untouched. No step below sets continue-on-error or `if: always()`, so
+      # a failure in either generation step stops the job before the commit,
+      # build and deploy steps run.
       - name: Generate ISS ephemeris
         run: |
           python scripts/generate_satellite_ephemeris.py iss \

@@ -92,6 +92,26 @@ has to re-run `fetch_horizons_reference.py` and regenerate
 `crates/sky_engine_core/tests/golden_positions.rs` on macOS/Apple Silicon. The
 workflow's PR body spells out the required steps.
 
+### Satellite ephemeris validation
+
+`generate_satellite_ephemeris.py` fails closed (issue #147). It rejects a
+Horizons response that is missing the `$$SOE`/`$$EOE` markers, contains any row
+that does not parse to finite JD/X/Y/Z values, has duplicate or decreasing
+timestamps, deviates from the requested cadence (tolerance `1e-6` day, which
+absorbs Horizons' 9-decimal JD rounding), or does not cover the whole effective
+window. The effective window is the requested one, or — when Horizons reports
+that its predicted trajectory ends earlier — the window clamped to the day
+before that cutoff; the clamped end and the actual first/last coverage are
+printed. Output is staged to a temporary file beside `--output`, read back and
+re-checked (exact size `4 + 32 * count`, at least 2 samples, finite, strictly
+increasing), and only then moved into place with `os.replace`. Any failure exits
+non-zero and leaves the previous binary byte-identical, so the refresh workflow
+stops before committing or deploying. The Rust reader
+(`SatelliteEphemeris::from_binary`) independently rejects the same defects with
+an error rather than a WASM trap. Tests:
+`python3 scripts/test_generate_satellite_ephemeris.py` (stdlib-only,
+network-free; runs in CI).
+
 ### Satellite deployment setup and recovery
 
 The refresh must deploy as well as commit: production is a Wrangler-uploaded
