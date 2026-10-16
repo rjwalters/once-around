@@ -92,7 +92,8 @@ Better experience on phones and tablets:
 
 - Touch-friendly controls (pinch zoom, drag to pan)
 - Responsive UI that adapts to small screens
-- AR "Magic Window" mode (device orientation controls camera)
+- AR "Magic Window" mode (device orientation controls camera), following the live clock and GPS fix, and waiting for a fresh north-referenced compass reading (#121, #122)
+- AR alignment check (`/test.html`): rear-camera Moon/Sun measurements of AR pointing error, exported as JSON or sent as a voluntary report to the `apps/report-worker` Cloudflare Worker (#125, #127; see [AR_ALIGNMENT.md](AR_ALIGNMENT.md) and [ALIGNMENT_REPORTS.md](ALIGNMENT_REPORTS.md))
 - Collapsible control panel on mobile
 
 ---
@@ -362,7 +363,7 @@ Location-aware totality path tools in the eclipse banner (`eclipsePaths.ts`, `ec
 
 ## Deep Sky Objects
 
-DSO ellipse markers and 30 deep field images rendered with full visual treatment.
+DSO ellipse markers and 29 deep field images rendered with full visual treatment.
 
 ### Deep Field Images
 
@@ -486,11 +487,10 @@ Refactored from vanilla CSS to Tailwind CSS v4 with modern utility-first styling
 
 ## Astronomical Corrections
 
-### Nutation Corrections
+### Reference Frames
 
-- Δψ (nutation in longitude)
-- Δε (nutation in obliquity)
-- Improved apparent positions for all objects
+- Render directions use fixed J2000 axes; observer geometry precesses to mean equator/equinox of date (IAU 1976) (#123)
+- Nutation (Δψ, Δε) is computed by the engine but deliberately omitted from rendered and observed positions — see [coordinate-frames.md](coordinate-frames.md)
 
 ### Annual Aberration
 
@@ -543,7 +543,7 @@ Real-time satellite positions with visibility indication.
 
 - **Tabulated ephemeris** - Pre-computed positions from NASA Horizons API
 - **Cubic spline interpolation** - Smooth position between tabulated points (Catmull-Rom)
-- **Earth shadow calculation** - Cylindrical approximation for umbra detection
+- **Earth shadow calculation** - Conical umbra/penumbra model, plus a continuous 0–1 shadow depth across the penumbra
 - **Topocentric conversion** - ECI to observer-relative coordinates
 - **Horizon culling** - Satellites hidden when below observer's horizon
 - **Cache-busting** - Ephemeris fetch includes timestamp to ensure fresh data
@@ -551,7 +551,7 @@ Real-time satellite positions with visibility indication.
 ### Visual Features
 
 - Bright yellow-white marker when illuminated by Sun
-- Dim blue-gray when in Earth's shadow (still shown if above horizon)
+- Fades to dim blue-gray through the penumbra as shadow depth increases (still shown if above horizon)
 - Labels show name, shadow state, and distance (e.g., "ISS (412 km)")
 - LOD system: detailed sprites when zoomed in (ISS shows actual image)
 - Searchable by name or full name
@@ -568,7 +568,7 @@ Ephemeris regeneration script: `scripts/generate_satellite_ephemeris.py`
 
 ### Automatic Freshness
 
-- **Weekly refresh** - GitHub Actions cron (`refresh-satellite-ephemeris.yml`, Mondays 06:00 UTC) regenerates the ISS/Hubble ephemeris from NASA Horizons and commits the binaries. Window lengths are per-satellite: **14 days for the ISS**, 45 days for Hubble (Horizons clamps the latter to its own predicted-trajectory cutoff). Horizons' spacecraft trajectories are predictions that degrade with forecast horizon — measured ISS error was ~26 km at +9.5 d and ~242 km at +23.5 d — so the ISS window is capped short while still leaving a 7-day buffer if one weekly run fails. Hubble orbits higher, where drag-driven divergence is far weaker, so its window is unchanged
+- **Weekly refresh** - GitHub Actions cron (`refresh-satellite-ephemeris.yml`, Mondays 06:00 UTC) regenerates the ISS/Hubble ephemeris from NASA Horizons, commits the binaries, and redeploys the site to Cloudflare Pages. Window lengths are per-satellite: **14 days for the ISS**, 45 days for Hubble (Horizons clamps the latter to its own predicted-trajectory cutoff). Horizons' spacecraft trajectories are predictions that degrade with forecast horizon — measured ISS error was ~26 km at +9.5 d and ~242 km at +23.5 d — so the ISS window is capped short while still leaving a 7-day buffer if one weekly run fails. Hubble orbits higher, where drag-driven divergence is far weaker, so its window is unchanged
 - **Staleness indicator** - `getEphemerisStatus()` classifies coverage (ok/stale/future/missing); the ISS Passes panel shows an explicit "ephemeris expired" warning instead of a misleading empty state
 - **Long-range forecast caveat** - additive to the coverage state: `isApproximatePass()` flags passes starting more than `APPROXIMATE_FORECAST_DAYS` (7) out, and the ISS Passes panel marks them with a muted "≈" plus a footnote, visually distinct from the "expired" warning
 
@@ -630,8 +630,9 @@ A pass is visible when ALL conditions are met:
 
 ### Implementation
 
+- **Engine-side scan** - `find_passes` in the WASM engine (`crates/sky_engine/src/lib.rs`) does the whole search; `iss-passes.ts` wraps it
 - **Coarse scan** - 10-minute interval search across ephemeris range
-- **Binary search refinement** - ~30 second precision for rise/set times
+- **Edge refinement** - shadow-limited rise/set edges are root-found on the continuous umbra distance; other edges use ~30-second binary search
 - **Sun altitude calculation** - WASM function computes Sun position
 - **Ephemeris range awareness** - Only searches within available data
 
@@ -647,9 +648,9 @@ A pass is visible when ALL conditions are met:
 
 | File | Purpose |
 |------|---------|
-| `iss-passes.ts` | Pass prediction algorithm |
+| `iss-passes.ts` | Pass prediction wrapper around WASM `find_passes()` |
 | `iss-passes-ui.ts` | UI component |
-| `lib.rs` | `sun_altitude()` and `satellite_ephemeris_range()` functions |
+| `lib.rs` | `find_passes()`, `sun_altitude()` and `satellite_ephemeris_range()` functions |
 
 ---
 
@@ -742,7 +743,9 @@ Regression suites guarding the astronomy engine (`sky_engine_core`).
 External-authority accuracy tests (`tests/horizons_accuracy.rs`) against NASA/JPL Horizons reference data, checked in as an offline CSV fixture (regenerate with `scripts/fetch_horizons_reference.py`).
 
 - **Coverage:** Sun, Moon, all 8 planets, Pluto at 4 epochs (J2000/2020/2026/2030); Halley and NEOWISE near their element epochs; one topocentric Moon site; all 14 minor bodies (dwarf planets, TNOs, asteroids, NEOs)
-- **Frame matching:** VSOP87/orbital-element bodies validated against astrometric ICRF (the engine omits precession); the equinox-of-date Meeus Moon against apparent-of-date
+- **Frame matching:** VSOP87/orbital-element bodies validated against astrometric ICRF (render directions are fixed J2000 axes); Moon directions precessed back to mean-of-date and compared against apparent-of-date
+- **Observed positions:** `sky_engine/tests/observed_positions.rs` checks the engine's topocentric Sun, Moon, and planet directions against 54 pinned Horizons AIRLESS observations (3 sites × 2 epochs; regenerate with `scripts/fetch_observed_reference.py`)
+- **Satellite cross-check:** `sky_engine/tests/sgp4_cross_check.rs` compares the Horizons-derived ISS ephemeris against independent SGP4 propagation from a pinned TLE
 - **Tolerances** derived from measured residuals: planets/Pluto/minor bodies 3′, geocentric Moon 2.5′, topocentric Moon 6′, comets 1°, distances 0.1–1%
 - **Minor bodies** use real Horizons osculating elements at a documented epoch (2026-07-06), back-propagated to the J2000 anchor — Ceres improved from ~18° to 0.21′; two-body drift limits documented per body
 - **CI:** the lib + Horizons suites run on every PR on Linux (`rust-test` job); the bit-exact golden suite runs on a dedicated `rust-golden-test` job pinned to a macOS/Apple Silicon runner (`macos-15`), the platform its constants were captured on (Linux libm rounds 1-2 ULP differently, so the suite cannot run there)

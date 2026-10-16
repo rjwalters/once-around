@@ -10,10 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Rise/set times panel for the Sun, Moon, and planets in topocentric mode (#81)
 - Periodic minor-body element refresh machinery: a Horizons-backed rewrite script plus a quarterly workflow that opens a refresh PR when osculating elements drift (#80)
+- AR alignment check (`/test.html`): rear-camera Moon/Sun captures recording signed altitude/azimuth error and great-circle separation, with JSON copy/download (GPS coordinates omitted by default) (#125)
+- Voluntary alignment reports: an explicit **Send report** action backed by a private Cloudflare Worker with D1 storage (`apps/report-worker`), separate coordinate consent, and 90-day retention; Worker tests run in CI (#127)
+- Satellite markers fade continuously through Earth's penumbra, driven by a new engine shadow-depth value (#97)
+- ISS passes starting more than 7 days out are marked approximate ("≈") in the ISS Passes panel (#96)
+- Paul Fellows channel sync through 2026-09-22: 15 uploads added to the inventory (363 total) and 10 placed on the map; videos about moving bodies follow those bodies (#116)
+- Offline SGP4 cross-check of the committed ISS ephemeris against independent propagation from a pinned TLE (#95)
+- `python-test` CI job for the minor-body generator unit tests, and a `cargo fmt --check` gate after a one-time workspace reformat (#106, #112)
+- `scripts/README.md` and `data/README.md` directory guides, and a CosmicFrontierLabs tooling evaluation (`docs/tooling-evaluation-cosmic-frontier-labs.md`) (#92, #110)
 
 ### Changed
 - Keyboard help overlay is now driven by a shared shortcut registry, so the `?` overlay and the handlers can't drift apart (#79)
 - Golden position suite runs on a dedicated macOS Apple Silicon CI job; `sky_engine` pass-prediction tests are pinned to a fixed ISS ephemeris fixture and run in CI (#78, #85)
+- Weekly ISS ephemeris request capped at 14 days (Hubble stays at 45) because Horizons' predicted trajectory drifts with forecast horizon (#96)
+- Shadow-limited ISS pass edges are root-found on the continuous umbra distance instead of bisecting a boolean, cutting their error from ~9 s to under 1 ms (#99)
+- pnpm pinned via `packageManager` (pnpm 11.18.0, Node ≥ 22.13; CI moves to Node 24), with a committed `allowBuilds` allowlist so fresh installs no longer rewrite `pnpm-workspace.yaml` (#107, #113)
+- Dependency updates are handled by Dependabot (weekly, 14-day cooldown, grouped minor/patch), with `.github/dependabot.yml` rendered from the org-wide policy; this replaces the briefly adopted Renovate config (#114, #130, #131)
+- Removed orphaned scripts and data assets, and reframed the README's `scripts/` lifecycle section (#109)
+
+### Fixed
+- Earth's shadow is modelled as a conical umbra instead of a cylinder, so visible ISS passes are no longer truncated by ~60 s at each end (#93)
+- Horizon and AR views no longer treat J2000 positions as equinox-of-date (~0.36° precession error in 2026); observer geometry now precesses explicitly, validated against 54 pinned Horizons topocentric observations (#123)
+- AR mode uses the live observing instant, keeps it current, and reports the GPS fix or location failure (#121)
+- AR waits for a fresh, north-referenced compass reading instead of trusting relative orientation, and handles display rotation (#122)
+- Weekly satellite refreshes now also build and deploy the site; previously they only committed data, and production served ISS coverage that expired at 2026-10-05 00:00 UTC (#141)
 
 ## [0.9.0] - 2026-07-07
 

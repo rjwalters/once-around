@@ -31,6 +31,7 @@ Every entry is one of:
 | [`ephemeris.json`](ephemeris.json) | bootstrap intermediate (frozen) | `scripts/fetch_ephemeris.js` | stage 2 — `scripts/create_final_placements.js` only |
 | [`catalog.csv`](catalog.csv) | generated-and-tracked (review artifact) | `scripts/generate_table.js` | nothing — human reading only |
 | `subtitles/` (277 × `<videoId>.en.vtt`) | generated-and-tracked | `scripts/get_transcripts.sh` (via `yt-dlp`) | `scripts/generate_table.js`, when building `catalog.csv` |
+| [`channel-sync-2026-09-22.md`](channel-sync-2026-09-22.md) | hand-maintained source (sync provenance record) | written by hand during the 2026-09-22 channel sync (#116) | nothing — human reading only (linked from `README.md` and `scripts/README.md`) |
 | `stars/bsc5.dat` | hand-maintained source (raw third-party catalog) | downloaded once from Harvard TDC (see the header comment in `scripts/preprocess_stars/src/main.rs`) | `scripts/preprocess_stars` — the only input file it opens |
 | `stars/bsc5.bin` | generated-and-tracked | `scripts/preprocess_stars` in its default (no-flag) single-file mode | nothing — superseded by the tiered binaries under `apps/web/public/data/stars/` |
 | `stars/hip_hr_xref.dat` | **unreferenced — likely orphan**, see below | nothing | nothing |
@@ -105,7 +106,7 @@ Two other ephemeris binaries live outside `data/` and are easy to conflate with
 the entry above:
 
 - `apps/web/public/data/iss_ephemeris.bin` — the **live** ISS ephemeris the app
-  fetches; refreshed weekly by CI.
+  fetches; refreshed and redeployed weekly by CI.
 - `crates/sky_engine/tests/fixtures/iss_ephemeris_fixture.bin` — a **pinned**
   3-day window used by the `sky_engine` pass-prediction tests, deliberately
   decoupled from the live file so the weekly refresh can't break the tests.

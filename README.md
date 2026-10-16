@@ -44,19 +44,20 @@ An interactive celestial visualizer for Paul Fellows' excellent [Once Around](ht
 - **FGS guide star lock** (`G`) — lock onto a guide star and track it, telescope-style
 
 ### Deep Sky Objects
-- **30 deep field images** from Hubble and JWST at actual sky positions
+- **29 deep field images** from Hubble and JWST at actual sky positions
 - **DSO markers** for galaxies, nebulae, and star clusters with info popups
 
 ### Satellites & Meteor Showers
 - **ISS and Hubble** tracking with real-time positions and shadow state
 - **ISS pass predictions** for your location, with a staleness warning if ephemeris data is out of date (data auto-refreshes weekly from NASA Horizons)
-- **13 meteor showers** with radiant markers during active periods
+- **12 meteor showers** with radiant markers during active periods
 
 ### Additional Features
 - **Search** — Find any star, planet, constellation, DSO, or satellite
 - **Time controls** — Scrub through time to watch celestial motion
 - **Video markers** — Links to relevant Once Around episodes
 - **AR mode** — Use device orientation to explore (mobile)
+- **AR alignment check** — Measure AR pointing against the Moon or Sun through the rear camera, with an optional voluntary report ([docs/AR_ALIGNMENT.md](docs/AR_ALIGNMENT.md))
 - **Night vision** — Red-only mode for outdoor observing
 - **PWA** — Installable, works offline
 - **URL deep linking** — Share any view, time, or tour
@@ -97,14 +98,17 @@ The astronomy engine is regression-tested against **JPL Horizons** reference dat
   - Orbital-element propagation for comets, minor bodies, and planetary moons
   - Yale Bright Star Catalog (BSC5) data
 - **Data pipeline**: NASA Horizons ephemerides (satellites auto-refresh weekly via GitHub Actions)
-- **CI**: web typecheck + unit tests, Rust engine test suites (including Horizons accuracy validation)
-- **Deployment**: Cloudflare Pages
+- **CI**: web typecheck + unit tests, Rust engine test suites (including Horizons accuracy validation) and `cargo fmt` check, Python generator tests, alignment-report Worker tests, alignment-page Playwright test
+- **Deployment**: Cloudflare Pages (the weekly satellite refresh also redeploys it); alignment reports go to a separate Cloudflare Worker with D1 storage (`apps/report-worker`)
+- **Dependency updates**: Dependabot (weekly, 14-day cooldown) via `.github/dependabot.yml`, rendered from an org-wide policy — do not hand-edit
 
 ## Project Structure
 
 ```
 once-around/
-├── apps/web/              # Three.js frontend application
+├── apps/
+│   ├── web/               # Three.js frontend application
+│   └── report-worker/     # Cloudflare Worker receiving voluntary AR alignment reports
 ├── crates/
 │   ├── sky_engine/        # WASM bindings
 │   └── sky_engine_core/   # Core astronomy calculations (Rust)
@@ -128,17 +132,19 @@ differ in how (and how often) they actually run:
   `generate_table.js` (produces `data/catalog.csv`).
 - **Scheduled data refreshes** — the two generators that GitHub Actions runs on
   a cron. `generate_satellite_ephemeris.py` refreshes the ISS/Hubble ephemerides
-  weekly (`.github/workflows/refresh-satellite-ephemeris.yml`), and
+  weekly and redeploys the site (`.github/workflows/refresh-satellite-ephemeris.yml`), and
   `generate_minor_body_elements.py` refreshes the minor-body orbital elements
   quarterly (`.github/workflows/refresh-minor-body-elements.yml`, which opens a
   PR for human review rather than committing directly).
-- **Engine-support tooling** — the two generators here are run by hand when the
+- **Engine-support tooling** — the three generators here are run by hand when the
   data or fixtures they feed need to change. `preprocess_stars` (a Rust
   workspace member) converts the Yale Bright Star / Hipparcos catalogs into the
-  packed binaries under `apps/web/public/data/stars/`; and
+  packed binaries under `apps/web/public/data/stars/`;
   `fetch_horizons_reference.py` regenerates the checked-in JPL Horizons CSV that
   keeps `crates/sky_engine_core/tests/horizons_accuracy.rs` offline (the
-  quarterly refresh PR asks a maintainer to re-run it by hand). Alongside them,
+  quarterly refresh PR asks a maintainer to re-run it by hand); and
+  `fetch_observed_reference.py` regenerates the pinned Horizons topocentric
+  fixture behind `crates/sky_engine/tests/observed_positions.rs`. Alongside them,
   `test_generate_minor_body_elements.py` is a network-free unit test for the
   back-propagation math inside `generate_minor_body_elements.py`; it runs on
   every PR via the `python-test` CI job, and locally with
@@ -171,6 +177,10 @@ pnpm test:unit
 # Run the Rust engine test suites
 cargo test -p sky_engine_core
 
+# Type-check and test the alignment-report Worker
+pnpm typecheck:worker
+pnpm test:worker
+
 # Playwright end-to-end tests (also: test:perf, test:ui)
 pnpm test
 
@@ -186,6 +196,9 @@ pnpm deploy:prod
 
 - [ROADMAP.md](ROADMAP.md) — planned features and known technical debt
 - [docs/COMPLETED_FEATURES.md](docs/COMPLETED_FEATURES.md) — detailed record of implemented features
+- [docs/coordinate-frames.md](docs/coordinate-frames.md) — the engine's J2000 / mean-of-date frame contract
+- [docs/AR_ALIGNMENT.md](docs/AR_ALIGNMENT.md) — checking AR alignment against the Moon or Sun
+- [docs/ALIGNMENT_REPORTS.md](docs/ALIGNMENT_REPORTS.md) — alignment-report Worker setup, privacy, and operations
 
 ## Credits
 
