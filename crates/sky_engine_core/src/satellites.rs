@@ -91,76 +91,70 @@ impl SatelliteEphemeris {
     /// Create a new ephemeris from a list of points.
     /// Points will be sorted by Julian Date.
     pub fn new(id: SatelliteId, mut points: Vec<SatelliteEphemerisPoint>) -> Self {
-        points.sort_by(|a, b| a.jd.partial_cmp(&b.jd).unwrap());
+        // total_cmp: never panics, even if a caller passes a NaN JD.
+        points.sort_by(|a, b| a.jd.total_cmp(&b.jd));
         Self { id, points }
     }
 
     /// Create from binary data.
     /// Format: [count: u32] followed by [jd: f64, x: f64, y: f64, z: f64] for each point.
+    ///
+    /// Malformed input returns `Err` (never panics, so it cannot trap the WASM
+    /// module): the length is computed with checked arithmetic, and the data
+    /// must hold at least 2 points (the minimum `interpolate` needs), every
+    /// value must be finite, and JDs must be strictly increasing as stored.
+    /// Trailing bytes after the last point are tolerated.
     pub fn from_binary(id: SatelliteId, data: &[u8]) -> Result<Self, &'static str> {
         if data.len() < 4 {
             return Err("Satellite ephemeris data too short");
         }
 
         let count = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
-        let expected_len = 4 + count * 32; // 4 bytes header + 32 bytes per point (4 f64s)
+        // 4 bytes header + 32 bytes per point (4 f64s). Checked so a huge count
+        // cannot wrap usize (32-bit on wasm32) and slip past the length check.
+        let expected_len = count
+            .checked_mul(32)
+            .and_then(|n| n.checked_add(4))
+            .ok_or("Satellite ephemeris point count overflows")?;
 
         if data.len() < expected_len {
             return Err("Satellite ephemeris data truncated");
         }
 
+        if count < 2 {
+            return Err("Satellite ephemeris needs at least 2 points");
+        }
+
+        let read_f64 = |offset: usize| -> f64 {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(&data[offset..offset + 8]);
+            f64::from_le_bytes(bytes)
+        };
+
         let mut points = Vec::with_capacity(count);
-        let mut offset = 4;
+        let mut prev_jd = f64::NEG_INFINITY;
 
-        for _ in 0..count {
-            let jd = f64::from_le_bytes([
-                data[offset],
-                data[offset + 1],
-                data[offset + 2],
-                data[offset + 3],
-                data[offset + 4],
-                data[offset + 5],
-                data[offset + 6],
-                data[offset + 7],
-            ]);
-            let x_km = f64::from_le_bytes([
-                data[offset + 8],
-                data[offset + 9],
-                data[offset + 10],
-                data[offset + 11],
-                data[offset + 12],
-                data[offset + 13],
-                data[offset + 14],
-                data[offset + 15],
-            ]);
-            let y_km = f64::from_le_bytes([
-                data[offset + 16],
-                data[offset + 17],
-                data[offset + 18],
-                data[offset + 19],
-                data[offset + 20],
-                data[offset + 21],
-                data[offset + 22],
-                data[offset + 23],
-            ]);
-            let z_km = f64::from_le_bytes([
-                data[offset + 24],
-                data[offset + 25],
-                data[offset + 26],
-                data[offset + 27],
-                data[offset + 28],
-                data[offset + 29],
-                data[offset + 30],
-                data[offset + 31],
-            ]);
+        for i in 0..count {
+            let offset = 4 + i * 32;
+            let point = SatelliteEphemerisPoint {
+                jd: read_f64(offset),
+                x_km: read_f64(offset + 8),
+                y_km: read_f64(offset + 16),
+                z_km: read_f64(offset + 24),
+            };
 
-            points.push(SatelliteEphemerisPoint {
-                jd,
-                x_km,
-                y_km,
-                z_km,
-            });
-            offset += 32;
+            if !(point.jd.is_finite()
+                && point.x_km.is_finite()
+                && point.y_km.is_finite()
+                && point.z_km.is_finite())
+            {
+                return Err("Satellite ephemeris contains a non-finite value");
+            }
+            if point.jd <= prev_jd {
+                return Err("Satellite ephemeris timestamps are not strictly increasing");
+            }
+            prev_jd = point.jd;
+            points.push(point);
         }
 
         Ok(Self::new(id, points))
@@ -1531,5 +1525,94 @@ mod tests {
         // Test interpolation
         let pos = eph.interpolate(2460000.5).unwrap();
         assert!((pos.0 - 3400.0).abs() < 1.0);
+    }
+
+    fn ephemeris_bytes(count: u32, points: &[(f64, f64, f64, f64)]) -> Vec<u8> {
+        let mut data = count.to_le_bytes().to_vec();
+        for &(jd, x, y, z) in points {
+            for v in [jd, x, y, z] {
+                data.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        data
+    }
+
+    #[test]
+    fn from_binary_rejects_malformed_input() {
+        let ok = (2461329.5, 6800.0, 0.0, 0.0);
+        let next = (2461329.5 + 1.0 / 1440.0, 0.0, 6800.0, 0.0);
+        let cases: &[(&str, Vec<u8>)] = &[
+            ("empty", Vec::new()),
+            ("short header", vec![2, 0, 0]),
+            ("truncated", ephemeris_bytes(3, &[ok, next])),
+            // u32::MAX * 32 + 4 overflows a 32-bit usize (wasm32); on 64-bit
+            // it is simply far larger than the buffer. Either way: Err.
+            ("oversized count", ephemeris_bytes(u32::MAX, &[ok, next])),
+            ("zero points", ephemeris_bytes(0, &[])),
+            ("one point", ephemeris_bytes(1, &[ok])),
+            (
+                "NaN jd",
+                ephemeris_bytes(2, &[ok, (f64::NAN, 0.0, 6800.0, 0.0)]),
+            ),
+            (
+                "Inf jd",
+                ephemeris_bytes(2, &[(f64::INFINITY, 6800.0, 0.0, 0.0), next]),
+            ),
+            (
+                "NaN position",
+                ephemeris_bytes(2, &[ok, (next.0, 0.0, f64::NAN, 0.0)]),
+            ),
+            (
+                "-Inf position",
+                ephemeris_bytes(2, &[ok, (next.0, 0.0, 0.0, f64::NEG_INFINITY)]),
+            ),
+            (
+                "duplicate jd",
+                ephemeris_bytes(2, &[ok, (ok.0, 1.0, 2.0, 3.0)]),
+            ),
+            ("decreasing jd", ephemeris_bytes(2, &[next, ok])),
+        ];
+        for (name, data) in cases {
+            assert!(
+                SatelliteEphemeris::from_binary(SatelliteId::ISS, data).is_err(),
+                "{name} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn from_binary_rejects_issue_147_nan_reproduction() {
+        // 68-byte binary, count 2, timestamps [2461329.5, NaN]: previously
+        // panicked in the sort (a WASM trap); now a normal error.
+        let data = ephemeris_bytes(
+            2,
+            &[(2461329.5, 6800.0, 0.0, 0.0), (f64::NAN, 0.0, 6800.0, 0.0)],
+        );
+        assert_eq!(data.len(), 68);
+        assert!(SatelliteEphemeris::from_binary(SatelliteId::ISS, &data).is_err());
+        assert!(IssEphemeris::from_binary(&data).is_err());
+    }
+
+    #[test]
+    fn from_binary_tolerates_trailing_bytes() {
+        let mut data = ephemeris_bytes(
+            2,
+            &[(2460000.0, 6800.0, 0.0, 0.0), (2460001.0, 0.0, 6800.0, 0.0)],
+        );
+        data.extend_from_slice(&[0xAB; 7]);
+        let eph = SatelliteEphemeris::from_binary(SatelliteId::Hubble, &data).unwrap();
+        assert_eq!(eph.len(), 2);
+    }
+
+    #[test]
+    fn new_does_not_panic_on_nan_jd() {
+        let p = |jd| SatelliteEphemerisPoint {
+            jd,
+            x_km: 0.0,
+            y_km: 0.0,
+            z_km: 0.0,
+        };
+        let eph = SatelliteEphemeris::new(SatelliteId::ISS, vec![p(2.0), p(f64::NAN), p(1.0)]);
+        assert_eq!(eph.len(), 3);
     }
 }

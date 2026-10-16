@@ -194,6 +194,17 @@ jobs:
       - name: Run minor-body element generator tests
         run: python3 scripts/test_generate_minor_body_elements.py
 
+      # scripts/generate_satellite_ephemeris.py drives the weekly
+      # refresh-satellite-ephemeris.yml workflow, which commits and deploys
+      # its output with no human review. These tests pin its fail-closed
+      # validation (issue #147): strict $$SOE/$$EOE parsing, finite values,
+      # monotonic timestamps, cadence, coverage of the (possibly Horizons-
+      # clamped) window, and staged atomic replacement of the output. Same
+      # conventions as the step above: stdlib-only, network-free (Horizons is
+      # stubbed), invoked from the repo root so the bare import resolves.
+      - name: Run satellite ephemeris generator tests
+        run: python3 scripts/test_generate_satellite_ephemeris.py
+
   typecheck:
     name: Typecheck (web)
     runs-on: ubuntu-latest
