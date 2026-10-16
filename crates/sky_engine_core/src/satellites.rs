@@ -4,7 +4,7 @@
 //! ephemeris data with interpolation for accurate positioning.
 //! Includes Earth shadow calculations for visibility determination.
 
-use crate::coords::{CartesianCoord, compute_gmst};
+use crate::coords::{CartesianCoord, OBLIQUITY_J2000, compute_gmst};
 use crate::frames::{j2000_to_mean_of_date, mean_of_date_to_j2000};
 use crate::planets::{AU_TO_KM, Planet, SUN_RADIUS_KM, heliocentric_position};
 use crate::time::SkyTime;
@@ -626,6 +626,205 @@ fn eci_to_topocentric(
     )
 }
 
+/// Geocentric Earth→Sun vector in fixed J2000 *equatorial* axes (km).
+///
+/// VSOP87A returns Earth's heliocentric position in J2000 *ecliptic* axes,
+/// while the satellite ephemeris vectors (`SatelliteEphemeris::interpolate`)
+/// are J2000 equatorial. The shadow helpers dot the two together, so the Sun
+/// vector must be rotated about +X by the J2000 obliquity first (#124);
+/// skipping the rotation tilts the shadow axis by up to ~23.4° in declination
+/// near the solstices.
+pub(crate) fn sun_eci_j2000_km(jd_tdb: f64) -> (f64, f64, f64) {
+    // Sun is in the opposite direction of Earth's heliocentric position
+    let earth_helio = heliocentric_position(Planet::Earth, jd_tdb);
+    let x_ecl = -earth_helio.0 * AU_TO_KM;
+    let y_ecl = -earth_helio.1 * AU_TO_KM;
+    let z_ecl = -earth_helio.2 * AU_TO_KM;
+
+    let (sin_eps, cos_eps) = OBLIQUITY_J2000.sin_cos();
+    (
+        x_ecl,
+        y_ecl * cos_eps - z_ecl * sin_eps,
+        y_ecl * sin_eps + z_ecl * cos_eps,
+    )
+}
+
+/// Regression tests for the Sun-vector frame used by the shadow path (#124).
+///
+/// Kept in their own module next to [`sun_eci_j2000_km`] so they validate the
+/// fix against an *external* reference rather than synthetic shadow axes,
+/// which cannot detect an ecliptic/equatorial mix-up.
+#[cfg(test)]
+mod sun_frame_tests {
+    use super::*;
+
+    /// JPL Horizons geocentric Sun vector, 2025-Jun-21 00:00 TDB
+    /// (JD 2460847.5, near the June solstice where the ecliptic/equatorial
+    /// mismatch is largest). Query: COMMAND='10', CENTER='500@399',
+    /// EPHEM_TYPE='VECTORS', REF_PLANE='FRAME', REF_SYSTEM='ICRF',
+    /// VEC_CORR='NONE', OUT_UNITS='KM-S'. Retrieved 2026-10-16.
+    const HORIZONS_JD_TDB: f64 = 2460847.5;
+    const HORIZONS_SUN_KM: (f64, f64, f64) = (
+        1.218_006_411_346_07e6,
+        1.394753350662301e8,
+        6.046034940084462e7,
+    );
+
+    fn unit(v: (f64, f64, f64)) -> (f64, f64, f64) {
+        let n = (v.0 * v.0 + v.1 * v.1 + v.2 * v.2).sqrt();
+        (v.0 / n, v.1 / n, v.2 / n)
+    }
+
+    fn angle_deg(a: (f64, f64, f64), b: (f64, f64, f64)) -> f64 {
+        let (a, b) = (unit(a), unit(b));
+        let d = (a.0 * b.0 + a.1 * b.1 + a.2 * b.2).clamp(-1.0, 1.0);
+        d.acos().to_degrees()
+    }
+
+    /// Pre-#124 Sun vector: VSOP87A ecliptic axes used as if equatorial.
+    fn legacy_ecliptic_sun_km(jd_tdb: f64) -> (f64, f64, f64) {
+        let e = heliocentric_position(Planet::Earth, jd_tdb);
+        (-e.0 * AU_TO_KM, -e.1 * AU_TO_KM, -e.2 * AU_TO_KM)
+    }
+
+    /// The JPL anti-Sun axis at the reference epoch, plus the unit vector
+    /// perpendicular to it pointing toward the south celestial pole (i.e.
+    /// away from where the un-rotated ecliptic vector would put the axis).
+    fn true_shadow_frame() -> ((f64, f64, f64), (f64, f64, f64)) {
+        let s = unit(HORIZONS_SUN_KM);
+        let anti = (-s.0, -s.1, -s.2);
+        // South pole minus its projection onto the anti-Sun axis.
+        let south = (0.0, 0.0, -1.0);
+        let d = south.2 * anti.2;
+        let perp = unit((
+            south.0 - d * anti.0,
+            south.1 - d * anti.1,
+            south.2 - d * anti.2,
+        ));
+        (anti, perp)
+    }
+
+    fn static_ephemeris(pos: (f64, f64, f64)) -> SatelliteEphemeris {
+        // Constant position over a short window bracketing the reference epoch.
+        let points = [HORIZONS_JD_TDB - 0.05, HORIZONS_JD_TDB + 0.05]
+            .iter()
+            .map(|&jd| SatelliteEphemerisPoint {
+                jd,
+                x_km: pos.0,
+                y_km: pos.1,
+                z_km: pos.2,
+            })
+            .collect();
+        SatelliteEphemeris::new(SatelliteId::ISS, points)
+    }
+
+    fn position_at_reference(sat: (f64, f64, f64)) -> SatellitePosition {
+        let eph = static_ephemeris(sat);
+        // Use the TDB epoch directly; the static ephemeris makes the
+        // UTC/TDB offset (~69 s) irrelevant to the satellite, and the Sun moves
+        // only ~0.0008 deg in that interval.
+        let time = SkyTime::from_jd(HORIZONS_JD_TDB);
+        compute_satellite_position(&eph, &time, 0.0, 0.0, 0.0).expect("in window")
+    }
+
+    #[test]
+    fn sun_vector_matches_horizons_j2000_equatorial() {
+        let engine = sun_eci_j2000_km(HORIZONS_JD_TDB);
+        let err = angle_deg(engine, HORIZONS_SUN_KM);
+        assert!(
+            err < 0.01,
+            "engine Sun direction differs from Horizons by {err} deg"
+        );
+
+        // The pre-fix ecliptic vector is off by roughly the solstice
+        // declination (~23.4 deg); this is what the regression guards.
+        let legacy_err = angle_deg(legacy_ecliptic_sun_km(HORIZONS_JD_TDB), HORIZONS_SUN_KM);
+        assert!(
+            legacy_err > 20.0,
+            "legacy ecliptic vector unexpectedly close: {legacy_err} deg"
+        );
+
+        // Distance must be unchanged by the rotation.
+        let r = |v: (f64, f64, f64)| (v.0 * v.0 + v.1 * v.1 + v.2 * v.2).sqrt();
+        let horizons_r = r(HORIZONS_SUN_KM);
+        assert!((r(engine) - horizons_r).abs() / horizons_r < 1e-5);
+    }
+
+    #[test]
+    fn sun_vector_agrees_with_core_sun_direction() {
+        // Independent in-engine path: the render Sun direction (which goes
+        // through spherical ecliptic -> `ecliptic_to_equatorial`). It adds
+        // ~20.5" of aberration, well inside the tolerance.
+        let time = SkyTime::from_jd(HORIZONS_JD_TDB);
+        let jd = time.julian_date_tdb();
+        let render = crate::planets::compute_sun_position(&time);
+        let err = angle_deg(sun_eci_j2000_km(jd), (render.x, render.y, render.z));
+        assert!(err < 0.01, "shadow vs render Sun direction: {err} deg");
+    }
+
+    #[test]
+    fn leo_satellite_in_true_shadow_is_eclipsed_at_solstice() {
+        // LEO (6778 km) satellite 60 deg off the true anti-Sun axis, toward
+        // the south: perpendicular distance 6778*sin(60) ~= 5870 km, inside
+        // the umbra. The legacy axis sits ~23.4 deg further north, putting
+        // the satellite ~83 deg off-axis (~6730 km perpendicular), so the old
+        // code reported it as sunlit.
+        let (anti, perp) = true_shadow_frame();
+        let r = 6778.0;
+        let (c, s) = (60f64.to_radians().cos(), 60f64.to_radians().sin());
+        let sat = (
+            r * (c * anti.0 + s * perp.0),
+            r * (c * anti.1 + s * perp.1),
+            r * (c * anti.2 + s * perp.2),
+        );
+
+        let pos = position_at_reference(sat);
+        assert!(!pos.illuminated, "satellite in true umbra reported sunlit");
+        assert!(pos.umbra_signed_distance_km > 0.0);
+        assert!(pos.shadow_depth > 0.0);
+        assert_eq!(pos.illuminated, pos.umbra_signed_distance_km <= 0.0);
+
+        // The pre-fix Sun vector gets this case wrong.
+        let legacy = umbra_signed_distance_km(sat, legacy_ecliptic_sun_km(HORIZONS_JD_TDB));
+        assert!(
+            legacy <= 0.0,
+            "legacy vector should have called this sunlit (got {legacy} km)"
+        );
+    }
+
+    #[test]
+    fn geo_satellite_on_true_anti_sun_axis_is_eclipsed() {
+        // On the true anti-Sun axis at geostationary radius. The legacy axis
+        // is ~23.4 deg away: 42164*sin(23.4) ~= 16700 km perpendicular, far
+        // outside Earth's shadow.
+        let (anti, _) = true_shadow_frame();
+        let r = 42_164.0;
+        let sat = (r * anti.0, r * anti.1, r * anti.2);
+
+        let pos = position_at_reference(sat);
+        assert!(!pos.illuminated);
+        assert!(pos.umbra_signed_distance_km > 0.0);
+        assert!(pos.shadow_depth > 0.0);
+
+        let legacy = umbra_signed_distance_km(sat, legacy_ecliptic_sun_km(HORIZONS_JD_TDB));
+        assert!(
+            legacy <= 0.0,
+            "legacy vector should be sunlit (got {legacy} km)"
+        );
+    }
+
+    #[test]
+    fn sunward_satellite_is_illuminated() {
+        let (anti, _) = true_shadow_frame();
+        let r = 6778.0;
+        let sat = (-r * anti.0, -r * anti.1, -r * anti.2);
+        let pos = position_at_reference(sat);
+        assert!(pos.illuminated);
+        assert_eq!(pos.shadow_depth, 0.0);
+        assert!(pos.umbra_signed_distance_km <= 0.0);
+    }
+}
+
 /// Compute a satellite's position as seen from an observer.
 ///
 /// # Arguments
@@ -660,14 +859,9 @@ pub fn compute_satellite_position(
         jd,
     );
 
-    // Get Sun position for shadow calculation
-    // Sun is in the opposite direction of Earth's heliocentric position
-    let earth_helio = heliocentric_position(Planet::Earth, jd);
-    let sun_eci = (
-        -earth_helio.0 * AU_TO_KM,
-        -earth_helio.1 * AU_TO_KM,
-        -earth_helio.2 * AU_TO_KM,
-    );
+    // Get Sun position for shadow calculation, in the same J2000 equatorial
+    // axes as `sat_eci` (see `sun_eci_j2000_km`).
+    let sun_eci = sun_eci_j2000_km(jd);
 
     let illuminated = !is_in_earth_shadow(sat_eci, sun_eci);
     let shadow_depth = earth_shadow_depth(sat_eci, sun_eci);
