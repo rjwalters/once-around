@@ -12,6 +12,7 @@
  */
 
 import init, { SkyEngine } from "../wasm/sky_engine";
+import { retryableInit } from "../retryable-init";
 
 // ISS satellite index and ephemeris URL (must match SATELLITES in engine.ts).
 const SATELLITE_ISS = 0;
@@ -52,30 +53,29 @@ interface ErrorMessage {
 }
 
 let engine: SkyEngine | null = null;
-let initPromise: Promise<void> | null = null;
 
-async function initEngine(): Promise<void> {
-  if (initPromise) return initPromise;
+/**
+ * Initialize the worker's engine and ISS ephemeris. Concurrent calls share one
+ * attempt; a failed attempt (e.g. a transient ephemeris fetch error) is
+ * forgotten so the next `compute` request retries instead of re-awaiting the
+ * same rejected promise forever.
+ */
+const initEngine = retryableInit(async (): Promise<void> => {
+  await init();
+  // Minimal engine (no star catalog needed for pass finding).
+  const eng = new SkyEngine(new Uint8Array(0));
 
-  initPromise = (async () => {
-    await init();
-    // Minimal engine (no star catalog needed for pass finding).
-    const eng = new SkyEngine(new Uint8Array(0));
+  // Load the ISS ephemeris independently of the main-thread engine.
+  const response = await fetch(ISS_EPHEMERIS_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to load ISS ephemeris: ${response.status}`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  eng.load_satellite_ephemeris(SATELLITE_ISS, bytes);
 
-    // Load the ISS ephemeris independently of the main-thread engine.
-    const response = await fetch(ISS_EPHEMERIS_URL);
-    if (!response.ok) {
-      throw new Error(`Failed to load ISS ephemeris: ${response.status}`);
-    }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    eng.load_satellite_ephemeris(SATELLITE_ISS, bytes);
-
-    engine = eng;
-    self.postMessage({ type: "ready" } as ReadyMessage);
-  })();
-
-  return initPromise;
-}
+  engine = eng;
+  self.postMessage({ type: "ready" } as ReadyMessage);
+});
 
 function computePasses(msg: ComputeMessage): Float64Array {
   if (!engine) {
