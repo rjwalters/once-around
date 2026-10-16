@@ -16,14 +16,16 @@ export interface EclipseHandlerOptions {
   getDatetimeInputValue: () => string | undefined;
   setDatetimeInputValue: (value: string) => void;
   stopTimePlayback: () => void;
-  applyTimeToEngine: (date: Date) => void;
-  recomputeEngine: () => void;
-  updateRenderer: () => void;
+  /**
+   * Move the observation time to `date` through the app's shared
+   * observation-time update path (engine, currentDate, topocentric params,
+   * date-dependent overlays, rise/set, persisted time and URL). Note: the
+   * shared path hides the eclipse banner, so the handler shows it afterwards.
+   */
+  setObservationTime: (date: Date) => void;
   getBodyPositions: () => BodyPositions;
   positionToRaDec: (pos: Position3D) => { ra: number; dec: number };
   calculateSunMoonSeparation: (bodyPos: BodyPositions) => number | null;
-  updateEclipseRendering: (separation: number) => void;
-  updateVideoMarkers: (bodyPos: BodyPositions) => void;
   animateToRaDec: (ra: number, dec: number, duration: number) => void;
   /** Current observer location (degrees). */
   getObserverLocation: () => { latitude: number; longitude: number };
@@ -128,14 +130,10 @@ export function createEclipseHandler(options: EclipseHandlerOptions): () => void
     getDatetimeInputValue,
     setDatetimeInputValue,
     stopTimePlayback,
-    applyTimeToEngine,
-    recomputeEngine,
-    updateRenderer,
+    setObservationTime,
     getBodyPositions,
     positionToRaDec,
     calculateSunMoonSeparation,
-    updateEclipseRendering,
-    updateVideoMarkers,
     animateToRaDec,
     getObserverLocation,
     setObserverLocation,
@@ -179,25 +177,16 @@ export function createEclipseHandler(options: EclipseHandlerOptions): () => void
       // Update the datetime input
       setDatetimeInputValue(formatDatetimeLocal(eclipseDate));
 
-      // Update the engine directly
-      applyTimeToEngine(eclipseDate);
-      recomputeEngine();
-      updateRenderer();
+      // Synchronize all time-dependent state (engine, currentDate,
+      // topocentric params, overlays, corona, video markers, rise/set,
+      // saved timestamp and URL) through the shared update path. It hides
+      // the eclipse banner, so the banner is shown below, after this call.
+      setObservationTime(eclipseDate);
 
-      // Get updated body positions
+      // Body positions at the eclipse instant (for camera + banner readout)
       const bodyPos = getBodyPositions();
-
-      // Update eclipse rendering (shows corona)
-      const sunMoonSep = calculateSunMoonSeparation(bodyPos);
-      if (sunMoonSep !== null) {
-        updateEclipseRendering(sunMoonSep);
-      }
-
       const sunPos = bodyPos.get("Sun");
       const moonPos = bodyPos.get("Moon");
-
-      // Update video markers with new body positions
-      updateVideoMarkers(bodyPos);
 
       if (sunPos) {
         const sunRaDec = positionToRaDec(sunPos);
@@ -213,7 +202,8 @@ export function createEclipseHandler(options: EclipseHandlerOptions): () => void
         }
       }
 
-      // Show eclipse info banner
+      // Show eclipse info banner (must come after setObservationTime, which
+      // hides it for ordinary time changes)
       const eclipseBanner = document.getElementById("eclipse-banner");
       const dateEl = document.getElementById("eclipse-banner-date");
       const pathEl = document.getElementById("eclipse-banner-path");
