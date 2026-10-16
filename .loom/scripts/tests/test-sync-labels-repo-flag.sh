@@ -8,8 +8,8 @@
 # forced a local checkout of the target was target *resolution* — the script
 # inferred the NWO from the current directory's git remote via
 # forge_detect/forge_get_repo_nwo. `--repo OWNER/NAME` names the target
-# instead, so one workspace can sync labels onto klayout-tools and every
-# gf180-*/sky130-* canary without cloning any of them.
+# instead, so one workspace can sync labels onto a tool repo and every
+# analog-* canary without cloning any of them.
 #
 # This is a black-box test: sync-labels.sh is a full CLI script, so we stub
 # `gh` on PATH, run the real script as a subprocess from a scratch directory,
@@ -17,9 +17,10 @@
 #
 # The load-bearing assertions:
 #   1. --repo resolves the target WITHOUT consulting the forge/git for the NWO
-#      (no *bare* `gh repo view --json nameWithOwner` in the log) and works
-#      from a directory that is not a git repo at all — the short-circuit,
-#      proven rather than asserted.
+#      (no *bare* `gh repo view --json nameWithOwner` in the log), and a
+#      --dry-run resolves it from a directory that is not a git repo at all —
+#      the short-circuit, proven rather than asserted. (A real sync writes, so
+#      since #9548 it runs from its target's registered checkout; see run_sls.)
 #   2. Every mutating gh call carries `-R <override>`, never the invoking repo.
 #   3. labels.yml is still read from WORKTREE_PATH (the source stays local;
 #      only the target moves).
@@ -50,57 +51,81 @@
 set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# #9548: a real sync vets its write target (`loom_write_repo`); the targets'
+# checkouts are registered below (write-scope-fixture.sh).
+# shellcheck source=lib/write-scope-fixture.sh
+source "$TEST_DIR/lib/write-scope-fixture.sh"
 SCRIPTS_DIR="$(cd "$TEST_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SCRIPTS_DIR/../.." && pwd)"
 SLS="$SCRIPTS_DIR/sync-labels.sh"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+# shellcheck source=lib/assert.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assert.sh"
 
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
 
-assert_eq() {
-    local expected="$1" actual="$2" msg="$3"
-    TESTS_RUN=$((TESTS_RUN + 1))
-    if [[ "$expected" == "$actual" ]]; then
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-        echo -e "  ${GREEN}PASS${NC}: $msg"
-    else
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        echo -e "  ${RED}FAIL${NC}: $msg"
-        echo "    Expected: '$expected'"
-        echo "    Actual:   '$actual'"
-    fi
+# _byte_len: true BYTE count of $1, independent of the ambient locale.
+# `${#var}` counts CHARACTERS under a multibyte (e.g. UTF-8) locale, which
+# undercounts a haystack containing this file's ANSI-colored ℹ/✓/✗/⚠ output.
+# Flipping LC_ALL=C for the expansion (no subprocess -- ${#} is a bash
+# builtin operator, and LC_ALL is read directly from the exported
+# environment, not cached) makes it count raw bytes instead, matching what
+# `wc -c` would report. Used only on the (rare) failure path below.
+_byte_len() {
+    local -x LC_ALL=C
+    printf '%s' "${#1}"
 }
 
+# assert_contains / assert_not_contains: pure bash substring match -- NO
+# external process is forked to evaluate the assertion (#7819).
+#
+# The previous implementation was `printf '%s' "$haystack" | grep -F --
+# "$needle" >/dev/null`: two forked processes (printf's pipeline subshell,
+# grep) per assertion, ~161 times in one run of this suite. Under
+# run-ci-suites.sh's parallel pool -- dozens of suites forking their own
+# subprocesses at the same time -- that fork pair is exactly the kind of call
+# that can hit a transient `fork: retry: Resource temporarily unavailable`
+# (EAGAIN) on a loaded CI runner. When printf or grep fails to fork, the
+# pipeline reads as "no match" even though $haystack -- an ordinary bash
+# variable that the failed fork never touched -- still holds the needle
+# byte-for-byte. That reproduces the exact symptom reported in #7819: a FAIL
+# whose own diagnostic (a bash builtin `echo`, never forked) shows the needle
+# sitting right there in the haystack, which looks like `grep -F` lying about
+# a literal match it should never be able to miss.
+#
+# `[[ "$haystack" == *"$needle"* ]]` needs zero forks -- the quoted $needle is
+# matched as a literal substring, not a glob pattern, so this is a drop-in
+# semantic replacement for `grep -F`. Being fork-free, it cannot suffer from
+# this flake class at all. Reproduced locally (not committed as a test, to
+# avoid trading one source of CI flakiness for another): lowering `ulimit -u`
+# for an isolated subshell to just a few slots above the host's live process
+# count makes `printf | grep` throw spurious "no match" results under that
+# pressure, while this bash-builtin form never does, in the same loop, on the
+# same inputs.
 assert_contains() {
     local haystack="$1" needle="$2" msg="$3"
     TESTS_RUN=$((TESTS_RUN + 1))
-    if printf '%s' "$haystack" | grep -qF -- "$needle"; then
+    if [[ "$haystack" == *"$needle"* ]]; then
         TESTS_PASSED=$((TESTS_PASSED + 1))
         echo -e "  ${GREEN}PASS${NC}: $msg"
     else
         TESTS_FAILED=$((TESTS_FAILED + 1))
         echo -e "  ${RED}FAIL${NC}: $msg"
-        echo "    Expected substring: '$needle'"
-        echo "    In: '$haystack'"
+        echo "    Expected substring: '$needle' ($(_byte_len "$needle") bytes)"
+        echo "    In ($(_byte_len "$haystack") bytes): '$haystack'"
     fi
 }
 
 assert_not_contains() {
     local haystack="$1" needle="$2" msg="$3"
     TESTS_RUN=$((TESTS_RUN + 1))
-    if ! printf '%s' "$haystack" | grep -qF -- "$needle"; then
+    if [[ "$haystack" != *"$needle"* ]]; then
         TESTS_PASSED=$((TESTS_PASSED + 1))
         echo -e "  ${GREEN}PASS${NC}: $msg"
     else
         TESTS_FAILED=$((TESTS_FAILED + 1))
         echo -e "  ${RED}FAIL${NC}: $msg"
-        echo "    Unexpected substring: '$needle'"
-        echo "    In: '$haystack'"
+        echo "    Unexpected substring: '$needle' ($(_byte_len "$needle") bytes)"
+        echo "    In ($(_byte_len "$haystack") bytes): '$haystack'"
     fi
 }
 
@@ -233,9 +258,52 @@ CFG_GITHUB="$TMP/cfg-github"
 mkdir -p "$CFG_GITHUB/.loom"
 echo '{"forge":{"type":"github"}}' > "$CFG_GITHUB/.loom/config.json"
 
+# #9548 write-scope fixtures: one registered checkout per distinct write
+# target, registered once. Each is a copy of $SRC (labels.yml and -alt/), so a
+# run from it reads the same sources. Without --repo the target is the
+# checkout's own origin; with --repo the real gate admits a target only from a
+# checkout whose origin it is (or, with a daemon, a registered workspace's), so
+# a real sync runs from its target's checkout. Each registration chains onto
+# the previous one, so the final LOOM_GH_BIN answers the permission probe for
+# all three and hands every other call to the stub gh.
+FIX_HELLO="$TMP/ws-hello-world"
+FIX_TYPO="$TMP/ws-typo-repo"
+FIX_REMOTE="$TMP/ws-from-remote"
+for fix in "$FIX_HELLO" "$FIX_TYPO" "$FIX_REMOTE"; do
+    mkdir -p "$fix" && cp -R "$SRC/." "$fix/"
+done
+WRITE_SCOPE_INNER_GH="$STUB_DIR/gh" write_scope_register "$FIX_HELLO" octocat/hello-world
+write_scope_register "$FIX_TYPO" octocat/typo-repo
+write_scope_register "$FIX_REMOTE" owner/from-remote
+
+# sls_cwd <nwo> <script args...>: where run_sls runs. A real sync runs from
+# its target's registered checkout: --repo X's, else (no --repo) the one whose
+# origin is the stubbed NWO. A --dry-run, a target with no checkout, and an
+# argument error stay in $SRC, which is not a git repo at all.
+sls_cwd() {
+    local nwo="$1" repo="" dry=0 a
+    shift
+    while [[ $# -gt 0 ]]; do
+        a="$1"; shift
+        case "$a" in
+            --) break ;;
+            --dry-run) dry=1 ;;
+            --repo) repo="${1:-}"; [[ $# -eq 0 ]] || shift ;;
+            --repo=*) repo="${a#--repo=}" ;;
+        esac
+    done
+    [[ "$dry" -eq 0 ]] || repo="-"
+    case "${repo:-$nwo}" in
+        octocat/hello-world) echo "$FIX_HELLO" ;;
+        octocat/typo-repo) echo "$FIX_TYPO" ;;
+        owner/from-remote) echo "$FIX_REMOTE" ;;
+        *) echo "$SRC" ;;
+    esac
+}
+
 GH_LOG="$TMP/gh.log"
 
-# Run the real script with the stub gh first on PATH, from $SRC.
+# Run the real script with the stub gh first on PATH, from sls_cwd's choice.
 #   run_sls [--nwo NWO] [--repo-view ANSWER] [--repo-root DIR] -- <script args...>
 #
 #   --repo-view   what the stub's targeted `gh repo view <NWO>` answers
@@ -261,8 +329,10 @@ run_sls() {
         esac
     done
     : > "$GH_LOG"
+    local cwd
+    cwd="$(sls_cwd "$nwo" "$@")"
     OUT="$(
-        cd "$SRC" || exit 99
+        cd "$cwd" || exit 99
         PATH="$STUB_DIR:$PATH" \
         LOOM_TEST_GH_LOG="$GH_LOG" \
         LOOM_TEST_GH_NWO="$nwo" \
@@ -281,10 +351,12 @@ run_sls() {
 echo ""
 echo "=== --repo short-circuits NWO resolution (no git remote needed) ==="
 
-# The scratch dir has no git remote and the stub `gh repo view` fails, so the
-# legacy resolution path cannot produce an NWO. --repo must still succeed.
+# The stub's targetless `gh repo view` fails, so the legacy resolution path
+# cannot produce an NWO. --repo must still succeed. (This real sync runs from
+# its target's registered checkout; the --dry-run below runs from $SRC, which
+# has no git remote at all.)
 run_sls -- --repo octocat/hello-world
-assert_eq "0" "$RC" "--repo succeeds in a directory with no resolvable remote"
+assert_eq "0" "$RC" "--repo succeeds where the forge resolves no repository"
 assert_contains "$OUT" "Target repository: octocat/hello-world (github)" \
     "--repo resolves REPO to the flag value"
 # The short-circuit proof, kept precise after #4524 added a preflight: what
@@ -312,8 +384,9 @@ assert_eq "-R octocat/hello-world" \
 # The preflight names its target positionally (`gh repo view` has no -R flag),
 # so match on the NWO itself rather than on '-R': no call may go anywhere else.
 assert_eq "" \
-    "$(printf '%s\n' "$LOG" | grep -v -- 'octocat/hello-world' || true)" \
+    "$(printf '%s\n' "$LOG" | grep -v -- 'octocat/hello-world' | grep -vxE -- '--version|--clear-cache' || true)" \
     "no gh call was made without the override target"
+# (the gh-cached wrapper's `--version` liveness probe and --clear-cache are the only target-less calls, #9953)
 
 # --repo=OWNER/NAME is the same flag.
 run_sls -- --repo=octocat/hello-world
@@ -321,8 +394,10 @@ assert_eq "0" "$RC" "--repo=OWNER/NAME form accepted"
 assert_contains "$OUT" "Target repository: octocat/hello-world (github)" \
     "--repo= form resolves the same target"
 
-# The flag order relative to the positional path must not matter.
-run_sls -- --repo octocat/hello-world "$SRC"
+# The flag order relative to the positional path must not matter. (The script
+# runs from WORKTREE_PATH, so the positional is the target's registered
+# checkout, #9548.)
+run_sls -- --repo octocat/hello-world "$FIX_HELLO"
 assert_eq "0" "$RC" "--repo composes with an explicit WORKTREE_PATH positional"
 assert_contains "$OUT" "Target repository: octocat/hello-world (github)" \
     "--repo plus positional still targets the override"
@@ -516,7 +591,8 @@ run_sls -- --repo octocat/hello-world
 assert_eq "0" "$RC" "a reachable, writable --repo target syncs normally"
 assert_contains "$LOG" "repo view octocat/hello-world --json nameWithOwner,viewerPermission" \
     "the real --repo path preflights the named target with 'gh repo view'"
-assert_contains "$(printf '%s\n' "$LOG" | head -1)" "repo view octocat/hello-world" \
+# (filtering the gh-cached wrapper's local `--version` liveness probe, #9953 — not a forge call)
+assert_contains "$(printf '%s\n' "$LOG" | grep -vx -- '--version' | head -1)" "repo view octocat/hello-world" \
     "the preflight is the FIRST gh call — it precedes every label operation"
 
 # A typo that resolves to nothing this identity can see must abort before the
@@ -531,7 +607,7 @@ assert_not_contains "$LOG" "label delete" \
     "the unreachable target aborted BEFORE any label deletion"
 assert_not_contains "$LOG" "label create" \
     "the unreachable target aborted before any label creation"
-assert_eq "1" "$(printf '%s\n' "$LOG" | grep -c . || true)" \
+assert_eq "1" "$(printf '%s\n' "$LOG" | grep -vx -- '--version' | grep -c . || true)" \
     "the preflight was the only gh call made against the bad target"
 
 # Existing-but-read-only is the other half of "existence/permission": deleting

@@ -30,7 +30,15 @@
 # exact and checkable by hand (see comments at each candidate).
 #
 # Usage:
+#   cargo build --package loom-daemon
 #   ./.loom/scripts/tests/test-check-duplicate.sh
+#
+# Needs a BUILT loom-daemon: since #8360 the similarity scan under test is
+# `loom-daemon duplicate-scan`, reached through check-duplicate.sh — so this
+# suite is wired in the "Native Port Suites" CI job (#7952 family), not
+# shell-suite-tests, which builds no binary. The exact-percentage assertions
+# below (33%, 25%, 26%…) are the equivalence evidence that the Rust port
+# reproduces the shell scorer's arithmetic to the digit.
 
 set -uo pipefail
 
@@ -38,46 +46,13 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$TEST_DIR/.." && pwd)"
 CDS="$SCRIPTS_DIR/check-duplicate.sh"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-TESTS_RUN=0
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-assert_eq() {
-    local expected="$1" actual="$2" msg="$3"
-    TESTS_RUN=$((TESTS_RUN + 1))
-    if [[ "$expected" == "$actual" ]]; then
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-        echo -e "  ${GREEN}PASS${NC}: $msg"
-    else
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        echo -e "  ${RED}FAIL${NC}: $msg"
-        echo "    Expected: '$expected'"
-        echo "    Actual:   '$actual'"
-    fi
-}
-
-assert_contains() {
-    local haystack="$1" needle="$2" msg="$3"
-    TESTS_RUN=$((TESTS_RUN + 1))
-    if printf '%s' "$haystack" | grep -qF -- "$needle"; then
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-        echo -e "  ${GREEN}PASS${NC}: $msg"
-    else
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        echo -e "  ${RED}FAIL${NC}: $msg"
-        echo "    Expected substring: '$needle'"
-        echo "    In: '$haystack'"
-    fi
-}
+# shellcheck source=lib/assert.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assert.sh"
 
 assert_not_contains() {
     local haystack="$1" needle="$2" msg="$3"
     TESTS_RUN=$((TESTS_RUN + 1))
-    if ! printf '%s' "$haystack" | grep -qF -- "$needle"; then
+    if ! [[ "$haystack" == *"$needle"* ]]; then
         TESTS_PASSED=$((TESTS_PASSED + 1))
         echo -e "  ${GREEN}PASS${NC}: $msg"
     else
@@ -96,11 +71,33 @@ fi
 STUB_DIR="$(mktemp -d)"
 trap 'rm -rf "$STUB_DIR" 2>/dev/null || true' EXIT
 
-# --- Stub loom-daemon: present on PATH but deliberately non-functional, so
-# check-duplicate.sh's `loom-daemon --version` probe fails and it falls back
-# to the `gh` stub below (byte-for-byte the documented fallback path,
-# defaults/scripts/check-duplicate.sh). Keeps this test independent of
-# whether a real loom-daemon happens to be installed on the host. ---
+# --- The scan under test is `loom-daemon duplicate-scan` (#8360), so this
+# suite needs a BUILT daemon -- pinned through the standard harness seam so
+# every invocation of check-duplicate.sh execs the binary built from this
+# tree, never whatever loom-daemon the host happens to have installed
+# (#8176). Fails (never skips) when no binary resolves: the assertions below
+# are the equivalence evidence for the port.
+# shellcheck source=lib/require-daemon-bin.sh
+source "$TEST_DIR/lib/require-daemon-bin.sh"
+loom_test_require_daemon_bin "$SCRIPTS_DIR" "duplicate-scan"
+
+# --- Stub loom-daemon on PATH: deliberately non-functional, so
+# check-duplicate.sh's `loom-daemon --version` FORGE probe fails and the
+# fetch falls back to the `gh` stub below (byte-for-byte the documented
+# fallback path, defaults/scripts/check-duplicate.sh). The SCORER is
+# unaffected: it resolves through $LOOM_DAEMON_SELF_BIN (set by the harness
+# above), which script-helper.sh checks before any PATH lookup.
+#
+# NOT renamed per #5548's "test fixtures should not be named `loom-daemon`"
+# fix, unlike the fixtures in test-loom-status.sh / test-gh-cached.sh /
+# test-loom-daemon-watchdog.sh: check-duplicate.sh resolves this binary via a
+# bare `command -v loom-daemon` PATH lookup with no LOOM_DAEMON_BIN-style
+# override, so the literal name is load-bearing here -- renaming it would
+# stop check-duplicate.sh from finding it at all, defeating the test. This
+# poses no #5548-shaped liveness-check risk in practice: the stub is invoked
+# synchronously (`exit 1`, no backgrounding, no loop), so even a leaked copy
+# left on disk after a failed trap can never appear as a running process for
+# a `pgrep`-style liveness check to match. ---
 cat > "$STUB_DIR/loom-daemon" <<'STUB'
 #!/usr/bin/env bash
 exit 1
@@ -114,6 +111,8 @@ chmod +x "$STUB_DIR/loom-daemon"
 #                                 "owner/repo" from this LOCAL read -- no `gh
 #                                 repo view` (GraphQL) round-trip -- so this stub
 #                                 never needs to simulate a rate limit for it.
+#                                 $STUB_DIR/git-remote-url, if present,
+#                                 overrides the URL (remote-casing cases).
 #   anything else              -> delegated to the real `git` binary (unused by
 #                                 check-duplicate.sh today; a safety net only).
 REAL_GIT_BIN="$(command -v git)"
@@ -126,7 +125,11 @@ if [[ "$1" == "remote" && "$2" == "get-url" && "$3" == "origin" ]]; then
     echo "stub git: No such remote 'origin'" >&2
     exit 1
   fi
-  echo "https://github.com/owner/repo.git"
+  if [[ -f "$STUB_DIR_FROM_ENV/git-remote-url" ]]; then
+    cat "$STUB_DIR_FROM_ENV/git-remote-url"
+  else
+    echo "https://github.com/owner/repo.git"
+  fi
   exit 0
 fi
 exec "$REAL_GIT_BIN" "$@"
@@ -134,7 +137,11 @@ STUB
 chmod +x "$STUB_DIR/git"
 
 # --- Stub gh on PATH ---
-#   gh auth status                                     -> exit 0 (authenticated)
+#   gh auth status                                     -> exit 0 (authenticated), or fail printing
+#                                                           $STUB_DIR/auth-fail if that file exists (#10025)
+#   gh api rate_limit --jq FILTER                        -> jq FILTER over $STUB_DIR/rate-limit.json
+#                                                           (fails if that file is absent, as a bad
+#                                                           token does) (#10025)
 #   gh issue list --state=open|closed ...               -> cat $STUB_DIR/issues-<state>.json (or [];
 #                                                           simulates a GraphQL rate-limit failure if
 #                                                           $STUB_DIR/issue-list-rate-limit-<state> exists)
@@ -149,6 +156,13 @@ chmod +x "$STUB_DIR/git"
 #   gh api repos/{owner}/{repo}/pulls?state=closed&...   -> REST fallback (#4526): cat
 #                                                           $STUB_DIR/rest-prs.json (or [];
 #                                                           fails if $STUB_DIR/rest-prs-fail exists)
+#   gh api search/issues?q=...                           -> the windowed closed-issue search (#9208):
+#                                                           appends the path to $STUB_DIR/search-calls.log,
+#                                                           then cat $STUB_DIR/search-issues.json. With NO
+#                                                           fixture it FAILS (printing $STUB_DIR/search-fail
+#                                                           if present), so every case that predates the
+#                                                           search exercises the recency-list fallback
+#                                                           exactly as it always did.
 #
 # Note (#4659): check-duplicate.sh no longer calls `gh repo view` anywhere --
 # repo resolution (get_repo_nwo(), used only by search_cross_references())
@@ -180,6 +194,10 @@ rate_limit_message() {
 
 case "$1" in
   auth)
+    if [[ -f "$STUB_DIR_FROM_ENV/auth-fail" ]]; then
+      cat "$STUB_DIR_FROM_ENV/auth-fail" >&2
+      exit 1
+    fi
     exit 0
     ;;
   issue)
@@ -218,7 +236,11 @@ case "$1" in
     ;;
   api)
     path="$2"
-    if [[ "$path" == *"/timeline" ]]; then
+    if [[ "$path" == "rate_limit" ]]; then
+      [[ -f "$STUB_DIR_FROM_ENV/rate-limit.json" ]] || { echo "HTTP 401: Bad credentials" >&2; exit 1; }
+      [[ "$3" == "--jq" ]] && exec jq -r "$4" "$STUB_DIR_FROM_ENV/rate-limit.json"
+      exec cat "$STUB_DIR_FROM_ENV/rate-limit.json"
+    elif [[ "$path" == *"/timeline" ]]; then
       if [[ -f "$STUB_DIR_FROM_ENV/timeline-fail" ]]; then
         echo "stub gh: api call failed" >&2
         exit 1
@@ -228,6 +250,12 @@ case "$1" in
       canned="$STUB_DIR_FROM_ENV/timeline-$num.json"
       if [[ -f "$canned" ]]; then cat "$canned"; else echo "[]"; fi
       exit 0
+    elif [[ "$path" == "search/issues?"* ]]; then  # before the next branch: this path contains "/issues?" too
+      echo "$path" >> "$STUB_DIR_FROM_ENV/search-calls.log"
+      canned="$STUB_DIR_FROM_ENV/search-issues.json"
+      if [[ -f "$canned" && ! -f "$STUB_DIR_FROM_ENV/search-fail" ]]; then cat "$canned"; exit 0; fi
+      if [[ -f "$STUB_DIR_FROM_ENV/search-fail" ]]; then cat "$STUB_DIR_FROM_ENV/search-fail" >&2; else echo "stub gh: no search fixture" >&2; fi
+      exit 1
     elif [[ "$path" == *"/issues?"* ]]; then
       if [[ -f "$STUB_DIR_FROM_ENV/rest-issues-fail" ]]; then
         echo "stub gh: rest issues api call failed" >&2
@@ -260,14 +288,38 @@ chmod +x "$STUB_DIR/gh"
 
 export LOOM_TEST_STUB_DIR="$STUB_DIR"
 export PATH="$STUB_DIR:$PATH"
+unset LOOM_GH_BIN LOOM_REPO LOOM_FORGE_TYPE
 
 reset_state() {
     rm -f "$STUB_DIR"/issues-*.json "$STUB_DIR"/prs-merged.json "$STUB_DIR"/timeline-*.json
     rm -f "$STUB_DIR"/rest-issues-*.json "$STUB_DIR/rest-prs.json"
-    rm -f "$STUB_DIR/timeline-fail" "$STUB_DIR/git-remote-fail"
+    rm -f "$STUB_DIR/timeline-fail" "$STUB_DIR/git-remote-fail" "$STUB_DIR/git-remote-url"
     rm -f "$STUB_DIR"/issue-list-rate-limit-* "$STUB_DIR/pr-list-rate-limit"
     rm -f "$STUB_DIR/rest-issues-fail" "$STUB_DIR/rest-prs-fail"
-    rm -f "$STUB_DIR/rate-limit-message"
+    rm -f "$STUB_DIR/rate-limit-message" "$STUB_DIR/auth-fail" "$STUB_DIR/rate-limit.json"
+    rm -f "$STUB_DIR/search-issues.json" "$STUB_DIR/search-fail" "$STUB_DIR/search-calls.log"
+}
+
+# How many search requests were made since the last reset_state, and the path
+# of the last one.
+search_calls() { if [[ -f "$STUB_DIR/search-calls.log" ]]; then wc -l < "$STUB_DIR/search-calls.log" | tr -d ' '; else echo 0; fi; }
+last_search() { tail -n 1 "$STUB_DIR/search-calls.log" 2>/dev/null || true; }
+# UTC date N days back, as the search's closed:>= qualifier spells it (BSD or GNU date).
+days_ago() { date -u -v-"$1"d +%F 2>/dev/null || date -u -d "$1 days ago" +%F; }
+# The last search's close-date bound is one of the two dates given (sampled
+# either side of the run, so a UTC midnight in between cannot fail the case).
+assert_window() {
+    local before="$1" after="$2" msg="$3" q
+    q="$(last_search)"
+    TESTS_RUN=$((TESTS_RUN + 1))
+    if [[ "$q" == *"closed%3A%3E%3D${before}%20"* || "$q" == *"closed%3A%3E%3D${after}%20"* ]]; then
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+        echo -e "  ${GREEN}PASS${NC}: $msg"
+    else
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        echo -e "  ${RED}FAIL${NC}: $msg"
+        echo "    Expected a closed:>= bound of $before (or $after) in: '$q'"
+    fi
 }
 
 run_cds() {
@@ -382,6 +434,60 @@ run_cds --issue 80 --title "Some issue title"
 assert_eq "0" "$RC" "(g) git remote resolution failure -> exit code driven by similarity check alone"
 assert_not_contains "$OUT" "RELATED_OPEN_WORK" "(g) git remote resolution failure -> probe result skipped"
 assert_contains "$ERR" "Failed to resolve repository" "(g) git remote resolution failure -> stderr warning emitted"
+
+# (cs) Remote-URL casing differs from GitHub's canonical full_name
+# (example-org/tool-repo#202). Owner/repo names are case-insensitive on
+# GitHub, but get_repo_nwo() returns the remote URL's casing verbatim -- a
+# clone of "https://github.com/example-org/harness-ops.git" yields
+# "example-org/harness-ops" while the timeline reports
+# "Example-Org/harness-ops". The same-repo filter must still match, or
+# RELATED_OPEN_WORK is silently [] for every issue.
+case_timeline() {
+    # $1 = issue number, $2 = cross-referencing issue number, $3 = full_name
+    cat > "$STUB_DIR/timeline-$1.json" <<EOF
+[
+  {"event": "cross-referenced", "source": {"type": "issue", "issue": {
+      "number": $2, "title": "Case-variant related work", "state": "open",
+      "repository": {"full_name": "$3"}}}}
+]
+EOF
+}
+
+# (cs1) lowercase remote, mixed-case full_name -> found.
+reset_state
+echo "https://github.com/owner/repo.git" > "$STUB_DIR/git-remote-url"
+case_timeline 90 91 "Owner/Repo"
+run_cds --issue 90 --title "Some issue title"
+assert_eq "1" "$RC" "(cs1) lowercase remote vs mixed-case full_name -> exit 1"
+assert_contains "$OUT" "#91: Case-variant related work (open issue, cross-references #90)" \
+  "(cs1) cross-reference found despite owner/repo casing mismatch"
+
+# (cs2) lowercase SSH remote, all-uppercase full_name -> found.
+reset_state
+echo "git@github.com:owner/repo.git" > "$STUB_DIR/git-remote-url"
+case_timeline 92 93 "OWNER/REPO"
+run_cds --issue 92 --title "Some issue title"
+assert_eq "1" "$RC" "(cs2) lowercase SSH remote vs all-uppercase full_name -> exit 1"
+assert_contains "$OUT" "#93: Case-variant related work" "(cs2) cross-reference found with uppercase full_name"
+
+# (cs3) mixed-case remote vs a full_name whose repo segment differs in case
+# -> found.
+reset_state
+echo "https://github.com/2AMLogic/Harness-Ops.git" > "$STUB_DIR/git-remote-url"
+case_timeline 94 95 "2amlogic/harness-OPS"
+run_cds --issue 94 --title "Some issue title"
+assert_eq "1" "$RC" "(cs3) mixed-case repo segment on both sides -> exit 1"
+assert_contains "$OUT" "#95: Case-variant related work" "(cs3) cross-reference found with mixed-case repo segment"
+
+# (cs4) A genuinely different repo is still excluded -- case-folding must not
+# widen the same-repo guard.
+reset_state
+echo "https://github.com/owner/repo.git" > "$STUB_DIR/git-remote-url"
+case_timeline 96 97 "Other/Repo"
+run_cds --issue 96 --title "Some issue title"
+assert_eq "0" "$RC" "(cs4) cross-reference from other/repo -> exit 0"
+assert_not_contains "$OUT" "RELATED_OPEN_WORK" "(cs4) foreign-repo cross-reference still excluded"
+assert_not_contains "$OUT" "#97" "(cs4) foreign-repo issue #97 not listed"
 
 echo ""
 echo "Testing check-duplicate.sh keyword-similarity scoring (issue #4409)..."
@@ -553,6 +659,132 @@ assert_contains "$OUT" "#3550" "(o) Real historical duplicate pair (#3550/#3551)
 assert_contains "$OUT" "(similarity: 26%)" "(o) Real historical duplicate pair scores the expected 26% true-Jaccard"
 
 echo ""
+echo "Testing check-duplicate.sh near-match band via --warn-threshold (issue #8289, #8360)..."
+
+# Below --threshold the scorer used to say NOTHING AT ALL, which made
+# create-issue.sh's backstop a cliff: a hard refusal at threshold, total
+# silence one point below it. --warn-threshold reports the [warn, threshold)
+# band as CONTEXT -- never as a verdict. Fixtures reuse the NATO-word scheme
+# so every percentage is checkable by hand. Query {alpha,bravo,charlie,delta}
+# (4 keywords), --threshold 30 --warn-threshold 20:
+#   #701 {alpha,bravo,echo,foxtrot}                 -> 2/(4+4-2)  = 33% BLOCK
+#   #702 {alpha,bravo,echo,foxtrot,golf,hotel}      -> 2/(4+6-2)  = 25% NEAR
+#   #703 {yankee,zulu,xray,whiskey}                 -> 0/(4+4-0)  =  0% silent
+
+# (nb1) Near match ALONE: exit code stays 0 (it is not a duplicate verdict),
+# but the row is now visible instead of silently dropped.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[
+  {"number": 702, "title": "Alpha Bravo Echo Foxtrot Golf Hotel", "body": ""},
+  {"number": 703, "title": "Yankee Zulu Xray Whiskey", "body": ""}
+]
+EOF
+run_cds --threshold 30 --warn-threshold 20 --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$RC" "(nb1) A near match alone does NOT change the exit code"
+assert_contains "$OUT" "NEAR_DUPLICATE" "(nb1) The near-match band announces itself under its own marker"
+assert_contains "$OUT" "NEAR #702: Alpha Bravo Echo Foxtrot Golf Hotel (similarity: 25%)" \
+  "(nb1) The sub-threshold candidate is listed with its score"
+assert_not_contains "$OUT" "DUPLICATE_FOUND" "(nb1) A near match is never dressed up as a duplicate"
+assert_not_contains "$OUT" "#703" "(nb1) Below the warn floor stays silent, as before"
+
+# (nb2) WITHOUT --warn-threshold the same fixture is byte-identical to the
+# pre-#8289 behaviour: off by default, so no existing caller sees a change.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[
+  {"number": 702, "title": "Alpha Bravo Echo Foxtrot Golf Hotel", "body": ""},
+  {"number": 703, "title": "Yankee Zulu Xray Whiskey", "body": ""}
+]
+EOF
+run_cds --threshold 30 --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$RC" "(nb2) Without --warn-threshold -> exit 0"
+assert_not_contains "$OUT" "NEAR" "(nb2) The band is opt-in: no near rows without --warn-threshold"
+
+# (nb3) Block + near together: the blocking verdict is unchanged and the near
+# row rides alongside it as context, in its own block.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[
+  {"number": 701, "title": "Alpha Bravo Echo Foxtrot", "body": ""},
+  {"number": 702, "title": "Alpha Bravo Echo Foxtrot Golf Hotel", "body": ""},
+  {"number": 703, "title": "Yankee Zulu Xray Whiskey", "body": ""}
+]
+EOF
+run_cds --threshold 30 --warn-threshold 20 --title "Alpha Bravo Charlie Delta"
+assert_eq "1" "$RC" "(nb3) An at/above-threshold match still exits 1"
+assert_contains "$OUT" "DUPLICATE_FOUND" "(nb3) The real match still gets its header"
+assert_contains "$OUT" "#701: Alpha Bravo Echo Foxtrot (similarity: 33%)" "(nb3) The real match is listed"
+assert_contains "$OUT" "NEAR #702" "(nb3) The near match is listed separately as context"
+
+# (nb4) --json: near matches get their OWN field. `matches` and
+# `duplicate_found` stay driven by --threshold alone, so a caller that ignores
+# the new field behaves exactly as it did before.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 702, "title": "Alpha Bravo Echo Foxtrot Golf Hotel", "body": ""}]
+EOF
+run_cds --threshold 30 --warn-threshold 20 --title "Alpha Bravo Charlie Delta" --json
+assert_eq "0" "$RC" "(nb4) --json near-only result -> exit 0"
+assert_eq "false" "$(echo "$OUT" | jq -r '.duplicate_found')" "(nb4) --json duplicate_found stays false for a near match"
+assert_eq "0" "$(echo "$OUT" | jq -r '.matches | length')" "(nb4) --json matches never absorbs a near match"
+assert_eq "1" "$(echo "$OUT" | jq -r '.near_matches | length')" "(nb4) --json reports the near match in its own array"
+assert_eq "702" "$(echo "$OUT" | jq -r '.near_matches[0].number')" "(nb4) --json near match carries its number"
+assert_eq "25" "$(echo "$OUT" | jq -r '.near_matches[0].similarity')" "(nb4) --json near match carries its score"
+assert_eq "near_match" "$(echo "$OUT" | jq -r '.near_matches[0].type')" "(nb4) --json near match is typed distinctly"
+
+# (nb5) A warn floor at or above --threshold cannot describe a band below it:
+# the band is disabled with a warning rather than silently reinterpreted.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 702, "title": "Alpha Bravo Echo Foxtrot Golf Hotel", "body": ""}]
+EOF
+run_cds --threshold 30 --warn-threshold 30 --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$RC" "(nb5) --warn-threshold == --threshold -> exit 0, band disabled"
+assert_contains "$ERR" "near-match band disabled" "(nb5) Disabling the inverted band is announced on stderr"
+assert_not_contains "$OUT" "NEAR" "(nb5) No near rows emitted once the band is disabled"
+
+# (nb6) A non-numeric warn threshold is an argument error, like --threshold.
+reset_state
+run_cds --warn-threshold high --title "Alpha Bravo Charlie Delta"
+assert_eq "2" "$RC" "(nb6) Non-numeric --warn-threshold -> exit 2"
+assert_contains "$ERR" "Warn threshold must be a number" "(nb6) …with a specific message"
+
+# (nb7) A degenerate (#4409) result suppresses the band entirely: when the
+# scorer is not separating anything at the BLOCK threshold, more
+# low-confidence rows are the last thing a caller needs. Same fixture as (m).
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[
+  {"number": 601, "title": "Quantum flux widget", "body": ""},
+  {"number": 602, "title": "Capacitor reactor system", "body": ""},
+  {"number": 603, "title": "Completely unrelated banana fruit basket", "body": ""},
+  {"number": 604, "title": "Core module driver suite", "body": ""}
+]
+EOF
+run_cds --warn-threshold 1 --title "Quantum Flux Capacitor Reactor Core Module Driver"
+assert_eq "1" "$RC" "(nb7) Degenerate result still exits 1"
+assert_contains "$OUT" "NON_DISCRIMINATIVE" "(nb7) …and still self-announces as non-discriminative"
+assert_not_contains "$OUT" "NEAR" "(nb7) …with no near-match rows piled on top"
+
+# (nb8) Near matches never tip the degenerate detector: the band is scored
+# outside $matched, so a pool where MOST candidates sit in the band (but only
+# one clears the block line) is NOT degenerate.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[
+  {"number": 701, "title": "Alpha Bravo Echo Foxtrot", "body": ""},
+  {"number": 702, "title": "Alpha Bravo Echo Foxtrot Golf Hotel", "body": ""},
+  {"number": 705, "title": "Alpha Bravo Echo Foxtrot Golf India", "body": ""},
+  {"number": 706, "title": "Alpha Bravo Echo Foxtrot Golf Juliet", "body": ""}
+]
+EOF
+run_cds --threshold 30 --warn-threshold 20 --title "Alpha Bravo Charlie Delta"
+assert_eq "1" "$RC" "(nb8) One real match among three near matches -> exit 1"
+assert_contains "$OUT" "DUPLICATE_FOUND" "(nb8) The real match keeps its header"
+assert_not_contains "$OUT" "NON_DISCRIMINATIVE" "(nb8) Near matches do not count toward the degenerate detector"
+
+echo ""
 echo "Testing check-duplicate.sh self-match exclusion via --issue (issue #4662)..."
 
 # check-duplicate.sh never excluded the issue being curated from its own
@@ -627,6 +859,63 @@ EOF
 run_cds --include-merged-prs --issue 4659 --threshold 50 --title "Alpha Bravo Charlie Delta"
 assert_eq "0" "$RC" "(ad) Self-numbered candidate in the merged-PRs pool excluded via --issue -> exit 0"
 assert_not_contains "$OUT" "DUPLICATE_FOUND" "(ad) No DUPLICATE_FOUND from the merged-PRs self-numbered match"
+
+echo ""
+echo "Testing check-duplicate.sh leading-dash title handling via \"--\" (issue #5898)..."
+
+# check-duplicate.sh's positional-argument branch used to fall into the
+# same "-*)" case as an unrecognized option flag whenever the first
+# positional token itself began with "-"/"--" -- a real hazard in CLI-tool
+# repos, where a bug report's title quotes the offending flag verbatim
+# (e.g. "--strategy basic calls route_all() with no timeout ..." from
+# issue #4697). The "--" end-of-options separator now disambiguates: every
+# argument after a bare "--" is consumed as positional text, verbatim, no
+# matter what it starts with.
+
+# (ae) A leading-dash TITLE round-trips through the positional form via
+# "--", instead of being rejected as an unknown option.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 5898, "title": "Strategy Basic Ignored Widget", "body": ""}]
+EOF
+run_cds --threshold 50 -- "--strategy basic is ignored"
+assert_eq "1" "$RC" "(ae) Leading-dash title via '--' -> parsed correctly, finds the keyword match"
+assert_not_contains "$ERR" "Unknown option" "(ae) Leading-dash title via '--' -> not misparsed as an unknown option"
+assert_contains "$OUT" "#5898: Strategy Basic Ignored Widget (similarity: 75%)" \
+  "(ae) Leading-dash title via '--' is used verbatim as the title text"
+
+# (ae2) Regression guard: WITHOUT "--", the same leading-dash title is still
+# rejected as an unknown option -- documents the boundary the fix respects
+# (the caller must supply "--", per --help), and pins the pre-existing error
+# path so a future change can't silently swallow it either.
+reset_state
+run_cds "--strategy basic is ignored"
+assert_eq "2" "$RC" "(ae2) Leading-dash title WITHOUT '--' -> still rejected as an unknown option (documented behavior)"
+assert_contains "$ERR" "Unknown option" "(ae2) Leading-dash title WITHOUT '--' -> error names it as an unknown option"
+
+# (ae3) A leading-dash BODY (the second positional argument) also round-trips
+# through "--", not just the title -- both positionals share the same
+# end-of-options handling.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 5899, "title": "Strategy Basic Ignored Widget", "body": ""}]
+EOF
+run_cds --threshold 50 -- "Some title" "--strategy basic is ignored"
+assert_eq "1" "$RC" "(ae3) Leading-dash body via '--' -> parsed correctly, finds the keyword match"
+assert_not_contains "$ERR" "Unknown option" "(ae3) Leading-dash body via '--' -> not misparsed as an unknown option"
+assert_contains "$OUT" "#5899: Strategy Basic Ignored Widget (similarity: 60%)" \
+  "(ae3) Leading-dash body via '--' feeds keyword extraction alongside the title"
+
+# (ae4) "--" is a no-op when everything before/after it is otherwise a
+# normal --title/--body flag invocation -- the separator must not interfere
+# with the documented flag-based form.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 5900, "title": "Strategy Basic Ignored Widget", "body": ""}]
+EOF
+run_cds --threshold 50 --title "Strategy Basic Ignored"
+assert_eq "1" "$RC" "(ae4) --title flag form is unaffected by the '--' handling"
+assert_contains "$OUT" "#5900" "(ae4) --title flag form still finds the match"
 
 echo ""
 echo "Testing check-duplicate.sh REST fallback on GraphQL rate limit (issue #4526)..."
@@ -935,6 +1224,252 @@ run_cds --include-merged-prs --threshold 50 --title "Alpha Bravo Charlie Delta" 
 assert_eq "3" "$(echo "$OUT" | jq -r '.matches | length')" "(z3) --json parses all three pool matches separately"
 assert_eq "801 901 1001" "$(echo "$OUT" | jq -r '[.matches[].number] | join(" ")')" "(z3) --json recovers every match number, none swallowed by a splice"
 assert_eq "issue pr closed_issue" "$(echo "$OUT" | jq -r '[.matches[].type] | join(" ")')" "(z3) --json assigns each match its correct pool type"
+
+echo ""
+echo "Testing title corroboration at low block scores (issue #8591)..."
+
+# At the DEFAULT threshold (18) a full-text match between 18% and 25% must
+# also reach 18% similarity on TITLES ALONE before it blocks. The fixtures
+# below keep every percentage hand-checkable: the query is the 4-keyword
+# title {alpha,bravo,charlie,delta} with no body, so a 9-keyword candidate
+# sharing 2 keywords scores 2/(4+9-2) = 18% -- exactly the floor #8561 hit.
+
+# (tc1) Uncorroborated: the 18% comes entirely from the candidate's BODY, its
+# title shares nothing. This is the #8561-vs-#8505 shape -- same-subsystem
+# jargon in two long bodies, unrelated titles. It must NOT block, and must
+# not vanish either: it is demoted to an annotated NEAR row.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 8505, "title": "Zulu Yankee Xray Whiskey", "body": "alpha bravo kilo lima mike"}]
+EOF
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$RC" "(tc1) An uncorroborated floor-score match is not a duplicate verdict"
+assert_not_contains "$OUT" "DUPLICATE_FOUND" "(tc1) …and gets no DUPLICATE_FOUND header"
+assert_contains "$OUT" "NEAR #8505" "(tc1) …but is still reported, as context"
+assert_contains "$OUT" "not corroborated" "(tc1) …annotated with WHY it did not block"
+assert_contains "$OUT" "title overlap only 0%" "(tc1) …naming the title overlap that fell short"
+
+# (tc2) Corroborated: the same 18% full-text score, but carried by the
+# candidate's TITLE, so the titles agree at 18% too. A calibration, not a
+# disable -- this still blocks.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 3550, "title": "Alpha Bravo Kilo Lima Mike November Oscar Papa Quebec", "body": ""}]
+EOF
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "1" "$RC" "(tc2) A corroborated floor-score match still blocks"
+assert_contains "$OUT" "DUPLICATE_FOUND" "(tc2) …under the ordinary duplicate header"
+assert_contains "$OUT" "#3550: Alpha Bravo Kilo Lima Mike November Oscar Papa Quebec (similarity: 18%)" \
+  "(tc2) …listed with its score"
+assert_not_contains "$OUT" "NEAR #3550" "(tc2) …and not also as a near row"
+
+# (tc3) --json: a demoted row lands in near_matches, never in matches, and
+# carries the title_similarity that explains it.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 8505, "title": "Zulu Yankee Xray Whiskey", "body": "alpha bravo kilo lima mike"}]
+EOF
+run_cds --title "Alpha Bravo Charlie Delta" --json
+assert_eq "false" "$(echo "$OUT" | jq -r '.duplicate_found')" "(tc3) --json duplicate_found stays false for a demoted match"
+assert_eq "0" "$(echo "$OUT" | jq -r '.matches | length')" "(tc3) --json matches never absorbs a demoted match"
+assert_eq "8505" "$(echo "$OUT" | jq -r '.near_matches[0].number')" "(tc3) --json reports the demotion in near_matches"
+assert_eq "18" "$(echo "$OUT" | jq -r '.near_matches[0].similarity')" "(tc3) --json demoted row keeps its full-text score"
+assert_eq "0" "$(echo "$OUT" | jq -r '.near_matches[0].title_similarity')" "(tc3) --json demoted row carries title_similarity"
+
+# (tc4) The rule is scoped to the low-confidence region: raise the candidate's
+# body overlap above the 25% ceiling and it blocks on body text alone, titles
+# still disagreeing: the candidate's 9 keywords share 3 of the query's 4, so
+# 3/(4+9-3) = 30%, clear of the 25% ceiling.
+reset_state
+cat > "$STUB_DIR/issues-open.json" <<'EOF'
+[{"number": 8506, "title": "Zulu Yankee Xray Whiskey", "body": "alpha bravo charlie kilo lima"}]
+EOF
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "1" "$RC" "(tc4) Above the corroboration ceiling, body overlap stands on its own"
+assert_contains "$OUT" "DUPLICATE_FOUND" "(tc4) …and blocks as before"
+assert_not_contains "$OUT" "NEAR #8506" "(tc4) …with no demotion"
+
+echo ""
+echo "Testing the auth preflight under REST exhaustion (issue #10025)..."
+
+# `gh auth status` hits REST (/user), so an exhausted core quota made it fail
+# exactly like a missing login, and check-duplicate.sh told every Curator to
+# run `gh auth login`. A rate limit must now be named as one, with the reset
+# time, and exit 2 (inconclusive); a real auth failure keeps the old message.
+
+# (ra1) auth status fails with gh's generic text while `gh api rate_limit`
+# (free of quota) shows core exhausted -> rate-limit message with the reset.
+reset_state
+echo "X Failed to log in to github.com account someone (default)" > "$STUB_DIR/auth-fail"
+echo '{"resources":{"core":{"limit":5000,"remaining":0,"reset":1790917200},"graphql":{"limit":5000,"remaining":4900,"reset":1790917200}}}' > "$STUB_DIR/rate-limit.json"
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "2" "$RC" "(ra1) REST-exhausted auth preflight -> exit 2 (inconclusive)"
+assert_contains "$ERR" "rate limit exhausted" "(ra1) ...names the rate limit"
+assert_contains "$ERR" "resets 2026-10-02T05:00:00Z" "(ra1) ...with the core reset time"
+assert_not_contains "$ERR" "Not authenticated" "(ra1) ...and never claims an auth failure"
+
+# (ra2) The auth output itself carries a rate-limit phrasing and the probe is
+# unavailable -> still a rate limit, with a generic reset hint.
+reset_state
+echo "HTTP 403: API rate limit exceeded for user ID 1." > "$STUB_DIR/auth-fail"
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "2" "$RC" "(ra2) Rate-limit phrasing in auth output -> exit 2"
+assert_contains "$ERR" "rate limit exhausted" "(ra2) ...names the rate limit"
+assert_not_contains "$ERR" "Not authenticated" "(ra2) ...not an auth failure"
+
+# (ra3) Genuine auth failure: quota is fine -> the original guidance.
+reset_state
+echo "X Failed to log in to github.com account someone (default)" > "$STUB_DIR/auth-fail"
+echo '{"resources":{"core":{"limit":5000,"remaining":4123,"reset":1790917200}}}' > "$STUB_DIR/rate-limit.json"
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "2" "$RC" "(ra3) Real auth failure -> exit 2"
+assert_contains "$ERR" "Not authenticated with forge" "(ra3) ...keeps the auth message"
+assert_not_contains "$ERR" "rate limit exhausted" "(ra3) ...and does not blame the quota"
+
+# (ra4) Bad token: the probe is refused too -> the auth message.
+reset_state
+echo "X Failed to log in to github.com account someone (default)" > "$STUB_DIR/auth-fail"
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "2" "$RC" "(ra4) Bad token -> exit 2"
+assert_contains "$ERR" "Not authenticated with forge" "(ra4) ...keeps the auth message"
+
+echo ""
+echo "Testing check-duplicate.sh windowed closed-issue search (issue #9208)..."
+
+# The closed pool used to be the 20 most recently CREATED closed issues --
+# about a day of this repo's history -- so #6808, closed five weeks before its
+# re-file #9167, was never a candidate. It is now ONE keyword search bounded
+# by close date; the recency list survives only as the fallback.
+SEARCH_PREFIX="search/issues?q=repo%3Aowner%2Frepo%20is%3Aissue%20is%3Aclosed%20closed%3A%3E%3D"
+EMPTY_SEARCH='{"total_count": 0, "incomplete_results": false, "items": []}'
+
+# (cw1) The acceptance case: the matching closed issue is in the search answer
+# and NOT in the recency list. A decoy that WOULD match sits in the recency
+# list, so its absence proves that list was not consulted once search answered.
+reset_state
+echo "[]" > "$STUB_DIR/issues-open.json"
+cat > "$STUB_DIR/issues-closed.json" <<'EOF'
+[{"number": 9900, "title": "Alpha Bravo Charlie Delta", "body": ""}]
+EOF
+cat > "$STUB_DIR/search-issues.json" <<'EOF'
+{"total_count": 3, "incomplete_results": false, "items": [
+  {"number": 6808, "title": "Alpha Bravo Charlie Delta", "body": null, "state": "closed"},
+  {"number": 6810, "title": "Alpha Bravo Charlie Delta", "body": "", "pull_request": {"url": "u"}},
+  {"number": 6811, "title": "Yankee Zulu Xray Whiskey", "body": "unrelated", "state": "closed"}
+]}
+EOF
+before="$(days_ago 90)"
+run_cds --include-merged-prs --threshold 50 --title "Alpha Bravo Charlie Delta"
+after="$(days_ago 90)"
+assert_eq "1" "$RC" "(cw1) Closed issue outside the recency list but inside the window -> exit 1"
+assert_contains "$OUT" "Closed #6808: Alpha Bravo Charlie Delta (similarity: 100%)" "(cw1) ...reported in the unchanged Closed #N row format"
+assert_not_contains "$OUT" "#9900" "(cw1) Recency list not consulted once the search answered"
+assert_not_contains "$OUT" "#6810" "(cw1) A pull request in the search answer is not a closed issue"
+assert_not_contains "$OUT" "#6811" "(cw1) Search hits are candidates, not verdicts: the threshold still decides"
+assert_eq "1" "$(search_calls)" "(cw1) Exactly one search request"
+assert_contains "$(last_search)" "$SEARCH_PREFIX" "(cw1) Query is the fixed qualifiers..."
+assert_contains "$(last_search)" "%20alpha%20OR%20bravo%20OR%20charlie%20OR%20delta&per_page=50" "(cw1) ...plus OR-joined keywords, one page of 50"
+assert_window "$before" "$after" "(cw1) Default window is 90 days back, on close date"
+
+# (cw1j) Same answer through --json: the match type is unchanged.
+run_cds --json --include-merged-prs --threshold 50 --title "Alpha Bravo Charlie Delta"
+assert_eq "closed_issue" "$(echo "$OUT" | jq -r '.matches[0].type')" "(cw1j) --json reports it as a closed_issue match"
+assert_eq "6808" "$(echo "$OUT" | jq -r '.matches[0].number')" "(cw1j) ...with its number"
+
+# (cw2) The search bucket refuses (403): the recency list still answers, with
+# a warning, one request and no retry -- and the exit code is the verdict, not 2.
+reset_state
+echo "[]" > "$STUB_DIR/issues-open.json"
+cat > "$STUB_DIR/issues-closed.json" <<'EOF'
+[{"number": 9900, "title": "Alpha Bravo Charlie Delta", "body": ""}]
+EOF
+echo "$EMPTY_SEARCH" > "$STUB_DIR/search-issues.json"
+echo "gh: API rate limit exceeded for user ID 12345667. (HTTP 403)" > "$STUB_DIR/search-fail"
+run_cds --include-merged-prs --threshold 50 --title "Alpha Bravo Charlie Delta"
+assert_eq "1" "$RC" "(cw2) Search 403 -> recency list answers -> exit 1 (not 2)"
+assert_contains "$OUT" "Closed #9900: Alpha Bravo Charlie Delta (similarity: 100%)" "(cw2) Recency list still finds the closed issue"
+assert_contains "$ERR" "falling back to the most recently created closed issues" "(cw2) stderr warns about the fallback"
+assert_contains "$ERR" "HTTP 403" "(cw2) ...and names why"
+assert_eq "1" "$(search_calls)" "(cw2) One search request, never retried"
+assert_not_contains "$OUT" "RATE_LIMIT_FALLBACK" "(cw2) A search refusal is not the GraphQL->REST sentinel"
+
+# (cw2b) ...and with nothing in the recency list either, a refused search
+# does not turn a passing check into exit 2.
+reset_state
+echo "gh: You have exceeded a secondary rate limit. (HTTP 429)" > "$STUB_DIR/search-fail"
+run_cds --include-merged-prs --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$RC" "(cw2b) Refused search + empty recency list -> exit 0"
+assert_eq "1" "$(search_calls)" "(cw2b) ...after one request"
+
+# (cw3) Hostile title text never reaches the query: no foreign repo, no state
+# qualifier, no quote, no operator -- only keyword tokens after the fixed part.
+reset_state
+echo "$EMPTY_SEARCH" > "$STUB_DIR/search-issues.json"
+run_cds --include-merged-prs --title 'repo:other/thing is:open "quoted phrase" NOT author:evil -label:x'
+assert_eq "0" "$RC" "(cw3) Hostile title, empty search answer -> exit 0"
+assert_eq "1" "$(search_calls)" "(cw3) One search request"
+q="$(last_search)"
+assert_contains "$q" "$SEARCH_PREFIX" "(cw3) Fixed qualifiers intact: own repo, closed issues only"
+tail_q="${q#"$SEARCH_PREFIX"}"; tail_q="${tail_q#*%20}"
+assert_eq "repo%20OR%20thing%20OR%20open%20OR%20quoted%20OR%20phrase%20OR%20author&per_page=50" "$tail_q" "(cw3) Only keyword tokens follow, six at most"
+assert_not_contains "$tail_q" "%3A" "(cw3) No ':' -- nothing binds as a qualifier"
+assert_not_contains "$tail_q" "%22" "(cw3) No quote"
+assert_not_contains "$tail_q" "NOT" "(cw3) No injected operator"
+
+# (cw4) No keywords -> no search request at all.
+reset_state
+echo "$EMPTY_SEARCH" > "$STUB_DIR/search-issues.json"
+run_cds --include-merged-prs --title "the a an is it"
+assert_eq "0" "$RC" "(cw4) Keyword-less query -> exit 0"
+assert_eq "0" "$(search_calls)" "(cw4) ...and no search request is spent on it"
+
+# (cw5) The window is overridable, and 0 switches the search off.
+reset_state
+echo "$EMPTY_SEARCH" > "$STUB_DIR/search-issues.json"
+before="$(days_ago 30)"
+run_cds --include-merged-prs --closed-window-days 30 --title "Alpha Bravo Charlie Delta"
+after="$(days_ago 30)"
+assert_window "$before" "$after" "(cw5) --closed-window-days 30 bounds the search 30 days back"
+reset_state
+echo "$EMPTY_SEARCH" > "$STUB_DIR/search-issues.json"
+cat > "$STUB_DIR/issues-closed.json" <<'EOF'
+[{"number": 9900, "title": "Alpha Bravo Charlie Delta", "body": ""}]
+EOF
+run_cds --include-merged-prs --closed-window-days 0 --threshold 50 --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$(search_calls)" "(cw5) --closed-window-days 0 makes no search request"
+assert_contains "$OUT" "Closed #9900:" "(cw5) ...and reads the recency list instead"
+assert_not_contains "$ERR" "could not answer" "(cw5) ...without a fallback warning (it was asked for)"
+run_cds --include-merged-prs --closed-window-days soon --title "Alpha Bravo Charlie Delta"
+assert_eq "2" "$RC" "(cw5) Non-numeric --closed-window-days -> exit 2"
+assert_contains "$ERR" "--closed-window-days must be a number" "(cw5) ...with a specific message"
+
+# (cw6) --issue self-exclusion threads through the searched pool too.
+reset_state
+echo "[]" > "$STUB_DIR/issues-open.json"
+cat > "$STUB_DIR/search-issues.json" <<'EOF'
+{"items": [{"number": 4659, "title": "Alpha Bravo Charlie Delta", "body": ""}]}
+EOF
+run_cds --include-merged-prs --issue 4659 --threshold 50 --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$RC" "(cw6) Self-match in the searched closed pool excluded via --issue -> exit 0"
+assert_eq "1" "$(search_calls)" "(cw6) ...and the search did run"
+
+# (cw7) An answer that is not a search result (an error body with exit 0) is
+# "did not answer", not "found nothing": the recency list is consulted.
+reset_state
+echo '{"message": "Validation Failed"}' > "$STUB_DIR/search-issues.json"
+cat > "$STUB_DIR/issues-closed.json" <<'EOF'
+[{"number": 9900, "title": "Alpha Bravo Charlie Delta", "body": ""}]
+EOF
+run_cds --include-merged-prs --threshold 50 --title "Alpha Bravo Charlie Delta"
+assert_contains "$OUT" "Closed #9900:" "(cw7) Unparseable search answer -> recency list answers"
+assert_eq "1" "$(search_calls)" "(cw7) ...after one request"
+
+# (cw8) The search is closed-pool only: without --include-merged-prs (the
+# create-issue.sh backstop's shape) no search request is ever made.
+reset_state
+echo "$EMPTY_SEARCH" > "$STUB_DIR/search-issues.json"
+run_cds --title "Alpha Bravo Charlie Delta"
+assert_eq "0" "$(search_calls)" "(cw8) No --include-merged-prs -> no search request"
 
 # --- Summary ---
 echo ""

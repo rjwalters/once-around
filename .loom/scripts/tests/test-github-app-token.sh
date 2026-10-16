@@ -315,8 +315,11 @@ echo "Testing installation-id validation (#4456)..."
 # constant so no signing is required.
 STUB_INSTALL_BODY='{"id": 55}'
 STUB_INSTALL_CODE='200'
+export STUB_CURL_ARGV_LOG="$WORK_DIR/curl-argv.log"
+: > "$STUB_CURL_ARGV_LOG"
 curl() {
     local url=""
+    printf '%s\n' "$*" >> "$STUB_CURL_ARGV_LOG"
     for _a in "$@"; do url="$_a"; done
     case "$url" in
         */installation) printf '%s\n%s' "$STUB_INSTALL_BODY" "$STUB_INSTALL_CODE" ;;
@@ -328,6 +331,16 @@ github_app_jwt() { echo "fake.jwt.signature"; }
 
 export LOOM_GITHUB_APP_ID="424242"
 export LOOM_GITHUB_APP_KEY_PATH="$KEY_PATH"
+
+# Credentials must never reach curl's argv (#10463): the stub records every
+# invocation's argv; run both API helpers, then assert no Authorization header.
+_github_app_api_get_installation "acme/widgets" >/dev/null 2>&1 || true
+_github_app_api_mint_token "55" >/dev/null 2>&1 || true
+if [[ -s "$STUB_CURL_ARGV_LOG" ]] && ! grep -q 'Authorization:\|fake\.jwt' "$STUB_CURL_ARGV_LOG"; then
+    pass "curl argv carries no Authorization header or JWT (#10463)"
+else
+    fail "curl argv must not contain 'Authorization:' or the JWT" "$(cat "$STUB_CURL_ARGV_LOG")"
+fi
 
 # Valid numeric id -> echoed, success.
 STUB_INSTALL_BODY='{"id": 55}'
@@ -372,6 +385,11 @@ fi
 # cache file is rewritten with the numeric id.
 STUB_INSTALL_BODY='{"id": 55}'
 poison_owner="poisoned"
+# The cache path is keyed by (owner, app id) (#5912); `github_app_get_token`
+# below runs in a command-substitution SUBSHELL, where `github_app_configured`
+# populates `_GH_APP_ID` from the exported `LOOM_GITHUB_APP_ID="424242"`
+# above. Set it here too so this (parent-shell) path computation matches.
+_GH_APP_ID="424242"
 poison_cache="$(_github_app_installation_cache_path "$poison_owner")"
 mkdir -p "$(dirname "$poison_cache")"
 printf '%s' "null" > "$poison_cache"
@@ -415,6 +433,161 @@ fi
 
 unset -f curl github_app_jwt
 unset LOOM_GITHUB_APP_ID LOOM_GITHUB_APP_KEY_PATH
+
+# ============================================================================
+# Installation cache is keyed by (owner, app id), not owner alone (#5912): two
+# different GitHub Apps configured under the same owner must not collide on
+# one cache file, regardless of which resolves first.
+# ============================================================================
+echo "Testing installation cache keying by (owner, app id) (#5912)..."
+
+shared_owner="shared-owner"
+
+_GH_APP_ID="111111"
+path_app_one="$(_github_app_installation_cache_path "$shared_owner")"
+_GH_APP_ID="222222"
+path_app_two="$(_github_app_installation_cache_path "$shared_owner")"
+_GH_APP_ID=""
+
+if [[ "$path_app_one" != "$path_app_two" ]]; then
+    pass "two different app ids for the same owner resolve to distinct cache paths"
+else
+    fail "cache paths should differ by app id" "both resolved to: $path_app_one"
+fi
+
+# End-to-end: mint via app 111111 (installation 55), then via app 222222
+# (installation 66) for the same owner/repo -- each must resolve/cache its
+# own installation id without clobbering the other, in either order. Redefine
+# the network/JWT stubs -- the #5401 section above `unset -f`'d them, and
+# `get-token` runs as a genuine child process so both the functions and the
+# `STUB_INSTALL_*` variables they read must be exported for the child to see.
+curl() {
+    local url=""
+    for _a in "$@"; do url="$_a"; done
+    case "$url" in
+        */installation) printf '%s\n%s' "$STUB_INSTALL_BODY" "$STUB_INSTALL_CODE" ;;
+        */access_tokens) printf '%s\n%s' '{"token":"ghs_mintedvalue","expires_at":"2099-01-01T00:00:00Z"}' '200' ;;
+        *) printf '%s\n%s' '{}' '404' ;;
+    esac
+}
+github_app_jwt() { echo "fake.jwt.signature"; }
+export LOOM_GITHUB_APP_KEY_PATH="$KEY_PATH"
+export -f curl github_app_jwt
+
+export STUB_INSTALL_BODY='{"id": 55}'
+export STUB_INSTALL_CODE='200'
+app_one_out=$(LOOM_GITHUB_APP_ID="111111" bash "$LIB_DIR/github-app-token.sh" get-token "${shared_owner}/repo")
+app_one_installation_id=$(echo "$app_one_out" | jq -r '.installation_id')
+
+export STUB_INSTALL_BODY='{"id": 66}'
+app_two_out=$(LOOM_GITHUB_APP_ID="222222" bash "$LIB_DIR/github-app-token.sh" get-token "${shared_owner}/repo")
+app_two_installation_id=$(echo "$app_two_out" | jq -r '.installation_id')
+
+# Re-resolve app one again (no re-stub needed -- it should hit its own cache
+# file, still holding installation 55, not app two's 66).
+app_one_out_again=$(LOOM_GITHUB_APP_ID="111111" bash "$LIB_DIR/github-app-token.sh" get-token "${shared_owner}/repo")
+app_one_installation_id_again=$(echo "$app_one_out_again" | jq -r '.installation_id')
+
+if [[ "$app_one_installation_id" == "55" && "$app_two_installation_id" == "66" \
+      && "$app_one_installation_id_again" == "55" ]]; then
+    pass "two apps sharing an owner resolve/cache independent installation ids without clobbering each other"
+else
+    fail "app-scoped installation caches should not collide" \
+      "app_one=$app_one_installation_id app_two=$app_two_installation_id app_one_again=$app_one_installation_id_again"
+fi
+
+unset -f curl github_app_jwt
+unset LOOM_GITHUB_APP_ID LOOM_GITHUB_APP_KEY_PATH STUB_INSTALL_BODY STUB_INSTALL_CODE
+
+# ============================================================================
+# Per-owner writer selection (forge.identities.writers[], #12446)
+# ============================================================================
+echo "Testing per-owner writer selection..."
+
+WRITERS_REPO="$WORK_DIR/writers-repo"
+mkdir -p "$WRITERS_REPO/.loom"
+cat > "$WRITERS_REPO/.loom/config.json" <<CFG
+{"forge":{"githubApp":{"appId":"100","privateKeyPath":"$KEY_PATH"},
+  "identities":{"writers":[
+    {"appId":"200","privateKeyPath":"$KEY_PATH","owners":["OrgTwo","org-three"]},
+    {"appId":"300","privateKeyPath":"$KEY_PATH","owners":["orgtwo"]}]}}}
+CFG
+unset LOOM_GITHUB_APP_ID LOOM_GITHUB_APP_KEY_PATH 2>/dev/null || true
+
+resolved_app_for() {
+    REPO_ROOT="$WRITERS_REPO" LOOM_CONFIG_DEFAULTS_FILE="" bash -c "
+        source '$LIB_DIR/github-app-token.sh'
+        github_app_configured '$1' && printf '%s' \"\$_GH_APP_ID\"
+      "
+}
+
+if [[ "$(resolved_app_for orgtwo)" == "200" && "$(resolved_app_for ORG-THREE)" == "200" ]]; then
+    pass "a listed owner resolves its writer app (case-insensitive, first match wins)"
+else
+    fail "listed owner should resolve writers[0]" "orgtwo=$(resolved_app_for orgtwo) org-three=$(resolved_app_for ORG-THREE)"
+fi
+if [[ "$(resolved_app_for someone-else)" == "100" && "$(resolved_app_for '')" == "100" ]]; then
+    pass "an unlisted owner (or none) falls back to forge.githubApp"
+else
+    fail "unlisted owner should fall back to forge.githubApp"
+fi
+if [[ "$(LOOM_GITHUB_APP_ID=999 LOOM_GITHUB_APP_KEY_PATH="$KEY_PATH" resolved_app_for orgtwo)" == "999" ]]; then
+    pass "env LOOM_GITHUB_APP_ID still beats a per-owner writer"
+else
+    fail "env override should beat writers[]"
+fi
+
+# The shell filter must agree with `forge_identity::writer_for_owner` on
+# malformed entries (Rust drops one bad element / skips one bad entry; it never
+# turns the whole `writers[]` off).
+WRITERS_REPO_ORIG="$WRITERS_REPO"
+WRITERS_REPO="$WORK_DIR/writers-repo-edge"
+mkdir -p "$WRITERS_REPO/.loom"
+cat > "$WRITERS_REPO/.loom/config.json" <<CFG
+{"forge":{"githubApp":{"appId":"100","privateKeyPath":"$KEY_PATH"},
+  "identities":{"writers":[
+    {"appId":"  ","privateKeyPath":"$KEY_PATH","owners":["emptyid"]},
+    {"appId":"400","privateKeyPath":"   ","owners":["emptykey"]},
+    {"appId":"500","privateKeyPath":"$KEY_PATH","owners":[7,null," Spaced ","mixed","bad_name","-lead"]},
+    {"appId":600,"privateKeyPath":"$KEY_PATH","owners":["emptyid","emptykey","numid"]}]}}}
+CFG
+if [[ "$(resolved_app_for spaced)" == "500" && "$(resolved_app_for mixed)" == "500" ]]; then
+    pass "a non-string owners element is dropped alone; surrounding whitespace is trimmed"
+else
+    fail "bad owners element must not hide the list" "spaced=$(resolved_app_for spaced) mixed=$(resolved_app_for mixed)"
+fi
+if [[ "$(resolved_app_for emptyid)" == "600" && "$(resolved_app_for emptykey)" == "600" && "$(resolved_app_for numid)" == "600" ]]; then
+    pass "an entry with an empty appId / privateKeyPath is skipped; numeric appId accepted"
+else
+    fail "invalid entries should be skipped" "emptyid=$(resolved_app_for emptyid) emptykey=$(resolved_app_for emptykey) numid=$(resolved_app_for numid)"
+fi
+if [[ "$(resolved_app_for bad_name)" == "100" && "$(resolved_app_for -lead)" == "100" ]]; then
+    pass "an owner that is not a valid GitHub login is dropped, as valid_owner drops it"
+else
+    fail "invalid owner names should not match a writer" "bad_name=$(resolved_app_for bad_name) -lead=$(resolved_app_for -lead)"
+fi
+WRITERS_REPO="$WRITERS_REPO_ORIG"
+
+# Two owners mint with two different app ids through the CLI envelope.
+export LOOM_GITHUB_APP_CACHE_DIR="$WORK_DIR/cache-writers"
+curl() {
+    local url="" arg
+    for arg in "$@"; do [[ "$arg" == https://* ]] && url="$arg"; done
+    if [[ "$url" == */installation ]]; then
+        printf '{"id": 77}\n200'
+    else
+        printf '{"token":"ghs_stub","expires_at":"2099-01-01T00:00:00Z"}\n201'
+    fi
+}
+export -f curl
+listed_out=$(REPO_ROOT="$WRITERS_REPO" LOOM_CONFIG_DEFAULTS_FILE="" bash "$LIB_DIR/github-app-token.sh" get-token "orgtwo/repo")
+other_out=$(REPO_ROOT="$WRITERS_REPO" LOOM_CONFIG_DEFAULTS_FILE="" bash "$LIB_DIR/github-app-token.sh" get-token "someone-else/repo")
+if [[ "$(echo "$listed_out" | jq -r '.app_id')" == "200" && "$(echo "$other_out" | jq -r '.app_id')" == "100" ]]; then
+    pass "get-token mints with a different app id per owner"
+else
+    fail "get-token should report per-owner app ids" "listed=$listed_out other=$other_out"
+fi
+unset -f curl
 
 # --- Summary ---
 echo ""

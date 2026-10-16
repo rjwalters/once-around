@@ -76,39 +76,57 @@ mkdir -p "$FAKE_BIN"
 # ---- Fake `gh` stub -----------------------------------------------------------
 # Answers `gh issue list --label <label> --state open --json number --jq length`
 # and the `pr` equivalent with a fixed count per label, driven by the
-# GH_LABEL_COUNTS env var (space-separated "label=count" pairs).
+# GH_LABEL_COUNTS env var (space-separated "label=count" pairs). With
+# `--jq '.[].number'` (the Parked line's per-name listing, #11861) it prints
+# the item numbers instead: GH_LABEL_NUMBERS ("label=1,2,3" pairs) when set
+# for the label, else 1..count.
 cat > "$FAKE_BIN/gh" <<'FAKEGH'
 #!/usr/bin/env bash
 kind="$1"; shift
-label=""
+label=""; jqx=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --label) label="$2"; shift 2 ;;
+        --jq) jqx="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
+if [[ "$jqx" == '.[].number' ]]; then
+    for pair in $GH_LABEL_NUMBERS; do
+        [[ "${pair%%=*}" == "$label" ]] && { tr ',' '\n' <<<"${pair#*=}"; exit 0; }
+    done
+fi
 for pair in $GH_LABEL_COUNTS; do
     key="${pair%%=*}"
     val="${pair#*=}"
     if [[ "$key" == "$label" ]]; then
-        echo "$val"
+        if [[ "$jqx" == '.[].number' ]]; then seq 1 "$val"; else echo "$val"; fi
         exit 0
     fi
 done
-echo "0"
+[[ "$jqx" == '.[].number' ]] || echo "0"
 FAKEGH
 chmod +x "$FAKE_BIN/gh"
 
 # ---- Fake `loom-daemon` stub factory -------------------------------------------
-# Writes a `loom-daemon` binary at $WORKDIR/daemon-<mode>/loom-daemon that
-# answers `status --json` per the named scenario. Echoes the stub's path.
+# Writes a stub binary at $WORKDIR/daemon-<mode>/loom-daemon-mock that answers
+# `status --json` per the named scenario. Echoes the stub's path.
+#
+# Named `loom-daemon-mock`, NOT `loom-daemon` (#5548): this stub is invoked
+# solely via its full path (pinned into LOOM_DAEMON_BIN below, never looked
+# up by name on PATH), so the name has no bearing on what loom-status.sh
+# resolves. A fixture literally named `loom-daemon` that leaked past this
+# suite's cleanup would be indistinguishable, to a production `pgrep -f
+# loom-daemon`-style liveness check, from the real daemon -- exactly the
+# failure mode #5548 describes. A distinct name means a leak can never forge
+# that check.
 make_daemon_stub() { # <mode>
     local mode="$1"
     local dir="$WORKDIR/daemon-$mode"
     mkdir -p "$dir"
     case "$mode" in
         managed)
-            cat > "$dir/loom-daemon" <<EOF
+            cat > "$dir/loom-daemon-mock" <<EOF
 #!/usr/bin/env bash
 if [[ "\$1" == "status" && "\$2" == "--json" ]]; then
   cat <<JSON
@@ -122,7 +140,7 @@ exit 1
 EOF
             ;;
         managed-halted)
-            cat > "$dir/loom-daemon" <<EOF
+            cat > "$dir/loom-daemon-mock" <<EOF
 #!/usr/bin/env bash
 if [[ "\$1" == "status" && "\$2" == "--json" ]]; then
   cat <<JSON
@@ -135,7 +153,7 @@ exit 1
 EOF
             ;;
         unmanaged)
-            cat > "$dir/loom-daemon" <<'EOF'
+            cat > "$dir/loom-daemon-mock" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == "status" && "$2" == "--json" ]]; then
   echo '{"per_repo":[{"root":"/some/other/repo","priority":100,"in_flight_count":0,"health_gate_halted":false}],"role_tick_records":[],"work_finder_enabled":true}'
@@ -145,7 +163,7 @@ exit 1
 EOF
             ;;
         unreachable)
-            cat > "$dir/loom-daemon" <<'EOF'
+            cat > "$dir/loom-daemon-mock" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == "status" && "$2" == "--json" ]]; then
   echo '{"error":"could not reach loom-daemon at /tmp/x.sock: connect failed","install_state":{"state":"ExpectedButDead","started_at":"2026-07-30T00:00:00Z","pid":null,"liveness_detail":"no live pid file"}}'
@@ -156,8 +174,8 @@ EOF
             ;;
         *) echo "unknown stub mode $mode" >&2; return 1 ;;
     esac
-    chmod +x "$dir/loom-daemon"
-    echo "$dir/loom-daemon"
+    chmod +x "$dir/loom-daemon-mock"
+    echo "$dir/loom-daemon-mock"
 }
 
 # Run loom-status.sh from $REPO with the given extra env assignments (as
@@ -276,18 +294,61 @@ assert_eq "ExpectedButDead" "$install_state" "unreachable --json: daemon.install
 #    stub reports non-zero counts.
 # ===================================================================
 echo "Test 8: work queue counts + renders the proposal labels"
-GH_LABEL_COUNTS="loom:issue=1 loom:review-requested=2 loom:pr=3 loom:architect=4 loom:hermit=5 loom:curated=6 loom:auditor=7"
+GH_LABEL_COUNTS="loom:issue=1 loom:review-requested=2 loom:pr=3 loom:architect=4 loom:hermit=5 loom:curated=6 loom:auditor=7 loom:operator=8 loom:blocked=3 loom:frozen=5"
 run_status LOOM_DAEMON_BIN=/nonexistent LOOM_WORKSPACES_PATH="$WORKDIR/no-such-registry.json"
 assert_contains "Pending proposals:" "$OUT" "work queue prints the Pending proposals line"
 assert_contains "loom:architect 4" "$OUT" "work queue reports the loom:architect count"
 assert_contains "loom:hermit 5" "$OUT" "work queue reports the loom:hermit count"
 assert_contains "loom:curated 6" "$OUT" "work queue reports the loom:curated count"
 assert_contains "loom:auditor 7" "$OUT" "work queue reports the loom:auditor count"
+assert_contains "Parked:" "$OUT" "work queue prints the Parked line (#5664)"
+assert_contains "loom:operator 8" "$OUT" "work queue reports the loom:operator count"
+assert_contains "loom:blocked 3" "$OUT" "work queue reports the loom:blocked count"
+assert_contains "loom:frozen 5" "$OUT" "work queue reports the loom:frozen count"
+assert_not_contains "operator-only" "$OUT" "no retired hold label in the Parked line (#11795)"
 unset GH_LABEL_COUNTS
 
 run_status_json LOOM_DAEMON_BIN=/nonexistent LOOM_WORKSPACES_PATH="$WORKDIR/no-such-registry.json" GH_LABEL_COUNTS="loom:architect=9"
 architect="$(echo "$OUT" | jq -r '.work_queue."loom:architect"' 2>/dev/null)"
 assert_eq "9" "$architect" "work_queue --json includes loom:architect"
+
+# ===================================================================
+# 8b. Parked work (#5664) is ALWAYS present (even at zero) -- a repo with
+#     nothing parked must still show "0", not omit the line, so "0" and "N"
+#     are both visible without reading labels.
+# ===================================================================
+run_status LOOM_DAEMON_BIN=/nonexistent LOOM_WORKSPACES_PATH="$WORKDIR/no-such-registry.json"
+assert_contains "Parked:" "$OUT" "the Parked line is shown even when nothing is parked"
+assert_contains "loom:operator 0" "$OUT" "an empty backlog reports zero parked, not an omitted line"
+
+run_status_json LOOM_DAEMON_BIN=/nonexistent LOOM_WORKSPACES_PATH="$WORKDIR/no-such-registry.json" GH_LABEL_COUNTS="loom:operator=2 loom:blocked=2"
+held_operator="$(echo "$OUT" | jq -r '.work_queue."loom:operator"' 2>/dev/null)"
+held_blocked="$(echo "$OUT" | jq -r '.work_queue."loom:blocked"' 2>/dev/null)"
+held_frozen="$(echo "$OUT" | jq -r '.work_queue."loom:frozen"' 2>/dev/null)"
+assert_eq "2" "$held_operator" "work_queue --json includes loom:operator"
+assert_eq "2" "$held_blocked" "work_queue --json includes loom:blocked"
+assert_eq "0" "$held_frozen" "work_queue --json defaults loom:frozen to 0 when unset (stub default)"
+
+# #11861: during the migration an issue may still carry a retired name. The
+# Parked counts read every name that folds into a hold (`labels aliases`),
+# deduplicated by number, so they neither undercount nor double-count.
+ALIAS_BIN="$WORKDIR/alias-daemon"
+cat > "$ALIAS_BIN" <<'STUB'
+#!/usr/bin/env bash
+[[ "$1 $2" == "labels aliases" ]] || exit 1
+case "$3" in
+  loom:operator) printf 'loom:operator\nloom:operator-only\n' ;;
+  loom:blocked) printf 'loom:blocked\nloom:needs-capability\n' ;;
+  *) echo "$3" ;;
+esac
+STUB
+chmod +x "$ALIAS_BIN"
+run_status_json LOOM_DAEMON_BIN="$ALIAS_BIN" LOOM_WORKSPACES_PATH="$WORKDIR/no-such-registry.json" \
+    GH_LABEL_NUMBERS="loom:operator=1,2 loom:operator-only=2,3,4 loom:blocked=7 loom:needs-capability=8"
+assert_eq "4" "$(echo "$OUT" | jq -r '.work_queue."loom:operator"' 2>/dev/null)" \
+    "loom:operator counts retired-name items too, deduplicated (#11861)"
+assert_eq "2" "$(echo "$OUT" | jq -r '.work_queue."loom:blocked"' 2>/dev/null)" \
+    "loom:blocked counts loom:needs-capability items too (#11861)"
 
 # ===================================================================
 # 9. LOOM_DAEMON_BIN pointed at a non-executable path: treated identically
