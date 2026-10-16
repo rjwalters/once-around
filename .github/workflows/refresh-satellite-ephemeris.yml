@@ -3,8 +3,10 @@ name: Refresh satellite ephemeris
 # The bundled ISS / Hubble ephemeris files cover only a fixed window (see
 # scripts/generate_satellite_ephemeris.py). Once the window elapses, satellite
 # positions and ISS pass predictions go stale. This workflow regenerates the
-# data from NASA Horizons on a schedule and commits the refreshed binaries so
-# the site stays current without manual intervention.
+# data from NASA Horizons on a schedule, commits the refreshed binaries, and
+# deploys them to Cloudflare Pages. A commit alone does not update the live site.
+# Requires repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID;
+# see scripts/README.md for setup and recovery.
 #
 # Safety net: even if a run fails (e.g. Horizons is unreachable) or the deploy
 # lags, the web UI detects out-of-range coverage and shows a "data out of date"
@@ -49,7 +51,10 @@ permissions:
 jobs:
   refresh:
     name: Regenerate ISS & Hubble ephemeris
+    # Manual runs from feature branches must not replace production.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,3 +101,67 @@ jobs:
           fi
           git commit -m "chore(data): refresh ISS (through ${{ steps.dates.outputs.iss_end }}) & Hubble (through ${{ steps.dates.outputs.hubble_end }}) ephemeris"
           git push
+
+      # Deploy in this workflow: pushes made with GITHUB_TOKEN do not trigger
+      # another push workflow, and this Pages project is deployed via Wrangler.
+      # These steps also run when the data was unchanged, so rerunning a failed
+      # deployment can recover without needing a new data commit.
+      - name: Check deployment credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::error::Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets (see scripts/README.md). Data was committed but has not been deployed."
+            exit 1
+          fi
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production site with refreshed data
+        run: pnpm build:all
+
+      - name: Deploy production site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+        run: pnpm --filter once-around-web exec wrangler pages deploy dist --project-name=once-around --branch=main
+
+      - name: Verify production serves the refreshed ephemerides
+        run: |
+          for satellite in iss hubble; do
+            file="${satellite}_ephemeris.bin"
+            matched=false
+            for attempt in {1..6}; do
+              echo "Checking production ${satellite} ephemeris (attempt ${attempt}/6)."
+              if curl --fail --silent --show-error --max-time 30 \
+                "https://once-around.pages.dev/data/${file}" -o "${RUNNER_TEMP}/${file}" \
+                && cmp --silent "apps/web/public/data/${file}" "${RUNNER_TEMP}/${file}"; then
+                matched=true
+                break
+              fi
+              sleep 10
+            done
+            if [[ "$matched" != true ]]; then
+              echo "::error::Production is not serving the refreshed ${satellite} ephemeris."
+              exit 1
+            fi
+            echo "Production ${satellite} ephemeris matches the refreshed data."
+          done

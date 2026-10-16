@@ -77,7 +77,7 @@ The two generators GitHub Actions runs on a cron.
 
 | Script | Invoked by | Reads | Writes |
 |---|---|---|---|
-| [`generate_satellite_ephemeris.py`](generate_satellite_ephemeris.py) | CI cron — [`refresh-satellite-ephemeris.yml`](../.github/workflows/refresh-satellite-ephemeris.yml), weekly (Mon 06:00 UTC), commits directly | NASA Horizons API | `apps/web/public/data/iss_ephemeris.bin`, `apps/web/public/data/hubble_ephemeris.bin` (explicit `--output`; see note below) |
+| [`generate_satellite_ephemeris.py`](generate_satellite_ephemeris.py) | CI cron — [`refresh-satellite-ephemeris.yml`](../.github/workflows/refresh-satellite-ephemeris.yml), weekly (Mon 06:00 UTC), commits directly and deploys to Cloudflare Pages | NASA Horizons API | `apps/web/public/data/iss_ephemeris.bin`, `apps/web/public/data/hubble_ephemeris.bin` (explicit `--output`; see note below) |
 | [`generate_minor_body_elements.py`](generate_minor_body_elements.py) | CI cron — [`refresh-minor-body-elements.yml`](../.github/workflows/refresh-minor-body-elements.yml), quarterly (1 Jan/Apr/Jul/Oct), **opens a PR** rather than committing | JPL Horizons API, current constants in `crates/sky_engine_core/src/minor_bodies.rs` | rewrites the osculating-element `const` blocks in [`crates/sky_engine_core/src/minor_bodies.rs`](../crates/sky_engine_core/src/minor_bodies.rs) in place |
 
 > **Note on the satellite output path.** `generate_satellite_ephemeris.py`
@@ -91,6 +91,44 @@ rewritten constants cannot be regenerated on a Linux CI runner — a maintainer
 has to re-run `fetch_horizons_reference.py` and regenerate
 `crates/sky_engine_core/tests/golden_positions.rs` on macOS/Apple Silicon. The
 workflow's PR body spells out the required steps.
+
+### Satellite deployment setup and recovery
+
+The refresh must deploy as well as commit: production is a Wrangler-uploaded
+Cloudflare Pages site. In October 2026 the weekly data commits succeeded, but
+production kept serving the September 21 bundle, whose ISS window ended October
+5 at 00:00 UTC (October 4 in Pacific time). The workflow now builds the WASM and
+web app, deploys to `once-around` on the production `main` branch, and checks that
+both public binaries match the refreshed files byte for byte. Deployment runs
+in the same workflow because commits made with `GITHUB_TOKEN` do not trigger
+another push workflow.
+
+Configure these GitHub repository secrets before the first automated deployment:
+
+- `CLOUDFLARE_API_TOKEN`: a token with **Account / Cloudflare Pages / Edit**
+  permission scoped to the account hosting `once-around`.
+- `CLOUDFLARE_ACCOUNT_ID`: that Cloudflare account's ID.
+
+Use `gh secret set CLOUDFLARE_API_TOKEN` and
+`gh secret set CLOUDFLARE_ACCOUNT_ID` to enter them interactively, or use the
+repository's Actions secrets settings. See
+[Cloudflare's CI setup](https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/).
+Local `wrangler login` credentials are separate from these CI secrets.
+
+To recover a failed refresh or deployment, run
+`gh workflow run refresh-satellite-ephemeris.yml --ref main`. Deployment is
+attempted even if regeneration produces unchanged files. Missing credentials
+or a public-file mismatch fails the workflow rather than reporting a successful
+refresh while production stays stale. Manual runs on other branches are skipped.
+For an immediate local recovery, regenerate both binaries with explicit
+`--output apps/web/public/data/<satellite>_ephemeris.bin` and current start/end
+dates (14 days for ISS, 45 for Hubble), then run `pnpm deploy:all` after
+`pnpm --filter once-around-web exec wrangler login` if needed. On operator
+machines, the chezmoi-managed `~/.cloudflare/rjwalters/pages-rjwalters.env` can
+instead be sourced with `set -a; source <path>; set +a` to pin the correct
+account. CI uses its own token, recorded in
+`~/.cloudflare/rjwalters/gha-once-around-deploy.env` and the Cloudflare token
+inventory in the `2am` repository, so it can be revoked independently.
 
 ## Engine-support tooling
 
