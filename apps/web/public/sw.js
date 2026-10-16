@@ -1,22 +1,68 @@
 /**
  * Once Around Service Worker
  * Provides offline support for the star map application.
+ *
+ * Offline strategy (issue #145):
+ * - On install, precache the app shell, every hashed JS/CSS/WASM bundle output
+ *   (injected at build time, see below), and the core star data needed for the
+ *   first render. Install FAILS if any required item fails, so a partially
+ *   populated cache is never activated.
+ * - Navigations are network-first with an explicit fallback to the precached
+ *   shell, so reopening `/` (or a share URL with query/hash state) offline
+ *   works on the very first offline visit.
+ * - Satellite ephemerides and videos.json stay network-first (fresh data
+ *   preferred, cached copy used offline).
  */
 
-const CACHE_VERSION = 'v1';
+// Build placeholders. `vite build` rewrites these two literals in dist/sw.js
+// (plugin `sw-precache-manifest` in vite.config.ts, helpers in
+// src/sw-manifest.ts). In dev they stay as-is: an empty asset list and a
+// `dev` cache version. Do not reformat these lines without updating
+// src/sw-manifest.ts — the build fails if a placeholder goes missing.
+const BUILD_VERSION = /* __SW_BUILD_VERSION__ */ 'dev';
+const BUILD_ASSETS = /* __SW_BUILD_ASSETS__ */ [];
+
+const CACHE_VERSION = BUILD_VERSION;
 const STATIC_CACHE = `once-around-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `once-around-dynamic-${CACHE_VERSION}`;
 
-// Assets to pre-cache on install (app shell)
-const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
+// App shell for the main star map. Navigations fall back to this when offline.
+const SHELL_URL = '/';
+
+// Required for a usable offline app: shell, bundle outputs, core star data
+// (fetched in createEngine() in src/engine.ts). Install fails if any fails.
+const REQUIRED_PRECACHE = [
+  SHELL_URL,
+  '/data/stars/bsc5-tier1.bin',
+  '/data/stars/constellation-stars.bin',
+  ...BUILD_ASSETS,
+];
+
+// Nice-to-have static assets: cached best-effort into the static cache.
+const OPTIONAL_PRECACHE = [
   '/test.html',
   '/manifest.json',
   '/favicon.svg',
   '/icon-192.svg',
   '/icon-512.svg',
+  '/data/stars/bsc5-tier2.bin',
+  '/data/stars/bsc5-tier3.bin',
 ];
+
+// Network-first data, seeded best-effort into the DYNAMIC cache (the same cache
+// networkFirst() refreshes) so the first visit leaves usable offline copies
+// without a stale static copy shadowing later network updates.
+const OPTIONAL_DYNAMIC_PRECACHE = [
+  '/data/iss_ephemeris.bin',
+  '/data/hubble_ephemeris.bin',
+  '/videos.json',
+];
+
+// Precache entries are fetched without an Origin header, but module scripts and
+// `crossorigin` preloads send one; servers that reply `Vary: Origin` (e.g.
+// `vite preview`) would otherwise make every such lookup miss. All cached
+// responses are same-origin, so ignoring Vary is safe.
+const MATCH_OPTIONS = { ignoreVary: true };
 
 // Patterns for assets that should use cache-first strategy
 const CACHE_FIRST_PATTERNS = [
@@ -36,20 +82,56 @@ const NETWORK_FIRST_PATTERNS = [
 ];
 
 /**
- * Install event - pre-cache essential assets
+ * Fetch `url` and store it in `cache`. Throws on a network error or non-OK
+ * status. Content-hashed `/assets/*` files may come from the HTTP cache (the
+ * page usually just downloaded them); everything else is revalidated so the
+ * shell and data match the deployed build.
+ *
+ * Redirected responses (e.g. Cloudflare Pages serving `/test.html` via a
+ * redirect to `/test`) are re-wrapped: a response with `redirected: true`
+ * cannot be used to answer a navigation request.
+ */
+async function precacheOne(cache, url) {
+  const request = new Request(url, { cache: url.startsWith('/assets/') ? 'default' : 'no-cache' });
+  let response = await fetch(request);
+  if (!response.ok) {
+    throw new Error(`[SW] Precache failed for ${url}: HTTP ${response.status}`);
+  }
+  if (response.redirected) {
+    response = new Response(await response.blob(), {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  }
+  await cache.put(url, response);
+}
+
+/**
+ * Install event - pre-cache the app shell, bundle and core data.
  */
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log('[SW] Pre-caching app shell');
-        return cache.addAll(PRECACHE_ASSETS);
-      })
-      .then(() => {
-        // Activate immediately without waiting for existing clients to close
-        return self.skipWaiting();
-      })
-  );
+  event.waitUntil((async () => {
+    const staticCache = await caches.open(STATIC_CACHE);
+    const dynamicCache = await caches.open(DYNAMIC_CACHE);
+
+    // Required: any failure rejects waitUntil, so this worker is discarded and
+    // never activates with a partial cache.
+    await Promise.all(REQUIRED_PRECACHE.map((url) => precacheOne(staticCache, url)));
+
+    // Optional: tolerate individual failures.
+    const optional = await Promise.allSettled([
+      ...OPTIONAL_PRECACHE.map((url) => precacheOne(staticCache, url)),
+      ...OPTIONAL_DYNAMIC_PRECACHE.map((url) => precacheOne(dynamicCache, url)),
+    ]);
+    for (const result of optional) {
+      if (result.status === 'rejected') console.warn(result.reason);
+    }
+
+    console.log(`[SW] Precached ${REQUIRED_PRECACHE.length} required assets (${CACHE_VERSION})`);
+    // Activate immediately without waiting for existing clients to close
+    await self.skipWaiting();
+  })());
 });
 
 /**
@@ -88,10 +170,11 @@ function matchesPattern(url, patterns) {
 }
 
 /**
- * Cache-first strategy: try cache, fall back to network
+ * Cache-first strategy: try cache, fall back to network.
+ * `caches.match` searches every cache, including the precached static cache.
  */
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
+  const cached = await caches.match(request, MATCH_OPTIONS);
   if (cached) {
     return cached;
   }
@@ -122,7 +205,31 @@ async function networkFirst(request) {
     return response;
   } catch (error) {
     console.log('[SW] Network failed, trying cache:', request.url);
-    const cached = await caches.match(request);
+    const cached = await caches.match(request, MATCH_OPTIONS);
+    if (cached) {
+      return cached;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Navigation strategy: network first, then the precached shell.
+ *
+ * The shell is looked up by its canonical URL (not the request URL) so share
+ * URLs like `/?ra=...&dec=...` resolve to it; the browser keeps the original
+ * URL in the address bar and the app reads its state client-side. The shell
+ * is never overwritten from navigations, so it always matches the hashed
+ * assets precached by this same worker version.
+ */
+async function navigate(request) {
+  try {
+    return await fetch(request);
+  } catch (error) {
+    const cache = await caches.open(STATIC_CACHE);
+    const path = new URL(request.url).pathname;
+    const shellUrl = path === '/test' || path === '/test.html' ? '/test.html' : SHELL_URL;
+    const cached = await cache.match(shellUrl, { ignoreSearch: true, ignoreVary: true });
     if (cached) {
       return cached;
     }
@@ -135,7 +242,7 @@ async function networkFirst(request) {
  */
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(DYNAMIC_CACHE);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request, MATCH_OPTIONS);
 
   const fetchPromise = fetch(request)
     .then((response) => {
@@ -167,7 +274,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Determine caching strategy based on URL pattern
-  if (matchesPattern(url, NETWORK_FIRST_PATTERNS)) {
+  if (request.mode === 'navigate') {
+    // Page loads: fresh HTML online, precached shell offline
+    event.respondWith(navigate(request));
+  } else if (matchesPattern(url, NETWORK_FIRST_PATTERNS)) {
     // Ephemeris and dynamic data: prefer fresh
     event.respondWith(networkFirst(request));
   } else if (matchesPattern(url, CACHE_FIRST_PATTERNS)) {
@@ -177,7 +287,7 @@ self.addEventListener('fetch', (event) => {
     // Built JS/CSS assets (hashed): cache-first
     event.respondWith(cacheFirst(request));
   } else {
-    // HTML and other resources: stale-while-revalidate
+    // Other resources: stale-while-revalidate
     event.respondWith(staleWhileRevalidate(request));
   }
 });
