@@ -319,7 +319,7 @@ mod tests {
             .filter(|r| r[0] == event_type)
             .map(|r| (r[1], r[2]))
             .collect();
-        v.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        v.sort_by(|a, b| a.0.total_cmp(&b.0));
         v
     }
 
