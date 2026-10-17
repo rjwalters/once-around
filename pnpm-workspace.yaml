@@ -28,3 +28,19 @@ allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+
+# Security floors for transitive dependencies whose parents pin a vulnerable
+# version exactly or never re-resolve it (Dependabot alerts, 2026-10-16). Each
+# selector only matches versions below the fix, so an entry stops applying once
+# the parent moves past it — delete it then.
+#
+#   sharp   <- miniflare (exact 0.35.4) <- wrangler 4.144.0
+#   uuid    <- vite-plugin-top-level-await (exact 10.0.0; only uses the CJS v5 export)
+#
+# rollup is NOT overridden here: it is an optional peer of @rollup/plugin-virtual
+# (via vite-plugin-top-level-await) that vite.config.ts needs at load time, and an
+# override stops pnpm auto-installing it. It is a direct devDependency of
+# apps/web instead, at a patched version.
+overrides:
+  "sharp@<0.35.5": "^0.35.5"
+  "uuid@<11.1.1": "^11.1.1"
