@@ -145,10 +145,11 @@ differ in how (and how often) they actually run:
   quarterly refresh PR asks a maintainer to re-run it by hand); and
   `fetch_observed_reference.py` regenerates the pinned Horizons topocentric
   fixture behind `crates/sky_engine/tests/observed_positions.rs`. Alongside them,
-  `test_generate_minor_body_elements.py` is a network-free unit test for the
-  back-propagation math inside `generate_minor_body_elements.py`; it runs on
-  every PR via the `python-test` CI job, and locally with
-  `python3 scripts/test_generate_minor_body_elements.py`.
+  `test_generate_minor_body_elements.py` and
+  `test_generate_satellite_ephemeris.py` are network-free unit tests for
+  `generate_minor_body_elements.py`'s back-propagation math and
+  `generate_satellite_ephemeris.py`'s validation; both run on every PR via the
+  `python-test` CI job, and locally with `python3 scripts/<test file>`.
 - **One-time catalog-bootstrap chain** — `create_placement_data.js` (stage 1) →
   `create_final_placements.js` (stage 2) originally produced the initial
   `data/final_placements.json` / `data/video_placements.json`. It is superseded
@@ -199,6 +200,7 @@ pnpm deploy:prod
 - [docs/coordinate-frames.md](docs/coordinate-frames.md) — the engine's J2000 / mean-of-date frame contract
 - [docs/AR_ALIGNMENT.md](docs/AR_ALIGNMENT.md) — checking AR alignment against the Moon or Sun
 - [docs/ALIGNMENT_REPORTS.md](docs/ALIGNMENT_REPORTS.md) — alignment-report Worker setup, privacy, and operations
+- [docs/tooling-evaluation-cosmic-frontier-labs.md](docs/tooling-evaluation-cosmic-frontier-labs.md) — evaluation of CosmicFrontierLabs open-source tooling for once-around
 
 ## Credits
 

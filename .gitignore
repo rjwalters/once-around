@@ -22,7 +22,8 @@ Thumbs.db
 # Logs
 *.log
 
-# WASM build artifacts (keep .gitignore in wasm dir)
+# WASM build artifacts. wasm-pack also writes its own apps/web/src/wasm/.gitignore
+# (`*`), which is what hides these after a build; these rules are the fallback.
 apps/web/src/wasm/*.wasm
 apps/web/src/wasm/*.js
 apps/web/src/wasm/*.ts
@@ -30,6 +31,12 @@ apps/web/src/wasm/package.json
 !apps/web/src/wasm/.gitignore
 test-results/
 playwright-report/
+
+# Local scratch output from the catalog scripts (see data/README.md "Untracked outputs")
+data/video_placements.csv
+data/final_placements.csv
+data/transcripts_progress.json
+data/videos_with_transcripts.json
 tests/screenshots/
 
 # Repo Skills machine-local install metadata (absolute source path + timestamp)
