@@ -25,10 +25,12 @@ interface FakeElement {
     contains: (c: string) => boolean;
   };
   addEventListener: (type: string, fn: () => void) => void;
+  click: () => void;
 }
 
 function makeElement(id: string): FakeElement {
   const classes = new Set<string>(["hidden"]);
+  const clickListeners: Array<() => void> = [];
   return {
     id,
     textContent: "",
@@ -38,7 +40,10 @@ function makeElement(id: string): FakeElement {
       remove: (c) => void classes.delete(c),
       contains: (c) => classes.has(c),
     },
-    addEventListener: () => {},
+    addEventListener: (type, fn) => {
+      if (type === "click") clickListeners.push(fn);
+    },
+    click: () => clickListeners.forEach((fn) => fn()),
   };
 }
 
@@ -53,6 +58,7 @@ const ELEMENT_IDS = [
   "eclipse-banner-circumstances",
   "eclipse-path-map",
   "eclipse-navigate-btn",
+  "eclipse-banner-close",
 ];
 
 /**
@@ -181,5 +187,15 @@ describe("next-eclipse navigation (#143)", () => {
     expect(setObservationTime.mock.calls[1][0].toISOString()).toBe("2028-07-22T02:55:36.000Z");
     expect(state.urlT).toBe("2028-07-22T02:55:36.000Z");
     expect(elements.get("eclipse-banner")!.classList.contains("hidden")).toBe(false);
+  });
+
+  it("close button dismisses the banner", () => {
+    const { handler } = setup(new Date("2026-10-16T12:00:00Z"));
+    handler();
+
+    const banner = elements.get("eclipse-banner")!;
+    expect(banner.classList.contains("hidden")).toBe(false);
+    elements.get("eclipse-banner-close")!.click();
+    expect(banner.classList.contains("hidden")).toBe(true);
   });
 });

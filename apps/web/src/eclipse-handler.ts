@@ -161,6 +161,18 @@ export function createEclipseHandler(options: EclipseHandlerOptions): () => void
     renderPathSection(activePath, getObserverLocation());
   });
 
+  // Dismiss the banner via its close button or Escape. It otherwise only
+  // hides when the observation time changes.
+  const hideBanner = (): void => {
+    document.getElementById("eclipse-banner")?.classList.add("hidden");
+  };
+  document.getElementById("eclipse-banner-close")?.addEventListener("click", hideBanner);
+  if (typeof window !== "undefined") {
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") hideBanner();
+    });
+  }
+
   return function handleNextEclipse(): void {
     stopTimePlayback();
 
